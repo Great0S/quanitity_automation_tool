@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import requests
 
@@ -64,9 +65,19 @@ def get_data(page, products):
             item = data['productMainId']
             quantity = data['quantity']
 
+            # Define the timestamp
+            timestamp = data['createDateTime']
+
+            # Convert the timestamp to milliseconds
+            milliseconds = timestamp / 1000
+
+            # Convert milliseconds to datetime object
+            date_without_time = datetime.utcfromtimestamp(milliseconds).date()
+
             products.append({
                 "barcode": f"{item}",
-                "quantity": quantity
+                "quantity": quantity,
+                "date": date_without_time
             })
 
         page += 1
