@@ -46,7 +46,7 @@ def prepare_data(request_data):
     return decoded_data
 
 
-def get_data(page, products):
+def get_data(startDate, endDate):
     """
     The function `get_data` retrieves data from multiple pages and appends it to a list of products.
 
@@ -56,7 +56,16 @@ def get_data(page, products):
     the list will be a dictionary with two keys: "barcode" and "quantity". The "barcode" key will store
     the product's barcode, and the "quantity" key will store the quantity of the product
     """
-    url_addon = f"?page={page}&size=100"
+    page = 0
+
+    if startDate and endDate is not None:
+        stDate = datetime.strptime(startDate, "%d/%m/%Y").date()
+        enDate = datetime.strptime(endDate, "%d/%m/%Y").date()
+        startDate = int(datetime.fromordinal(stDate.toordinal()).timestamp())
+        endDate = int(datetime.fromordinal(enDate.toordinal()).timestamp())
+        url_addon = f"?page={page}&size=100&startDate={startDate}&endDate={endDate}"
+    else:
+        url_addon = f"?page={page}&size=100"
     decoded_data = prepare_data(request_data(url_addon, "GET", {}))
 
     while page < int(decoded_data['totalPages']):
@@ -84,6 +93,7 @@ def get_data(page, products):
         url_addon = f"?page={page}&size=100"
         decoded_data = prepare_data(request_data(url_addon, "GET", {}))
     print(f"Data records extracted size is {len(products)}")
+    return products
 
 
 def post_data(products):
@@ -106,7 +116,7 @@ def post_data(products):
 
 # The `get_data(page, products)` function is responsible for retrieving data from multiple pages and
 # appending it to a list of products.
-get_data(page, products)
+
 
 # post_data(products, request_data, prepare_data)
 print("Done!")

@@ -11,7 +11,9 @@
         "Secondsdetailed",
         "soap",
         "soapenv",
+        "stok",
         "süre",
+        "trendyol",
         "xmltodict",
         "zeep"
     ]

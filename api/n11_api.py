@@ -1,177 +1,75 @@
-import csv
-from datetime import datetime
-from functools import reduce
-import operator
-import time
 import requests
-import xmltodict
-from bs4 import BeautifulSoup
+import lxml.etree as ET
 
-
-url = "https://api.n11.com/ws/orderService/"
+url = "https://api.n11.com/ws/ProductService/"
 current_page = 0
-payload_temp = f"""<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
+
+# Authenticate with your appKey and appSecret
+headers = {"Content-Type": "text/xml; charset=utf-8"}
+payload = """
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
     <soapenv:Header/>
     <soapenv:Body>
-        <sch:DetailedOrderListRequest>
+        <sch:GetProductListRequest>
             <auth>
                 <appKey>b5f2329d-d92f-4bb9-8d1b-3badedf77762</appKey>
                 <appSecret>BmDozr9ORpNlhjNp</appSecret>
             </auth>
-            <searchData>
-                <productId></productId>
-                <status></status>
-                <buyerName></buyerName>
-                <orderNumber></orderNumber>
-                <productSellerCode></productSellerCode>
-                <recipient></recipient>
-                <sameDayDelivery></sameDayDelivery>
-                <period>
-                    <startDate></startDate>
-                    <endDate></endDate>
-                </period>
-                <sortForUpdateDate>true</sortForUpdateDate>
-            </searchData>
             <pagingData>
-                <currentPage>{current_page}</currentPage>
+                <currentPage>0</currentPage>
                 <pageSize>100</pageSize>
-                <totalCount></totalCount>
-                <pageCount></pageCount>
             </pagingData>
-        </sch:DetailedOrderListRequest>
+        </sch:GetProductListRequest>
     </soapenv:Body>
-</soapenv:Envelope>"""
-headers = {"Content-Type": "text/xml; charset=utf-8"}
-
-ordersLST = []
-product_data = []
-response = requests.request("POST", url, headers=headers, data=payload_temp)
-response_data = BeautifulSoup(
-    response.text, "xml").contents[0].contents[1].contents[0]
-total_pages = int(response_data.contents[1].contents[3].text)
+</soapenv:Envelope>
+"""
 
 
-def data_request(url, headers, payload):
-    time.sleep(5)
-    req_response = requests.request("POST", url, headers=headers, data=payload)
-    if req_response.status_code == 200:
-        return req_response
-    elif (
-        req_response.text
-        == "failureSELLER_API.notAvailableForUpdateForFiveSecondsdetailedOrders belli süre aralıklarıyla güncellenebilirSELLER_API"
-    ):
-        total_pages += 1
-        time.sleep(5)
-        return "retry"
-    else:
-        return None
+# Call the DetailedOrderList operation
+api_call = requests.post(url, headers=headers, data=payload)
+
+# Access the response elements
+def assign_vars(response):
+    raw_xml = response.text
+    tree = ET.fromstring(raw_xml)
+    namespaces = {'ns3': 'http://www.n11.com/ws/schemas'}
+    products_raw_response = tree.find(
+        './/ns3:GetProductListResponse', namespaces)
+    products_list = products_raw_response.find('products').findall('product')
+    products_pages = products_raw_response.find(
+        'pagingData').find('pageCount').text
+    return products_list, products_pages
 
 
-def item_data_extract(ordersLST, json_data, iterator, item):
-    if len(json_data[iterator]["orderItemList"]["orderItem"]) >= 20:
-        item_name = item["productName"]
-        item_date = item["updatedDate"]
-        total_product = qty = int(item["quantity"])
-        unit_price = item["sellerInvoiceAmount"]
-        product_code = item["productSellerCode"]
-    else:
-        item_name = []
-        qty = []
-        item_date = item[0]["updatedDate"]
-        unit_price = []
-        product_code = []
+if api_call.status_code == 200:
+    products_list, products_pages = assign_vars(api_call)
 
-        for t in range(len(item)):
-            item_name.append(item[t]["productName"])
-            qty.append(float(item[t]["quantity"]))
-            unit_price.append(item[t]["sellerInvoiceAmount"])
-            product_code.append(item[t]["productSellerCode"])
-        total_product = reduce(operator.add, qty)
+    # Process all pages found
+    while current_page < int(products_pages):
 
-    price = float(json_data[iterator]["totalAmount"])
+        if products_list is not None:
 
-    print(
-        f"{item_date} - {item_name} + {unit_price} x {total_product} = {price}"
-    )
-    if isinstance(item_name, list):
-        for l in range(len(item_name)):
-            ordersLST.append(
-                {
-                    "product": item_name[l],
-                    "code": product_code[l],
-                    "qty": qty[l],
-                    "price": unit_price[l],
-                    "date": item_date,
-                }
-            )
-    else:
-        ordersLST.append(
-            {
-                "product": item_name,
-                "code": product_code,
-                "qty": total_product,
-                "price": price,
-                "date": item_date,
-            }
-        )
+            # Process the product data
+            for product in products_list:
 
+                # Access order details using order.id, order.createDate, etc.
+                product_id = product.find('productSellerCode').text
+                product_qty = product.find('stockItems').find(
+                    'stockItem').find('quantity').text
+                raw_elements_strings = {'kod': product.find('id').text,'id': product_id, 'stok': product_qty}
+                # raw_elements = ET.fromstringlist(raw_elements_strings)
+                print(raw_elements_strings)
+        else:
+            print("No products found in the response.")
 
-while current_page < total_pages:
-    status = response_data.contents[0].text
-    if status == "success":
-        xml_data = xmltodict.parse(str(response_data.contents[2]))
-        json_data = xml_data["orderList"]["order"]
-
-        # Define the format of the date string
-        date_format = "%d/%m/%Y"
-
-        for n in range(len(json_data)):
-            item = json_data[n]["orderItemList"]["orderItem"]
-
-            if len(item) < 20:          
-                
-                for item_data in range(len(item)):
-
-                    # Convert the date string to a datetime object
-                    date_obj = datetime.strptime(item[item_data]['approvedDate'], date_format).date()
-
-                    product_data.append({'productId':int(item[item_data]['productId']), 'qty': int(item[item_data]['quantity']), 'date': date_obj})
-            else:
-                date_obj = datetime.strptime(item['approvedDate'], date_format).date()
-                product_data.append({'productId': int(item['productId']), 'qty': int(item['quantity']), 'date': date_obj})
-
-
-            # item_data_extract(ordersLST, json_data, n, item)
         current_page += 1
-        payload = payload_temp.replace(
+        payload_dump = payload.replace(
             f"<currentPage>0</currentPage>",
             f"<currentPage>{str(current_page)}</currentPage>",
         )
-        response = data_request(url, headers, payload)
-        if response == "retry":
-            continue
-        elif response is not None:
-            response_data = (
-                BeautifulSoup(
-                    response.text, "xml").contents[0].contents[1].contents[0]
-            )
+        api_call_loop = requests.post(url, headers=headers, data=payload_dump)
+        products_list, products_pages = assign_vars(api_call_loop)
+else:
+    print("Error:", api_call.text)
 
-
-# Method to save scraped data to a csv file
-def save_data(ordersLST):
-    columns = ["product", "code", "qty", "price", "date"]
-    with open(
-        "N11_satis_raporu_tum.csv", mode="w", newline="", encoding="utf-8"
-    ) as file:
-        data_convert = csv.DictWriter(file, fieldnames=columns)
-
-        # Write headers
-        data_convert.writeheader()
-
-        # Write rows
-        data_convert.writerows(ordersLST)
-
-    print("\n\n\nData has been save to N11_satis_raporu_tum.csv successfully!")
-
-
-save_data(ordersLST)
+print("SOAP Request Successful. Response:", api_call.reason)
