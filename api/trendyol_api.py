@@ -1,5 +1,6 @@
 from datetime import datetime
 import json
+import time
 import requests
 
 # The code snippet is initializing some variables and setting up the headers for making API requests.
@@ -29,8 +30,18 @@ def request_data(url_addons, request_type, payload_content):
     """
     payload = payload_content
     url = f"https://api.trendyol.com/sapigw/suppliers/120101/products{url_addons}"
-
-    return requests.request(request_type, url, headers=headers, data=payload)
+    for retry in range(5):
+        api_request = requests.request(
+            request_type, url, headers=headers, data=payload)
+        if api_request.status_code == 200:
+            break
+        else:
+            time.sleep(5)
+            continue
+    if api_request.status_code == 200:
+        return api_request
+    else:
+        return None
 
 
 def prepare_data(request_data):
@@ -46,7 +57,7 @@ def prepare_data(request_data):
     return decoded_data
 
 
-def get_data(startDate, endDate):
+def get_trendyol_stock_data():
     """
     The function `get_data` retrieves data from multiple pages and appends it to a list of products.
 
@@ -58,45 +69,38 @@ def get_data(startDate, endDate):
     """
     page = 0
 
-    if startDate and endDate is not None:
-        stDate = datetime.strptime(startDate, "%d/%m/%Y").date()
-        enDate = datetime.strptime(endDate, "%d/%m/%Y").date()
-        startDate = int(datetime.fromordinal(stDate.toordinal()).timestamp())
-        endDate = int(datetime.fromordinal(enDate.toordinal()).timestamp())
-        url_addon = f"?page={page}&size=100&startDate={startDate}&endDate={endDate}"
-    else:
-        url_addon = f"?page={page}&size=100"
+    # if startDate and endDate is not None:
+    #     stDate = datetime.strptime(startDate, "%d/%m/%Y").date()
+    #     enDate = datetime.strptime(endDate, "%d/%m/%Y").date()
+    #     startDate = int(datetime.fromordinal(stDate.toordinal()).timestamp())
+    #     endDate = int(datetime.fromordinal(enDate.toordinal()).timestamp())
+    #     url_addon = f"?page={page}&size=100&startDate={startDate}&endDate={endDate}"
+    # else:
+
+    url_addon = f"?page={page}&size=100"
     decoded_data = prepare_data(request_data(url_addon, "GET", {}))
 
     while page < int(decoded_data['totalPages']):
         for element in range(len(decoded_data['content'])):
             data = decoded_data['content'][element]
+            item_id = data['barcode']
             item = data['productMainId']
             quantity = data['quantity']
 
-            # Define the timestamp
-            timestamp = data['createDateTime']
-
-            # Convert the timestamp to milliseconds
-            milliseconds = timestamp / 1000
-
-            # Convert milliseconds to datetime object
-            date_without_time = datetime.utcfromtimestamp(milliseconds).date()
-
             products.append({
-                "barcode": f"{item}",
-                "quantity": quantity,
-                "date": date_without_time
+                "barcode": f"{item_id}",
+                "productMainId": f"{item}",
+                "quantity": quantity
             })
 
         page += 1
         url_addon = f"?page={page}&size=100"
         decoded_data = prepare_data(request_data(url_addon, "GET", {}))
-    print(f"Data records extracted size is {len(products)}")
+    print(f'Trendyol request is successful. Response: OK')
     return products
 
 
-def post_data(products):
+def post_trendyol_data(product):
     """
     The function `post_data` sends a POST request to a specified URL with a payload containing a list of
     products.
@@ -107,7 +111,7 @@ def post_data(products):
     """
     url_addon = "/price-and-inventory"
     post_payload = json.dumps({
-        "items": [products]
+        "items": [product]
     })
     post_response = request_data(url_addon, "POST", post_payload)
 
@@ -119,4 +123,3 @@ def post_data(products):
 
 
 # post_data(products, request_data, prepare_data)
-print("Done!")
