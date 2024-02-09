@@ -1,3 +1,4 @@
+import re
 import time
 import requests
 import lxml.etree as ET
@@ -123,11 +124,15 @@ def post_n11_data(data):
         post_payload = f"<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:sch=\"http://www.n11.com/ws/schemas\">\n    <soapenv:Header/>\n    <soapenv:Body>\n        <sch:UpdateStockByStockSellerCodeRequest>\n            <auth>\n                <appKey>b5f2329d-d92f-4bb9-8d1b-3badedf77762</appKey>\n                <appSecret>BmDozr9ORpNlhjNp</appSecret>\n            </auth>\n            <stockItems>\n                <stockItem>\n                    <sellerStockCode>{data_item['code']}</sellerStockCode>\n                    <quantity>{data_item['qty']}</quantity>\n                </stockItem>\n            </stockItems>\n        </sch:UpdateStockByStockSellerCodeRequest>\n    </soapenv:Body>\n</soapenv:Envelope>"
         post_response = requests.post(url, headers=headers, data=post_payload)
         if post_response.status_code == 200:
-            print(
-                f'N11 product with code: {data_item["code"]}, New value: {data_item["qty"]}')
+            if re.search('failure', post_response.text):
+                print(f"Request failure for code {data_item['code']} | Response: {post_response.text}\n")
+            else:
+                print(
+                f'N11 product with code: {data_item["code"]}, New value: {data_item["qty"]}\n')
         elif post_response.status_code == 429:
             time.sleep(15)
         else:
-            print(post_response.text)
+            post_response.raise_for_status()
+            print(f"Request for product {data_item['code']} is unsuccessful | Response: {post_response.text}\n")
 
     print('N11 product updates is finished.')

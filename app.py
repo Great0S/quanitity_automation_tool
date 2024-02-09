@@ -42,9 +42,9 @@ def get_data():
     N11_data = get_n11_stock_data()
     Trendyol_data = get_trendyol_stock_data()
 
-    all_codes = list(set([item['id'] for item in N11_data] +
+    all_codes = list(set([item['code'] for item in N11_data] +
                          [item['productMainId'] for item in Trendyol_data]))
-    n11_ids = [item['id'] for item in N11_data]
+    n11_ids = [item['code'] for item in N11_data]
     trendyol_ids = [item['productMainId']
                     for item in Trendyol_data]
 
@@ -62,20 +62,24 @@ def process_data():
     N11_post_data = []
     changed_values = []
     matching_values = []
+    qty1 = None
+    qty2 = None
 
     for code in all_codes:
-        if code in n11_ids:
-            qty1 = [item['stok'] for item in N11_data if item['id'] == code][0]
-        else:
-            qty1 = None
-
-        if code in trendyol_ids:
-            qty2 = [item['quantity']
-                    for item in Trendyol_data if item['productMainId'] == code][0]
-            trend_barcode = [item['barcode']
-                             for item in Trendyol_data if item['productMainId'] == code][0]
-        else:
-            qty2 = None
+        if code in n11_ids and code in trendyol_ids:
+            for item in N11_data:
+                if item['code'] == code:
+                    qty1 = item['stok']
+                    break
+                else:
+                    qty1 = None
+            for item in Trendyol_data:
+                if item['productMainId'] == code:
+                    qty2 = item['quantity']
+                    trend_barcode = item['barcode']
+                    break
+                else:
+                    qty2 = None
 
         if qty1 and qty2:
             if qty1 > qty2:
@@ -91,10 +95,10 @@ def process_data():
             if value_diff:
                 qty = qty2
                 for item in N11_data:
-                    if item['productSellerCode'] == code:
+                    if item['code'] == code:
                         try:
                             N11_post_data.append(
-                                {'code': item['id'], 'qty': qty})
+                                {'code': item['code'], 'qty': qty})
                         except ValueError:
                             continue
                     else:
@@ -115,14 +119,15 @@ def process_data():
                 continue
 
     print(
-        f'\nLength of the two lists:- \nChanged values count is {len(changed_values)}\nMatching codes is {len(matching_values)}')
+        f'\nLength of the two lists:- \nChanged values count is {len(changed_values)}\nMatching codes is {len(matching_values)}\n')
 
-    if N11_post_data:
-        changed_values = N11_post_data
-    elif Trendyol_post_data:
-        changed_values = Trendyol_post_data
-    else:
-        return changed_values
+    # if len(N11_post_data) > 0:
+    #     changed_values = N11_post_data
+    # elif len(Trendyol_post_data) > 0:
+    #     changed_values = Trendyol_post_data
+    # else:
+    return changed_values, N11_post_data
 
+changed_values, post_data = process_data()
 
-post_n11_data(process_data())
+post_n11_data(post_data)

@@ -294,8 +294,9 @@ def process_updates(source_url: str, target_url: str):
 def update_product(found):
     consumer_key, consumer_secret, username, password, base_url, callback_address = assign_vars(target_website)
     tokens = get_token(consumer_key, consumer_secret, base_url, callback_address, 'PUT', username, password)
+    print('\nUpdating please wait ...')
     partial_func = partial(update_request, tokens)
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=27) as executor:
         successful = list(executor.map(partial_func, found))
     return successful
 
@@ -319,7 +320,7 @@ def update_request(tokens, item: dict ):
 
     successful = []
     consumer_key, consumer_secret, username, password, base_url, callback_address = assign_vars(target_website)
-    print('\nUpdating please wait ...')
+    
     
     client = create_headers(consumer_key, consumer_secret, callback_address, tokens['verifier_token'], tokens['access_token'])
     header = Client.sign(client, uri=f"{base_url}/api/rest/products/{item['entity_id']}", headers={"Content-Type": "application/json"}, http_method='PUT', body=json.dumps(item))[1]
@@ -327,7 +328,11 @@ def update_request(tokens, item: dict ):
     if update_response.status_code == 200:
         successful = item['entity_id']
     else:
-        print(f'Product with sku {item['entity_id']} has error | Error: {
+        error = json.loads(update_response.text)['messages']['error'][0]['message']
+        if 'Resource unknown error.' == error:
+            successful = item['entity_id']
+        else:
+            print(f'Product with sku {item['entity_id']} has error | Error: {
               update_response.text}')
     return successful
 
