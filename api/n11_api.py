@@ -1,20 +1,25 @@
+import os
 import re
 import time
 import requests
 import lxml.etree as ET
+from dotenv import load_dotenv
 
+load_dotenv()
+API_KEY = os.getenv('N11_KEY')
+API_SECRET = os.getenv('N11_SECRET')
 url = "https://api.n11.com/ws/ProductService/"
 
 # Authenticate with your appKey and appSecret
 headers = {"Content-Type": "text/xml; charset=utf-8"}
-payload = """
+payload = f"""
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
     <soapenv:Header/>
     <soapenv:Body>
         <sch:GetProductListRequest>
             <auth>
-                <appKey>b5f2329d-d92f-4bb9-8d1b-3badedf77762</appKey>
-                <appSecret>BmDozr9ORpNlhjNp</appSecret>
+                <appKey>{API_KEY}</appKey>
+                <appSecret>{API_SECRET}</appSecret>
             </auth>
             <pagingData>
                 <currentPage>0</currentPage>
@@ -121,18 +126,39 @@ def post_n11_data(data):
     for data_item in data:
         # The `post_payload` variable is a string that contains an XML request payload for updating the
         # stock quantity of a product on the N11 platform.
-        post_payload = f"<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:sch=\"http://www.n11.com/ws/schemas\">\n    <soapenv:Header/>\n    <soapenv:Body>\n        <sch:UpdateStockByStockSellerCodeRequest>\n            <auth>\n                <appKey>b5f2329d-d92f-4bb9-8d1b-3badedf77762</appKey>\n                <appSecret>BmDozr9ORpNlhjNp</appSecret>\n            </auth>\n            <stockItems>\n                <stockItem>\n                    <sellerStockCode>{data_item['code']}</sellerStockCode>\n                    <quantity>{data_item['qty']}</quantity>\n                </stockItem>\n            </stockItems>\n        </sch:UpdateStockByStockSellerCodeRequest>\n    </soapenv:Body>\n</soapenv:Envelope>"
-        post_response = requests.post(url, headers=headers, data=post_payload)
+        post_payload = f"""
+                        <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
+                          <soapenv:Header/>
+                          <soapenv:Body>
+                            <sch:UpdateProductBasicRequest>
+                              <auth>
+                                <appKey>{API_KEY}</appKey>
+                                <appSecret>{API_SECRET}</appSecret>
+                              </auth>
+                              <stockItems>
+                                <stockItem>
+                                  <sellerStockCode>{data_item['code']}</sellerStockCode>
+                                  <quantity>{data_item['qty']}</quantity>
+                                </stockItem>
+                              </stockItems>
+                            </sch:UpdateProductBasicRequest>
+                          </soapenv:Body>
+                        </soapenv:Envelope>
+                        """
+        post_response = requests.request(
+            "POST", url, headers=headers, data=post_payload)
         if post_response.status_code == 200:
             if re.search('failure', post_response.text):
-                print(f"Request failure for code {data_item['code']} | Response: {post_response.text}\n")
+                print(f"Request failure for code {
+                      data_item['code']} | Response: {post_response.text}\n")
             else:
                 print(
-                f'N11 product with code: {data_item["code"]}, New value: {data_item["qty"]}\n')
+                    f'N11 product with code: {data_item["code"]}, New value: {data_item["qty"]}\n')
         elif post_response.status_code == 429:
             time.sleep(15)
         else:
             post_response.raise_for_status()
-            print(f"Request for product {data_item['code']} is unsuccessful | Response: {post_response.text}\n")
+            print(f"Request for product {
+                  data_item['code']} is unsuccessful | Response: {post_response.text}\n")
 
     print('N11 product updates is finished.')

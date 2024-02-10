@@ -319,21 +319,27 @@ def update_request(tokens, item: dict ):
     """
 
     successful = []
+
     consumer_key, consumer_secret, username, password, base_url, callback_address = assign_vars(target_website)
     
-    
-    client = create_headers(consumer_key, consumer_secret, callback_address, tokens['verifier_token'], tokens['access_token'])
-    header = Client.sign(client, uri=f"{base_url}/api/rest/products/{item['entity_id']}", headers={"Content-Type": "application/json"}, http_method='PUT', body=json.dumps(item))[1]
-    update_response = requests.request("PUT", f"{base_url}/api/rest/products/{item['entity_id']}", headers=header, data=json.dumps(item))
-    if update_response.status_code == 200:
-        successful = item['entity_id']
-    else:
-        error = json.loads(update_response.text)['messages']['error'][0]['message']
-        if 'Resource unknown error.' == error:
+    while True:
+        client = create_headers(consumer_key, consumer_secret, callback_address, tokens['verifier_token'], tokens['access_token'])
+        header = Client.sign(client, uri=f"{base_url}/api/rest/products/{item['entity_id']}", headers={"Content-Type": "application/json"}, http_method='PUT', body=json.dumps(item))[1]
+        update_response = requests.request("PUT", f"{base_url}/api/rest/products/{item['entity_id']}", headers=header, data=json.dumps(item))
+        if update_response.status_code == 200:
             successful = item['entity_id']
+            break
+        elif update_response.status_code == 500:
+            print(f"Timeout error for {item['entity_id']} | Retrying...")
         else:
-            print(f'Product with sku {item['entity_id']} has error | Error: {
-              update_response.text}')
+            error = json.loads(update_response.text)['messages']['error'][0]['message']
+            if 'Resource unknown error.' == error:
+                successful = item['entity_id']
+                break
+            else:
+                print(f'Product with sku {item['entity_id']} has error | Error: {
+                  update_response.text}')
+                break
     return successful
 
 

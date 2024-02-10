@@ -58,6 +58,21 @@ def process_data():
 
     # Initializing empty lists. These lists will be used to store data during the processing of stock
     # data from N11 and Trendyol APIs.
+    N11_post_data, changed_values, matching_values = update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_ids)
+
+    print(
+        f'\nLength of the two lists:- \nChanged values count is {len(changed_values)}\nMatching codes is {len(matching_values)}\n')
+    
+
+
+    # if len(N11_post_data) > 0:
+    #     changed_values = N11_post_data
+    # elif len(Trendyol_post_data) > 0:
+    #     changed_values = Trendyol_post_data
+    # else:
+    return changed_values, N11_post_data
+
+def update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_ids):
     Trendyol_post_data = []
     N11_post_data = []
     changed_values = []
@@ -86,6 +101,7 @@ def process_data():
                 value_diff = qty1 - qty2
             elif qty1 < qty2:
                 value_diff = qty2 - qty1
+                
             else:
                 value_diff = None
 
@@ -117,16 +133,7 @@ def process_data():
                 #         continue
             else:
                 continue
-
-    print(
-        f'\nLength of the two lists:- \nChanged values count is {len(changed_values)}\nMatching codes is {len(matching_values)}\n')
-
-    # if len(N11_post_data) > 0:
-    #     changed_values = N11_post_data
-    # elif len(Trendyol_post_data) > 0:
-    #     changed_values = Trendyol_post_data
-    # else:
-    return changed_values, N11_post_data
+    return N11_post_data,changed_values,matching_values
 
 changed_values, post_data = process_data()
 
