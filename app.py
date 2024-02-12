@@ -96,7 +96,7 @@ def update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_i
                 else:
                     qty2 = None
 
-        if qty1 and qty2:
+        if qty1 and qty2 is not None:            
             if qty1 > qty2:
                 value_diff = qty1 - qty2
             elif qty1 < qty2:
