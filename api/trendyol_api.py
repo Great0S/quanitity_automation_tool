@@ -88,9 +88,9 @@ def get_trendyol_stock_data():
             quantity = data['quantity']
 
             products.append({
-                "barcode": f"{item_id}",
-                "productMainId": f"{item}",
-                "quantity": quantity
+                "id": f"{item_id}",
+                "code": f"{item}",
+                "stok": quantity
             })
 
         page += 1
