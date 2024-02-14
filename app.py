@@ -41,27 +41,28 @@ def get_data():
     # Retrieve stock data from N11 and Trendyol APIs
     N11_data = get_n11_stock_data()
     Trendyol_data = get_trendyol_stock_data()
+    data_content = {"Trendyol_data": Trendyol_data, "N11_data": N11_data}
 
     all_codes = list(set([item['code'] for item in N11_data] +
-                         [item['productMainId'] for item in Trendyol_data]))
+                         [item['code'] for item in Trendyol_data]))
     n11_ids = [item['code'] for item in N11_data]
-    trendyol_ids = [item['productMainId']
+    trendyol_ids = [item['code']
                     for item in Trendyol_data]
 
-    return N11_data, Trendyol_data, all_codes, n11_ids, trendyol_ids
+    return data_content, all_codes, n11_ids, trendyol_ids
 
 
 def process_data():
 
     #  This allows us to access and use these variables
-    N11_data, Trendyol_data, all_codes, n11_ids, trendyol_ids = get_data()
+    data_lists, all_codes, n11_ids, trendyol_ids = get_data()
 
     # Initializing empty lists. These lists will be used to store data during the processing of stock
     # data from N11 and Trendyol APIs.
-    N11_post_data, changed_values, matching_values = update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_ids)
+    platform_updates, matching_values = get_platform_updates(data_lists, all_codes, n11_ids, trendyol_ids)
 
     print(
-        f'\nLength of the two lists:- \nChanged values count is {len(changed_values)}\nMatching codes is {len(matching_values)}\n')
+        f'\nLength of the two lists:- \nPlatform updates is {len(platform_updates)}\nMatching codes is {len(matching_values)}\n')
     
 
 
@@ -70,11 +71,9 @@ def process_data():
     # elif len(Trendyol_post_data) > 0:
     #     changed_values = Trendyol_post_data
     # else:
-    return changed_values, N11_post_data
+    return platform_updates
 
-def update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_ids):
-    Trendyol_post_data = []
-    new_post_data = []
+def get_platform_updates(data, all_codes, n11_ids, trendyol_ids):
     changed_values = []
     matching_values = []
     qty1 = None
@@ -82,16 +81,16 @@ def update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_i
 
     for code in all_codes:
         if code in n11_ids and code in trendyol_ids:
-            for item in N11_data:
+            for item in data['N11_data']:
                 if item['code'] == code:
                     qty1 = item['stok']
                     break
                 else:
                     qty1 = None
-            for item in Trendyol_data:
-                if item['productMainId'] == code:
-                    qty2 = item['quantity']
-                    trend_barcode = item['barcode']
+            for item in data['Trendyol_data']:
+                if item['code'] == code:
+                    qty2 = item['stok']
+                    trend_barcode = item['id']
                     break
                 else:
                     qty2 = None
@@ -101,11 +100,11 @@ def update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_i
             if qty1 > qty2:
                 value_diff = qty1 - qty2
                 qty = qty2
-                target = 'Trendyol'
+                target = 'N11'
             elif qty1 < qty2:
                 value_diff = qty2 - qty1
                 qty = qty1
-                target = 'N11'                
+                target = 'Trendyol'                
             else:
                 value_diff = None
 
@@ -113,17 +112,18 @@ def update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_i
                 {'code': code, 'qty1': qty1, 'qty2': qty2, 'value_difference': value_diff})
 
             if value_diff:
-                for item in N11_data:
-                    if item['code'] == code:
-                        try:
-                            new_post_data.append(
-                                {'code': item['code'], 'qty': qty})
-                        except ValueError:
-                            continue
-                    else:
-                        continue
+                # data_list = data[f'{target}_data']
+                # for item in data_list:
+                #     if item['code'] == code:
+                #         try:
+                #             new_post_data.append(
+                #                 {'code': item['code'], 'qty': qty})
+                #         except ValueError:
+                #             continue
+                #     else:
+                #         continue
                 changed_values.append(
-                    {'code': code, 'qty': str(qty)})
+                    {'code': code, 'qty': str(qty), 'platform': target})
 
                 # for item in Trendyol_data:
                 #     if item['productMainId'] == code:
@@ -136,8 +136,8 @@ def update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_i
                 #         continue
             else:
                 continue
-    return new_post_data,changed_values,matching_values
+    return changed_values,matching_values
 
-changed_values, post_data = process_data()
+post_data = process_data()
 
 post_n11_data(post_data)
