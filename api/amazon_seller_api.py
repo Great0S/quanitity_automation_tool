@@ -1,6 +1,25 @@
+import json
 import requests
+import os
+from dotenv import load_dotenv
 
 
-refresh_token = 'Atzr|IwEBIDV2-YMR_2vd9fxYClKpNOBWruoY0bEABxPwcbMvvgrkqM4vDjpG-TaIncFXThBgmTLZU8J92Bbj14RgZD8DtSiu_n-m8WDuYTDoXwUw9QxWna2ai8sT3Zl79a9jXPObOHN4UsA6oS3KBOB0IZziCRqgvxLjLEjBYNJKwkJ3sQKorsLs1xFcyJQ_fyAmvnGEKGjoH7nxOwgZGuDXAhsyi0UZrtGWHXzva_FKR4-FS3_mWBJYBbP3d6IqgHamzWzKaJ6sUEr5mUquIJbm59UYqDsMh3MTVwQBrQtV2FOicDsiu_CI2sfXRgZof0ptDSk8aE-w2EjaLrDha72QXNfPe5Xa'
+load_dotenv()
 
-request = requests.get()
+client_id = os.getenv('SP_API_ID')
+client_secret = os.getenv('SP_API_SECRET')
+refresh_token = os.getenv('SP_API_REFRESH_TOKEN')
+
+url = "https://api.amazon.com/auth/o2/token"
+
+payload = f'grant_type=refresh_token&client_id={client_id}&client_secret={client_secret}&refresh_token={refresh_token}'
+headers = {
+  'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+}
+
+response = requests.request("POST", url, headers=headers, data=payload)
+response_content = json.loads(response.text)
+access_token = response_content['access_token']
+access_token_type = response_content['token_type']
+
+print(response.text)

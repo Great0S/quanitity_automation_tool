@@ -74,7 +74,7 @@ def process_data():
 
 def update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_ids):
     Trendyol_post_data = []
-    N11_post_data = []
+    new_post_data = []
     changed_values = []
     matching_values = []
     qty1 = None
@@ -96,12 +96,16 @@ def update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_i
                 else:
                     qty2 = None
 
-        if qty1 and qty2 is not None:            
+        if qty1 and qty2 is not None:      
+            qty = None      
             if qty1 > qty2:
                 value_diff = qty1 - qty2
+                qty = qty2
+                target = 'Trendyol'
             elif qty1 < qty2:
                 value_diff = qty2 - qty1
-                
+                qty = qty1
+                target = 'N11'                
             else:
                 value_diff = None
 
@@ -109,11 +113,10 @@ def update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_i
                 {'code': code, 'qty1': qty1, 'qty2': qty2, 'value_difference': value_diff})
 
             if value_diff:
-                qty = qty2
                 for item in N11_data:
                     if item['code'] == code:
                         try:
-                            N11_post_data.append(
+                            new_post_data.append(
                                 {'code': item['code'], 'qty': qty})
                         except ValueError:
                             continue
@@ -133,7 +136,7 @@ def update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_i
                 #         continue
             else:
                 continue
-    return N11_post_data,changed_values,matching_values
+    return new_post_data,changed_values,matching_values
 
 changed_values, post_data = process_data()
 
