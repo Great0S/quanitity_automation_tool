@@ -64,6 +64,7 @@ params = {
     'pageSize': 10  # Number of results per page
 }
 
-report_request = requests.get(ordersEndpoint_url, headers=report_header, data=[])
+orders_request = requests.get(ordersEndpoint_url, headers=report_header, data=[])
+jsonify = json.loads(orders_request.text)
 
 print(token_response.text)
