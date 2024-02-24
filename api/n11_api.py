@@ -18,12 +18,14 @@ url = "https://api.n11.com/ws"
 headers = {"Content-Type": "text/xml; charset=utf-8"}
 
 # Function for parsing the XML response received from the N11 API
+
+
 def assign_vars(response, response_namespace, list_name):
     """
     The function `assign_vars` parses XML response data, extracts specific elements based on provided
     namespace and list name, and returns a list of items and total pages if the list exists, otherwise
     returns None.
-    
+
     :param response: The `response` parameter is the HTTP response object received from a request to a
     web service. It contains the raw XML data that needs to be processed
     :param response_namespace: The `response_namespace` parameter in the `assign_vars` function is used
@@ -41,10 +43,10 @@ def assign_vars(response, response_namespace, list_name):
     # Access the response elements
     raw_xml = response.text
 
-    # XML raw data trimming 
+    # XML raw data trimming
     revised_response = (raw_xml.replace(f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body>""",
                         "")).replace(f"""</SOAP-ENV:Body></SOAP-ENV:Envelope>""", "")
-    
+
     # Parse the XML response into a dictionary using xmltodict library.
     response_json = xmltodict.parse(revised_response)
 
@@ -54,7 +56,7 @@ def assign_vars(response, response_namespace, list_name):
     # Check if the list_name exists in the response data and has at least one element.
     # If so, return the list of items and the total number of pages.
     # Otherwise, return None.
-    if list_name in response_data: 
+    if list_name in response_data:
         if response_data[list_name]:
             items_list = next(iter(response_data[list_name].values()))
             items_total_pages = response_data['pagingData']['pageCount']
@@ -66,11 +68,13 @@ def assign_vars(response, response_namespace, list_name):
         return None, None
 
 # Function for retrieving stock data from the N11 API.
+
+
 def get_n11_stock_data(url):
     """
     The function `get_n11_stock_data` sends a SOAP request to the N11 API to retrieve a list of products
     and their stock information.
-    
+
     :param url: The `get_n11_stock_data` function you provided seems to be making a SOAP request to the
     N11 API to retrieve stock data for products. However, there are a few things missing in the code
     snippet you shared
@@ -78,7 +82,7 @@ def get_n11_stock_data(url):
     information about products retrieved from the N11 API. Each dictionary in the list includes keys for
     "id" (product ID), "code" (product seller code), and "stok" (product quantity in stock).
     """
-  
+
     payload = f"""
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
     <soapenv:Header/>
@@ -141,11 +145,13 @@ def get_n11_stock_data(url):
     return raw_elements
 
 # Function for retrieving order data from the N11 API.
+
+
 def get_n11_detailed_order_list(url):
     """
     The function `get_n11_detailed_order_list` sends a SOAP request to the N11 API to retrieve a list of
     detailed orders and processes the response to extract relevant information.
-    
+
     :param url: It looks like the code snippet you provided is a function that sends a SOAP request to
     the N11 API to retrieve a detailed list of orders. The function takes a URL as a parameter where the
     API is located
@@ -201,21 +207,21 @@ def get_n11_detailed_order_list(url):
         # Process all pages found
         if orders_list is not None:
             while current_page < int(orders_total_pages):
-            
+
                 for order in orders_list:
                     flattened_order = flatten_dict(order, "")
-                    raw_elements.append(flattened_order)      
+                    raw_elements.append(flattened_order)
 
                 current_page += 1
                 payload_dump = payload.replace(
-                f"<currentPage>0</currentPage>",
-                f"<currentPage>{str(current_page)}</currentPage>",
-            )
+                    f"<currentPage>0</currentPage>",
+                    f"<currentPage>{str(current_page)}</currentPage>",
+                )
                 orders_list, orders_total = looper(
-                orders_url, payload_dump, "DetailedOrderListResponse", "orderList")
-                
+                    orders_url, payload_dump, "DetailedOrderListResponse", "orderList")
+
         else:
-            print("No orders found in the response.")    
+            print("No orders found in the response.")
     else:
         print("Error:", api_call.text)
 
@@ -230,14 +236,36 @@ def flatten_dict(data, prefix=""):
     item = {}
     for item_key, item_value in data.items():
         if isinstance(item_value, dict):
-            data_val = flatten_dict(item_value, f"{prefix}_{item_key}" if prefix else item_key)
-            item.update(data_val)
+            for sub_key, sub_value in item_value.items():
+                if isinstance(sub_value, dict):
+                    data_val = flatten_dict(sub_value, f"{prefix}_{
+                                            sub_key}" if prefix else sub_key)
+                    item.update(data_val)
+                elif isinstance(sub_value, list):
+                    count = 1
+                    while count < len(sub_value):
+                        for data_item in sub_value:  
+                            if isinstance(data_item, dict):                          
+                                data_val = flatten_dict(data_item, f"{prefix}_{sub_key}{count}" if prefix else f"{sub_key}{count}")
+                                item.update(data_val)
+                            else:
+                                if prefix:
+                                    item[f"{prefix}_{sub_key}{count}"] = data_item
+                                else:
+                                    item[f"{sub_key}{count}"] = data_item
+                            count += 1
+                else:
+                    if prefix:
+                        item[f"{prefix}_{sub_key}"] = sub_value
+                    else:
+                        item[f"{sub_key}"] = sub_value
         else:
             if prefix:
                 item[f"{prefix}_{item_key}"] = item_value
             else:
                 item[f"{item_key}"] = item_value
     return item
+
 
 def looper(link, payload_dump, namespace, list_name):
     while True:
@@ -252,6 +280,8 @@ def looper(link, payload_dump, namespace, list_name):
             time.sleep(1)
 
 # Function for saving data to a CSV file.
+
+
 def save_to_csv(data, filename=""):
     if data:
         keys = set()
@@ -265,6 +295,8 @@ def save_to_csv(data, filename=""):
                 file_writer.writerow(d)
 
 # Function for updating product data on N11
+
+
 def post_n11_data(data):
 
     for data_item in data:
@@ -306,5 +338,6 @@ def post_n11_data(data):
                   data_item['code']} is unsuccessful | Response: {post_response.text}\n")
 
     print('N11 product updates is finished.')
+
 
 save_to_csv(get_n11_detailed_order_list(url), 'orders')
