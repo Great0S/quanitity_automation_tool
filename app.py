@@ -141,3 +141,4 @@ def update_from_trendyol(N11_data, Trendyol_data, all_codes, n11_ids, trendyol_i
 changed_values, post_data = process_data()
 
 post_n11_data(post_data)
+print('End')
