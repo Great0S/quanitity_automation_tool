@@ -94,6 +94,7 @@ ENV/
 # Rope project settings
 .ropeproject
 
+
 # mkdocs documentation
 /site
 
@@ -130,3 +131,7 @@ zeminbank.com_non_found.csv
 zeminbank.com_non_foundbk.csv
 zeminbank.com_non_foundbkp.csv
 zeminbank.com_non_foundbkpc.csv
+output.csv
+viewstate_decoder.py
+api/kak.py
+orders_data_list.csv
