@@ -37,7 +37,7 @@ response_content = json.loads(token_response.text)
 access_token = response_content['access_token']
 access_token_type = response_content['token_type']
 
-reportEndpoint_url = 'https://sellingpartnerapi-eu.amazon.com/catalog/2022-04-01/items'
+ordersEndpoint_url = 'https://sellingpartnerapi-eu.amazon.com/orders/v0/orders/?MarketplaceIds=A33AVAJ2PDY3EV&CreatedAfter=2019-10-07T17:58:48.017Z'
 # report_payload = {
 #     'marketplaceIds': [
 #         f'{MarketPlaceID}',
@@ -46,7 +46,7 @@ reportEndpoint_url = 'https://sellingpartnerapi-eu.amazon.com/catalog/2022-04-01
 #         'includedData': 'summaries',
 #         'pageSize': 10
 # }
-report_payload = f'keywords=hali&marketplaceIds=[{MarketPlaceID}]&includedData=summaries&pageSize=10'
+orders_payload = f'marketplaceIds=[{MarketPlaceID}]&CreatedAfter=2019-10-07T17:58:48.017Z'
 # Get the current time
 current_time = datetime.utcnow()
 
@@ -64,6 +64,6 @@ params = {
     'pageSize': 10  # Number of results per page
 }
 
-report_request = requests.get(reportEndpoint_url, headers=report_header, data=params)
+report_request = requests.get(ordersEndpoint_url, headers=report_header, data=[])
 
 print(token_response.text)
