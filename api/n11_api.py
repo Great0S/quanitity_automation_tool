@@ -289,7 +289,7 @@ def save_to_csv(data, filename=""):
             keys.update(item.keys())
 
         with open(f"{filename}_data_list.csv", "w", newline='', encoding="utf-8") as csvfile:
-            file_writer = csv.DictWriter(csvfile, fieldnames=keys)
+            file_writer = csv.DictWriter(csvfile, fieldnames=sorted(keys))
             file_writer.writeheader()
             for d in data:
                 file_writer.writerow(d)
