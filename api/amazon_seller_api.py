@@ -43,10 +43,9 @@ def spapi_getOrders(rate_limit):
     
     orders = formatted_data['Orders']
     orders_dict = []
-    count = 0
+    
     while orders:
-        count += 1
-        if seconds >= rate or count < 20:
+        if seconds >= rate:
             orderBasic_info(orders, orders_dict)
             params = {'MarketplaceIds': MarketPlaceID, "NextToken": parse.quote(formatted_data['NextToken'])}
             next_page_request = requestData(access_token, "/orders/v0/orders/", params)
@@ -58,12 +57,12 @@ def spapi_getOrders(rate_limit):
             time.sleep(rate)
             seconds_now = current_seconds()
             diff = seconds_now - first_seconds
-            seconds = diff * 60
+            seconds = abs(diff) * 60
             count = 0
             
             continue
         
-    return token_response
+    return orders_dict
 
 def current_seconds():
     time_now = datetime.now()
