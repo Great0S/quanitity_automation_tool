@@ -3,15 +3,12 @@ import os
 import re
 import time
 import requests
-from dotenv import load_dotenv
+from simple_dotenv import GetEnv
 import xmltodict
 
-# Load environment variables from .env file
-load_dotenv()
-
 # Setting api value
-API_KEY = os.getenv('N11_KEY')
-API_SECRET = os.getenv('N11_SECRET')
+API_KEY = str(GetEnv('N11_KEY'))
+API_SECRET = str(GetEnv('N11_SECRET'))
 url = "https://api.n11.com/ws"
 
 # Authenticate with your appKey and appSecret
@@ -238,8 +235,7 @@ def flatten_dict(data, prefix=""):
         if isinstance(item_value, dict):
             for sub_key, sub_value in item_value.items():
                 if isinstance(sub_value, dict):
-                    data_val = flatten_dict(sub_value, f"{prefix}_{
-                                            sub_key}" if prefix else sub_key)
+                    data_val = flatten_dict(sub_value, f"{prefix}_{sub_key}" if prefix else sub_key)
                     item.update(data_val)
                 elif isinstance(sub_value, list):
                     count = 1
@@ -325,8 +321,7 @@ def post_n11_data(data):
             "POST", url, headers=headers, data=post_payload)
         if post_response.status_code == 200:
             if re.search('failure', post_response.text):
-                print(f"Request failure for code {
-                      data_item['code']} | Response: {post_response.text}\n")
+                print(f"Request failure for code {data_item['code']} | Response: {post_response.text}\n")
             else:
                 print(
                     f'N11 product with code: {data_item["code"]}, New value: {data_item["qty"]}\n')
@@ -334,8 +329,7 @@ def post_n11_data(data):
             time.sleep(15)
         else:
             post_response.raise_for_status()
-            print(f"Request for product {
-                  data_item['code']} is unsuccessful | Response: {post_response.text}\n")
+            print(f"Request for product {data_item['code']} is unsuccessful | Response: {post_response.text}\n")
 
     print('N11 product updates is finished.')
 
