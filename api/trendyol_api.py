@@ -1,5 +1,6 @@
 from datetime import datetime
 import json
+import re
 import time
 import requests
 
@@ -9,6 +10,7 @@ url_addon = ""
 products = []
 headers = {
     'User-Agent': '120101 - SelfIntegration',
+    'Content-Type': 'application/json',
     'Authorization': 'Basic c1V0V1BWT3U4ZWdISldWcE5za0s6QVBhTU5rQjBuUVJQTzZSQ2tjeWc='
 }
 
@@ -30,18 +32,16 @@ def request_data(url_addons, request_type, payload_content):
     """
     payload = payload_content
     url = f"https://api.trendyol.com/sapigw/suppliers/120101/products{url_addons}"
-    for retry in range(5):
+    while True:
         api_request = requests.request(
             request_type, url, headers=headers, data=payload)
         if api_request.status_code == 200:
-            break
+            return api_request
+        elif api_request.status_code == 400:
+            return None
         else:
-            time.sleep(5)
+            time.sleep(1)
             continue
-    if api_request.status_code == 200:
-        return api_request
-    else:
-        return None
 
 
 def prepare_data(request_data):
@@ -83,7 +83,10 @@ def get_trendyol_stock_data():
     while page < int(decoded_data['totalPages']):
         for element in range(len(decoded_data['content'])):
             data = decoded_data['content'][element]
+
             item_id = data['barcode']
+            if item_id == None:
+                pass
             item = data['productMainId']
             quantity = data['quantity']
 
@@ -110,16 +113,29 @@ def post_trendyol_data(product):
     process
     """
     url_addon = "/price-and-inventory"
-    post_payload = json.dumps({
-        "items": [product]
-    })
+    post_payload = json.dumps(
+        {
+    "items": [
+        {
+            "barcode": product['code'],
+            "quantity": int(product['qty'])
+        }
+    ]
+})
     post_response = request_data(url_addon, "POST", post_payload)
 
-    print(post_response.text)
-
-
-# The `get_data(page, products)` function is responsible for retrieving data from multiple pages and
-# appending it to a list of products.
-
+    if post_response.status_code == 200:
+        if re.search('failure', post_response.text):
+            print(
+                f"Request failure for trendyol product {product['code']} | Response: {post_response.text}\n")
+        else:
+            print(
+                f'Trendyol product with code: {product["code"]}, New value: {product["qty"]}\n')
+    elif post_response.status_code == 429:
+        time.sleep(15)
+    else:
+        post_response.raise_for_status()
+        print(
+            f"Request for trendyol product {product['code']} is unsuccessful | Response: {post_response.text}\n")
 
 # post_data(products, request_data, prepare_data)

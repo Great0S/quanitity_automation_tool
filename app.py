@@ -1,4 +1,4 @@
-from api.trendyol_api import get_trendyol_stock_data
+from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
 from api.n11_api import get_n11_stock_data, post_n11_data
 
 # Options = {
@@ -46,8 +46,7 @@ def get_data():
     all_codes = list(set([item['code'] for item in N11_data] +
                          [item['code'] for item in Trendyol_data]))
     n11_ids = [item['code'] for item in N11_data]
-    trendyol_ids = [item['code']
-                    for item in Trendyol_data]
+    trendyol_ids = [item['code']for item in Trendyol_data]
 
     return data_content, all_codes, n11_ids, trendyol_ids
 
@@ -78,19 +77,24 @@ def get_platform_updates(data, all_codes, n11_ids, trendyol_ids):
     matching_values = []
     qty1 = None
     qty2 = None
+    item_id = 0
+    first_list_item_id = 0
+    second_list_item_id = 0
 
     for code in all_codes:
+        
         if code in n11_ids and code in trendyol_ids:
-            for item in data['N11_data']:
-                if item['code'] == code:
-                    qty1 = item['stok']
+            for first_item in data['N11_data']:
+                if first_item['code'] == code:
+                    qty1 = first_item['stok']
+                    first_list_item_id = first_item['id']
                     break
                 else:
                     qty1 = None
-            for item in data['Trendyol_data']:
-                if item['code'] == code:
-                    qty2 = item['stok']
-                    trend_barcode = item['id']
+            for second_item in data['Trendyol_data']:
+                if second_item['code'] == code:
+                    qty2 = second_item['stok']
+                    second_list_item_id = second_item['id']
                     break
                 else:
                     qty2 = None
@@ -101,10 +105,12 @@ def get_platform_updates(data, all_codes, n11_ids, trendyol_ids):
                 value_diff = qty1 - qty2
                 qty = qty2
                 target = 'N11'
+                item_id = first_list_item_id
             elif qty1 < qty2:
                 value_diff = qty2 - qty1
                 qty = qty1
-                target = 'Trendyol'                
+                target = 'Trendyol'   
+                item_id = second_list_item_id
             else:
                 value_diff = None
 
@@ -112,33 +118,16 @@ def get_platform_updates(data, all_codes, n11_ids, trendyol_ids):
                 {'code': code, 'qty1': qty1, 'qty2': qty2, 'value_difference': value_diff})
 
             if value_diff:
-                # data_list = data[f'{target}_data']
-                # for item in data_list:
-                #     if item['code'] == code:
-                #         try:
-                #             new_post_data.append(
-                #                 {'code': item['code'], 'qty': qty})
-                #         except ValueError:
-                #             continue
-                #     else:
-                #         continue
-                changed_values.append(
-                    {'code': code, 'qty': str(qty), 'platform': target})
-
-                # for item in Trendyol_data:
-                #     if item['productMainId'] == code:
-                #         try:
-                #             Trendyol_post_data.append(
-                #             {'barcode': item['barcode'], 'quantity': qty})
-                #         except ValueError:
-                #             continue
-                #     else:
-                #         continue
+                changed_values.append({'id': item_id, 'code': code, 'qty': str(qty), 'platform': target})
             else:
                 continue
     return changed_values,matching_values
 
 post_data = process_data()
 
-post_n11_data(post_data)
+for post in post_data:
+    if post['platform'] == 'Trendyol':
+        post_trendyol_data(post)
+    elif post['platform'] == 'N11':
+        post_n11_data(post)
 print('End')
