@@ -57,9 +57,9 @@ def prepare_data(request_data):
     return decoded_data
 
 
-def get_trendyol_stock_data():
+def get_trendyol_stock_data(everyProduct: bool =False):
     """
-    The function `get_data` retrieves data from multiple pages and appends it to a list of products.
+    The function `get_data` retrieves products data from multiple pages and appends it to a list.
 
     :param page: The `page` parameter is used to specify the page number of the data to retrieve. It is
     used in the URL to fetch data from different pages
@@ -76,32 +76,37 @@ def get_trendyol_stock_data():
     #     endDate = int(datetime.fromordinal(enDate.toordinal()).timestamp())
     #     url_addon = f"?page={page}&size=100&startDate={startDate}&endDate={endDate}"
     # else:
-
+    all_products = []
+    products = []
     url_addon = f"?page={page}&size=100"
     decoded_data = prepare_data(request_data(url_addon, "GET", {}))
 
-    while page < int(decoded_data['totalPages']):
+    while page < int(decoded_data['totalPages']):        
         for element in range(len(decoded_data['content'])):
             data = decoded_data['content'][element]
+            if everyProduct:
+                all_products.append(data)
+            else:
+                item_id = data['barcode']
+                if item_id == None:
+                    pass
+                item = data['productMainId']
+                quantity = data['quantity']
 
-            item_id = data['barcode']
-            if item_id == None:
-                pass
-            item = data['productMainId']
-            quantity = data['quantity']
-
-            products.append({
-                "id": f"{item_id}",
-                "code": f"{item}",
-                "stok": quantity
-            })
-
+                products.append({
+                    "id": f"{item_id}",
+                    "code": f"{item}",
+                    "stok": quantity
+                })
         page += 1
         url_addon = f"?page={page}&size=100"
         decoded_data = prepare_data(request_data(url_addon, "GET", {}))
     print(f'Trendyol request is successful. Response: OK')
-    return products
 
+    if everyProduct:
+        products = all_products
+
+    return products
 
 def post_trendyol_data(product):
     """

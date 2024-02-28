@@ -27,7 +27,7 @@ from api.n11_api import get_n11_stock_data, post_n11_data
 #     print("Invalid input. Please try again.")
 
 
-def get_data():
+def get_data(everyProduct: bool=False):
     """
     The function `get_data()` retrieves stock data from N11 and Trendyol, and returns various lists and
     data related to the retrieved data.
@@ -39,22 +39,30 @@ def get_data():
     - trendyol_ids: a list of product IDs from Trendyol
     """
     # Retrieve stock data from N11 and Trendyol APIs
-    N11_data = get_n11_stock_data()
-    Trendyol_data = get_trendyol_stock_data()
+    params = []
+    N11_data = get_n11_stock_data(everyProduct)
+    Trendyol_data = get_trendyol_stock_data(everyProduct)
     data_content = {"Trendyol_data": Trendyol_data, "N11_data": N11_data}
 
-    all_codes = list(set([item['code'] for item in N11_data] +
-                         [item['code'] for item in Trendyol_data]))
-    n11_ids = [item['code'] for item in N11_data]
-    trendyol_ids = [item['code']for item in Trendyol_data]
+    if everyProduct:
+        pass
+    else:
+        all_codes = list(set([item['code'] for item in N11_data] +
+                             [item['code'] for item in Trendyol_data]))
+        n11_ids = [item['code'] for item in N11_data]
+        trendyol_ids = [item['code']for item in Trendyol_data]
+        params = [all_codes, n11_ids, trendyol_ids]
 
-    return data_content, all_codes, n11_ids, trendyol_ids
+    return data_content, params
 
 
-def process_data():
+def process_update_data():
 
     #  This allows us to access and use these variables
-    data_lists, all_codes, n11_ids, trendyol_ids = get_data()
+    data_lists, params = get_data() 
+    all_codes = params[0] 
+    n11_ids = params[1] 
+    trendyol_ids = params[2] 
 
     # Initializing empty lists. These lists will be used to store data during the processing of stock
     # data from N11 and Trendyol APIs.
@@ -123,11 +131,17 @@ def get_platform_updates(data, all_codes, n11_ids, trendyol_ids):
                 continue
     return changed_values,matching_values
 
-post_data = process_data()
+def execute_updates():
+    post_data = process_update_data()
 
-for post in post_data:
-    if post['platform'] == 'Trendyol':
-        post_trendyol_data(post)
-    elif post['platform'] == 'N11':
-        post_n11_data(post)
+    for post in post_data:
+        if post['platform'] == 'Trendyol':
+            post_trendyol_data(post)
+        elif post['platform'] == 'N11':
+            post_n11_data(post)
+
+# execute_updates()
+
+data, _= get_data(True)
+
 print('End')
