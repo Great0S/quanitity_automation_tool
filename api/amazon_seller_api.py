@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+import csv
 import json
 import time
 import requests
@@ -12,8 +13,8 @@ from datetime import datetime, timedelta, timezone
 from urllib import parse
 
 
-client_id = str(GetEnv('SP_API_ID'))
-client_secret = str(GetEnv('SP_API_SECRET'))
+client_id = str(GetEnv('LWA_APP_ID'))
+client_secret = str(GetEnv('LWA_CLIENT_SECRET'))
 refresh_token = str(GetEnv('SP_API_REFRESH_TOKEN'))
 MarketPlaceID = str(GetEnv("AMAZONTURKEYMARKETID"))
 AmazonSA_ID = str(GetEnv('AMAZONSELLERACCOUNTID'))
@@ -68,8 +69,7 @@ def requestData(access_token, operation_uri, params: dict):
             access_token = get_access_token()
             report_header['x-amz-access-token'] = access_token
         elif orders_request.status_code == 429:
-            print(f"KeyError has occured! || I will sleep for 60 seconds now!")
-            time.sleep(60)
+            time.sleep(65)
         else:
             print(f"An error has occured || {Exception}")
             break
@@ -77,26 +77,46 @@ def requestData(access_token, operation_uri, params: dict):
     return jsonify
 
 
-def orderBasic_info(orders, orders_list):
+def orderBasic_info(item_list, orders_list):
 
-    for item in orders:
-        city = None
-        if "ShippingAddress" in item and item['FulfillmentChannel'] == "MFN" and isinstance(item['ShippingAddress'], dict):
-            city = item['ShippingAddress']['City']
-            county = item['ShippingAddress'].get('County', None)
+    city = None
+    county = None
 
-        # Create a dictionary for each item's information and append it to data_list
-        data = {
-            "AmazonOrderId": item.get('AmazonOrderId', None),
-            "OrderStatus": item.get('OrderStatus', None),
-            "EarliestShipDate": item.get('EarliestShipDate', None),
-            "LatestShipDate": item.get('LatestShipDate', None),
-            "PurchaseDate": item.get('PurchaseDate', None),
-            "City": city,
-            "County": county
-        }
+    for order in orders_list:
+        for item_data in item_list:
+            if item_data['AmazonOrderId'] == order['AmazonOrderId']:
+                try:
+                    if "ShippingAddress" in order and order['FulfillmentChannel'] == "MFN" and isinstance(order['ShippingAddress'], dict):
+                        city = order['ShippingAddress']['City']
+                        county = order['ShippingAddress'].get('County', None)
 
-        orders_list.append(data)
+                    # Create a dictionary for each item's information and append it to data_list
+                    if 'ASIN' not in order:
+                        for item in item_data['OrderItems']:
+                            data = {
+                            "AmazonOrderId": order.get('AmazonOrderId', None),
+                            "OrderStatus": order.get('OrderStatus', None),
+                            "EarliestShipDate": order.get('EarliestShipDate', None),
+                            "LatestShipDate": order.get('LatestShipDate', None),
+                            "PurchaseDate": order.get('PurchaseDate', None),
+                            "City": city,
+                            "County": county,
+                            "ASIN": item.get('ASIN', None),
+                            "QuantityShipped": item.get('QuantityShipped', None),
+                            "Amount": item['ItemPrice']['Amount'],
+                            "SellerSKU": item.get('SellerSKU', None),
+                            "Title": item.get('Title', None)
+                        }
+                            orders_list.append(data)          
+                except KeyError:
+                    if order in orders_list:
+                        orders_list.remove(order)
+                    pass
+    
+    for order in orders_list:
+        for item_data in item_list:
+            if item_data['AmazonOrderId'] == order['AmazonOrderId'] and 'ASIN' not in order:
+                orders_list.remove(order)
 
     return orders_list
 
@@ -119,7 +139,6 @@ def spapi_getOrders(rate_limit, max_requests):
 
     with ThreadPoolExecutor(max_workers=7) as executor:
         while orders:
-            orderBasic_info(orders, orders_dict)
             futures = []
             if next_token:
                 params = {'MarketplaceIds': MarketPlaceID,
@@ -131,16 +150,16 @@ def spapi_getOrders(rate_limit, max_requests):
             for future in futures:
                 result = future.result()
                 next_token = result.get('NextToken', None)
-                orders = result['Orders']
+                orders = result.get('Orders')
                 request_count += 1
                 if request_count % max_requests == 0:
-                    new_details = spapi_getOrderItems(
-                        0.5, 30, orders_dict, access_token)
-
-                    time.sleep(rate)
+                    spapi_getOrderItems(0.5, 30, orders, access_token)
+                    time.sleep(rate+5)
                     request_count = 0
                 else:
                     pass
+
+        spapi_getOrderItems(0.5, 30, orders_dict, access_token)
 
     return orders_dict
 
@@ -153,42 +172,68 @@ def spapi_getOrderItems(rate_limit, max_requests, orders_list, access_token):
     rate = int(1 / rate_limit)
 
     items_dict = []
-    request_count = 1
+    item_request_count = 1
 
     with ThreadPoolExecutor(max_workers=7) as executor:
 
         futures = []
 
         for order in orders_list:
-            futures.append(executor.submit(
-                requestData, access_token, f"/orders/v0/orders/{order['AmazonOrderId']}/orderItems", params))
-            request_count += 1
+            if 'ASIN' not in order:
+                futures.append(executor.submit(
+                    requestData, access_token, f"/orders/v0/orders/{order['AmazonOrderId']}/orderItems", params))
+                item_request_count += 1
 
-            if request_count % max_requests == 0:
-                for future in futures:
-                    result = future.result()
-                    items = result['OrderItems']
-                    if items:
-                        for item in items:
-                            data = {f"{order['AmazonOrderId']}": {
-                                "ASIN": item.get('ASIN', None),
-                                "QuantityShipped": item.get('QuantityShipped', None),
-                                "Amount": item['ItemPrice']['Amount'],
-                                "SellerSKU": item.get('SellerSKU', None),
-                                "Title": item.get('Title', None),
-                                'statusNow': 'Done'
-                            }}
-                            items_dict.append(data)
+                if item_request_count % max_requests == 0:
+                    for future in futures:
+                        result = future.result()
+                        if result:
+                            items_dict.append(result)
+                    orderBasic_info(
+                                orders_list=orders_list, item_list=items_dict)
+                    item_request_count = 0
+                    items_dict = []
 
-                    if request_count % max_requests == 0:
-                        time.sleep(rate)
-                        request_count = 0
-                    else:
-                        pass
-
-    return items_dict
+    return orders_list
 
 
-token_response = spapi_getOrders(rate_limit=0.0166, max_requests=20)
+def filter_orderData(orders_list, order, result, items):
+    for item in items:
+        try:
+            print(result.get('AmazonOrderId', None))
+            data = {
+                "ASIN": item.get('ASIN', None),
+                "QuantityShipped": item.get('QuantityShipped', None),
+                "Amount": item['ItemPrice']['Amount'],
+                "SellerSKU": item.get('SellerSKU', None),
+                "Title": item.get('Title', None)
+            }
+            for order_item in orders_list:
+                if result['AmazonOrderId'] == order_item['AmazonOrderId']:
+                    orders_list.remove(order_item)
+                    order_item.update(data)
+                    orders_list.append(order_item)
+                    break
+        except KeyError as ex:
+            if order in orders_list:
+                orders_list.remove(order)
+            continue
+    return orders_list
 
-print(token_response.text)
+
+def save_to_csv(data, filename=""):
+    if data:
+        keys = set()
+        for item in data:
+            keys.update(item.keys())
+
+        with open(f"{filename}_data_list.csv", "w", newline='', encoding="utf-8") as csvfile:
+            file_writer = csv.DictWriter(csvfile, fieldnames=sorted(keys))
+            file_writer.writeheader()
+            for d in data:
+                file_writer.writerow(d)
+
+
+orders_list = spapi_getOrders(rate_limit=0.0166, max_requests=20)
+save_to_csv(orders_list, 'amazon')
+print('Done')
