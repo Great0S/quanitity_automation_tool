@@ -1,21 +1,31 @@
-additional_info = {
-    '408-6659271-4223524': {'AdditionalData': 'Some additional data for this order'},
-    # Add more additional info mappings as needed
-}
+import datetime
+import os
+from sp_api.api import Catalog, Reports, Orders
+from sp_api.base import SellingApiException, Marketplaces
+from sp_api.base.reportTypes import ReportType
+from sp_api.util import throttle_retry, load_all_pages
+from simple_dotenv import GetEnv
 
-orders_list = [
-    {'AmazonOrderId': '408-6659271-4223524', 'OrderStatus': 'Shipped', 'EarliestShipDate': '2022-03-07T00:30:00Z', 'LatestShipDate': '2022-03-07T00:30:00Z', 'PurchaseDate': '2022-03-06T11:42:02Z', 'City': None, 'County': 'Levazım Mh.'},
-    # Add more order dictionaries
-]
+credentials=dict(
+        refresh_token=str(GetEnv('SP_API_REFRESH_TOKEN')),
+        lwa_app_id=str(GetEnv('LWA_APP_ID')),
+        lwa_client_secret=str(GetEnv('LWA_CLIENT_SECRET'))
+    )
+market = str(GetEnv('AMAZONTURKEYMARKETID'))
+#wd = Orders(credentials=credentials, marketplace=[os.environ.get('SP_API_DEFAULT_MARKETPLACE')]).get_orders(CreatedAfter=("2019-10-07T17:58:48.017Z"))
 
-# Iterate through each order dictionary
-for order in orders_list:
-    # Get the AmazonOrderId for the current order
-    order_id = order['AmazonOrderId']
-    
-    # Check if additional information exists for this order ID
-    if order_id in additional_info:
-        # Merge the additional information with the current order dictionary
-        order.update(additional_info[order_id])
+@throttle_retry(rate=0.0167, tries=10, delay=5)
+@load_all_pages(next_token_param='next_token', use_rate_limit_header=True)
+def load_all_orders(**kwargs):
+    """
+    a generator function to return all pages, obtained by NextToken
+    """
+    return Orders().get_orders(**kwargs)
 
-# Now each order dictionary in orders_list should have additional information if available
+orders = []
+
+for page in load_all_orders(LastUpdatedAfter=("2019-10-07T17:58:48.017Z")):
+    for order in page.payload.get('Orders'):
+        orders.append(order)
+        print(order['AmazonOrderId'])
+print(len(orders))
