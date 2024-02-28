@@ -81,6 +81,7 @@ def orderBasic_info(item_list, orders_list):
 
     city = None
     county = None
+    count = 0
 
     for order in orders_list:
         for item_data in item_list:
@@ -94,31 +95,32 @@ def orderBasic_info(item_list, orders_list):
                     if 'ASIN' not in order:
                         for item in item_data['OrderItems']:
                             data = {
-                            "AmazonOrderId": order.get('AmazonOrderId', None),
-                            "OrderStatus": order.get('OrderStatus', None),
-                            "EarliestShipDate": order.get('EarliestShipDate', None),
-                            "LatestShipDate": order.get('LatestShipDate', None),
-                            "PurchaseDate": order.get('PurchaseDate', None),
-                            "City": city,
-                            "County": county,
-                            "ASIN": item.get('ASIN', None),
-                            "QuantityShipped": item.get('QuantityShipped', None),
-                            "Amount": item['ItemPrice']['Amount'],
-                            "SellerSKU": item.get('SellerSKU', None),
-                            "Title": item.get('Title', None)
-                        }
-                            orders_list.append(data)          
+                                "AmazonOrderId": order.get('AmazonOrderId', None),
+                                "OrderStatus": order.get('OrderStatus', None),
+                                "EarliestShipDate": order.get('EarliestShipDate', None),
+                                "LatestShipDate": order.get('LatestShipDate', None),
+                                "PurchaseDate": order.get('PurchaseDate', None),
+                                "City": city,
+                                "County": county,
+                                "ASIN": item.get('ASIN', None),
+                                "QuantityShipped": item.get('QuantityShipped', None),
+                                "Amount": item['ItemPrice']['Amount'],
+                                "SellerSKU": item.get('SellerSKU', None),
+                                "Title": item.get('Title', None)
+                            }
+                            orders_list.append(data)
+                            count += 1
                 except KeyError:
                     if order in orders_list:
                         orders_list.remove(order)
                     pass
-    
-    for order in orders_list:
+
+    for index, order in enumerate(orders_list):
         for item_data in item_list:
             if item_data['AmazonOrderId'] == order['AmazonOrderId'] and 'ASIN' not in order:
-                orders_list.remove(order)
+                del orders_list[index]
 
-    return orders_list
+    return orders_list, count
 
 
 def spapi_getOrders(rate_limit, max_requests):
@@ -135,6 +137,7 @@ def spapi_getOrders(rate_limit, max_requests):
     orders = formatted_data['Orders']
     orders_dict = []
     request_count = 1
+    count = 0
     next_token = formatted_data.get('NextToken')
 
     with ThreadPoolExecutor(max_workers=7) as executor:
@@ -152,8 +155,26 @@ def spapi_getOrders(rate_limit, max_requests):
                 next_token = result.get('NextToken', None)
                 orders = result.get('Orders')
                 request_count += 1
+
+                for oi in orders:
+                    if orders_dict:
+                        for io in orders_dict:
+                            if io['AmazonOrderId'] == oi['AmazonOrderId']:
+                                break
+                            else:
+                                if oi['OrderStatus'] == "Shipped":
+                                    count += 1
+                                    orders_dict.append(oi)
+                                    break
+                    elif oi['OrderStatus'] == "Shipped":
+                        count += 1
+                        orders_dict.append(oi)
+                print(f'{count} orders has been added')
                 if request_count % max_requests == 0:
-                    spapi_getOrderItems(0.5, 30, orders, access_token)
+                    print(f"Processing {count} orders please wait!")
+                    spapi_getOrderItems(0.5, 30, orders_dict, access_token)
+                    print(f"Processed {count} orders || Orders left: {
+                          len(orders_dict)-count}")
                     time.sleep(rate+5)
                     request_count = 0
                 else:
@@ -166,6 +187,7 @@ def spapi_getOrders(rate_limit, max_requests):
 
 def spapi_getOrderItems(rate_limit, max_requests, orders_list, access_token):
 
+    count = 0
     params = {
         'MarketplaceIds': MarketPlaceID}
 
@@ -190,11 +212,11 @@ def spapi_getOrderItems(rate_limit, max_requests, orders_list, access_token):
                         if result:
                             items_dict.append(result)
                     orderBasic_info(
-                                orders_list=orders_list, item_list=items_dict)
+                        orders_list=orders_list, item_list=items_dict)
                     item_request_count = 0
                     items_dict = []
 
-    return orders_list
+    return orders_list, count
 
 
 def filter_orderData(orders_list, order, result, items):

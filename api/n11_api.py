@@ -68,9 +68,7 @@ def assign_vars(response, response_namespace, list_name, error_message=False):
         return None, None
 
 # Function for retrieving stock data from the N11 API.
-
-
-def get_n11_stock_data():
+def get_n11_stock_data(everyProduct: bool=False):
     """
     The function `get_n11_stock_data` sends a SOAP request to the N11 API to retrieve a list of products
     and their stock information.
@@ -106,6 +104,7 @@ def get_n11_stock_data():
     # This is used to send a SOAP request to the N11 API to retrieve a list of products.
     api_call = requests.post(url, headers=headers, data=payload)
     current_page = 0
+    all_products = []
 
     # Status code of 200 means that the request was successful and the server returned the expected response.
     if api_call.status_code == 200:
@@ -118,23 +117,26 @@ def get_n11_stock_data():
             if products_list is not None:
                 # Process the product data
                 for product in products_list:
-                    product_id = product.get("id")
-                    product_code = product.get("productSellerCode")
-                    if "stockItems" in product and isinstance(product['stockItems']['stockItem'], list):
-                        for stock_item in product['stockItems']['stockItem']:
-                            if stock_item['sellerStockCode'] == product_code:
-                                product_qty = int(stock_item["quantity"])
-                                break
-                    elif "stockItems" in product:
-                        product_qty = int(
-                            product['stockItems']['stockItem']['quantity'])
+                    if everyProduct:
+                        all_products.append(product)
                     else:
-                        product_qty = None
-                    raw_elements.append({
-                        "id": product_id,
-                        "code": product_code,
-                        "stok": product_qty,
-                    })
+                        product_id = product.get("id")
+                        product_code = product.get("productSellerCode")
+                        if "stockItems" in product and isinstance(product['stockItems']['stockItem'], list):
+                            for stock_item in product['stockItems']['stockItem']:
+                                if stock_item['sellerStockCode'] == product_code:
+                                    product_qty = int(stock_item["quantity"])
+                                    break
+                        elif "stockItems" in product:
+                            product_qty = int(
+                                product['stockItems']['stockItem']['quantity'])
+                        else:
+                            product_qty = None
+                        raw_elements.append({
+                            "id": product_id,
+                            "code": product_code,
+                            "stok": product_qty,
+                        })
             else:
                 print("No products found in the response.")
 
@@ -151,11 +153,13 @@ def get_n11_stock_data():
         print("Error:", api_call.text)
 
     print("N11 SOAP Request is Successful. Response:", api_call.reason)
+
+    if everyProduct:
+        raw_elements = all_products
+
     return raw_elements
 
 # Function for retrieving order data from the N11 API.
-
-
 def get_n11_detailed_order_list(url):
     """
     The function `get_n11_detailed_order_list` sends a SOAP request to the N11 API to retrieve a list of
@@ -290,8 +294,6 @@ def looper(link, payload_dump, namespace, list_name):
             time.sleep(1)
 
 # Function for saving data to a CSV file.
-
-
 def save_to_csv(data, filename=""):
     if data:
         keys = set()
@@ -305,8 +307,6 @@ def save_to_csv(data, filename=""):
                 file_writer.writerow(d)
 
 # Function for updating product data on N11
-
-
 def post_n11_data(data):
 
     # The `post_payload` variable is a string that contains an XML request payload for updating the
