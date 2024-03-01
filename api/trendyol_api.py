@@ -3,15 +3,17 @@ import json
 import re
 import time
 import requests
+import os 
 
 # The code snippet is initializing some variables and setting up the headers for making API requests.
 page = 0
 url_addon = ""
 products = []
+auth_hash = os.environ.get('TRENDYOLBASICAUTHHASH')
 headers = {
     'User-Agent': '120101 - SelfIntegration',
     'Content-Type': 'application/json',
-    'Authorization': 'Basic c1V0V1BWT3U4ZWdISldWcE5za0s6QVBhTU5rQjBuUVJQTzZSQ2tjeWc='
+    'Authorization': f'Basic {auth_hash}'
 }
 
 
@@ -57,9 +59,9 @@ def prepare_data(request_data):
     return decoded_data
 
 
-def get_trendyol_stock_data():
+def get_trendyol_stock_data(everyProduct: bool =False):
     """
-    The function `get_data` retrieves data from multiple pages and appends it to a list of products.
+    The function `get_data` retrieves products data from multiple pages and appends it to a list.
 
     :param page: The `page` parameter is used to specify the page number of the data to retrieve. It is
     used in the URL to fetch data from different pages
@@ -76,32 +78,37 @@ def get_trendyol_stock_data():
     #     endDate = int(datetime.fromordinal(enDate.toordinal()).timestamp())
     #     url_addon = f"?page={page}&size=100&startDate={startDate}&endDate={endDate}"
     # else:
-
+    all_products = []
+    products = []
     url_addon = f"?page={page}&size=100"
     decoded_data = prepare_data(request_data(url_addon, "GET", {}))
 
-    while page < int(decoded_data['totalPages']):
+    while page < int(decoded_data['totalPages']):        
         for element in range(len(decoded_data['content'])):
             data = decoded_data['content'][element]
+            if everyProduct:
+                all_products.append(data)
+            else:
+                item_id = data['barcode']
+                if item_id == None:
+                    pass
+                item = data['productMainId']
+                quantity = data['quantity']
 
-            item_id = data['barcode']
-            if item_id == None:
-                pass
-            item = data['productMainId']
-            quantity = data['quantity']
-
-            products.append({
-                "id": f"{item_id}",
-                "code": f"{item}",
-                "stok": quantity
-            })
-
+                products.append({
+                    "id": f"{item_id}",
+                    "code": f"{item}",
+                    "stok": quantity
+                })
         page += 1
         url_addon = f"?page={page}&size=100"
         decoded_data = prepare_data(request_data(url_addon, "GET", {}))
     print(f'Trendyol request is successful. Response: OK')
-    return products
 
+    if everyProduct:
+        products = all_products
+
+    return products
 
 def post_trendyol_data(product):
     """
@@ -117,7 +124,7 @@ def post_trendyol_data(product):
         {
     "items": [
         {
-            "barcode": product['code'],
+            "barcode": product['id'],
             "quantity": int(product['qty'])
         }
     ]
@@ -129,8 +136,22 @@ def post_trendyol_data(product):
             print(
                 f"Request failure for trendyol product {product['code']} | Response: {post_response.text}\n")
         else:
-            print(
-                f'Trendyol product with code: {product["code"]}, New value: {product["qty"]}\n')
+            batchRequestId = json.loads(post_response.text)['batchRequestId']
+            while True:
+                batchId_request_raw = request_data(f'/batch-requests/{batchRequestId}', "GET", [])
+                batchId_request = json.loads(batchId_request_raw.text)
+                if batchId_request['items']:
+                    request_status = batchId_request['items'][0]['status']
+                    if request_status == 'SUCCESS':
+                        print(
+                    f'Trendyol product with code: {product["code"]}, New value: {product["qty"]}\n')
+                        break
+                    elif request_status == 'FAILED':
+                        print(
+                    f'Trendyol product with code: {product["code"]} failed to update || Reason: {batchId_request['items']['failureReasons']}\n')
+                        break
+                else:
+                    pass
     elif post_response.status_code == 429:
         time.sleep(15)
     else:
