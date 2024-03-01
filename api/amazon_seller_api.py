@@ -1,6 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 import csv
+import gzip
 import json
+import shutil
 import time
 import requests
 import os
@@ -44,7 +46,10 @@ def requestData(access_token, operation_uri, params: dict):
 
     Endpoint_url = f'https://sellingpartnerapi-eu.amazon.com{operation_uri}?'
 
-    uri = '&'.join([f'{k}={params[k]}' for k, v in params.items()])
+    if params:
+        uri = '&'.join([f'{k}={params[k]}' for k, v in params.items()])
+    else:
+        uri = ''
 
     # Get the current time
     current_time = datetime.now(timezone.utc)
@@ -63,7 +68,7 @@ def requestData(access_token, operation_uri, params: dict):
             f"{Endpoint_url}{uri}", headers=report_header, data=[])
 
         if orders_request.status_code == 200 or orders_request.status_code == 400:
-            jsonify = json.loads(orders_request.text)['payload']
+            jsonify = json.loads(orders_request.text)
             break
         elif orders_request.status_code == 403:
             access_token = get_access_token()
@@ -129,58 +134,60 @@ def spapi_getOrders(rate_limit, max_requests):
 
     params = {
         'MarketplaceIds': MarketPlaceID,
+        'OrderStatuses': 'Shipped',
+        'MaxResultsPerPage': 100,
         'CreatedAfter': "2019-10-07T17:58:48.017Z"}
 
     rate = int(1 / rate_limit)
 
-    formatted_data = requestData(access_token, "/orders/v0/orders/", params)
+    formatted_data = requestData(
+        access_token, "/orders/v0/orders/", params)['payload']
     orders = formatted_data['Orders']
     orders_dict = []
     request_count = 1
     count = 0
     next_token = formatted_data.get('NextToken')
+    while orders:
+        futures = []
 
-    with ThreadPoolExecutor(max_workers=7) as executor:
-        while orders:
-            futures = []
-            if next_token:
-                params = {'MarketplaceIds': MarketPlaceID,
-                          "NextToken": parse.quote(formatted_data['NextToken'])}
-                futures.append(executor.submit(
-                    requestData, access_token, "/orders/v0/orders/", params))
-                next_token = None
+        if next_token:
+            params = {'MarketplaceIds': MarketPlaceID,
+                      "NextToken": parse.quote(formatted_data['NextToken'])}
+            futures = requestData(access_token, "/orders/v0/orders/", params)
 
-            for future in futures:
-                result = future.result()
-                next_token = result.get('NextToken', None)
-                orders = result.get('Orders')
-                request_count += 1
+            result = futures['payload']
+            next_token = result.get('NextToken', None)
+            orders = result.get('Orders')
+            request_count += 1
 
-                for oi in orders:
-                    if orders_dict:
-                        for io in orders_dict:
-                            if io['AmazonOrderId'] == oi['AmazonOrderId']:
-                                break
-                            else:
-                                if oi['OrderStatus'] == "Shipped":
-                                    count += 1
-                                    orders_dict.append(oi)
-                                    break
-                    elif oi['OrderStatus'] == "Shipped":
-                        count += 1
-                        orders_dict.append(oi)
-                print(f'{count} orders has been added')
-                if request_count % max_requests == 0:
-                    print(f"Processing {count} orders please wait!")
-                    spapi_getOrderItems(0.5, 30, orders_dict, access_token)
-                    print(f"Processed {count} orders || Orders left: {
-                          len(orders_dict)-count}")
-                    time.sleep(rate+5)
-                    request_count = 0
+            for oi in orders:
+                if orders_dict:
+                    for io in orders_dict:
+                        if io['AmazonOrderId'] == oi['AmazonOrderId']:
+                            break
+                        else:
+                            count += 1
+                            orders_dict.append(oi)
+                            break
                 else:
-                    pass
+                    count += 1
+                    orders_dict.append(oi)
+            print(f'{count} orders has been added')
+            if request_count % max_requests == 0:
+                print(f"Processing {count} orders please wait!")
+                spapi_getOrderItems(0.5, 30, orders_dict, access_token)
+                print(f"Processed {count} orders || Orders left: {
+                      len(orders_dict)-count}")
+                request_count = 0
 
-        spapi_getOrderItems(0.5, 30, orders_dict, access_token)
+            else:
+                pass
+    for data in orders_dict:
+        if 'MarketplaceId' in data:
+            spapi_getOrderItems(0.5, 30, orders_dict, access_token)
+            break
+        else:
+            continue
 
     return orders_dict
 
@@ -208,7 +215,7 @@ def spapi_getOrderItems(rate_limit, max_requests, orders_list, access_token):
 
                 if item_request_count % max_requests == 0:
                     for future in futures:
-                        result = future.result()
+                        result = future.result()['payload']
                         if result:
                             items_dict.append(result)
                     orderBasic_info(
@@ -217,6 +224,63 @@ def spapi_getOrderItems(rate_limit, max_requests, orders_list, access_token):
                     items_dict = []
 
     return orders_list, count
+
+
+def spapi_getListings():
+
+    access_token = get_access_token()
+    params = {
+        'MarketplaceIds': MarketPlaceID,
+        'reportTypes': 'GET_MERCHANT_LISTINGS_ALL_DATA'}
+
+    report_id_request = requestData(
+        access_token, "/reports/2021-06-30/reports/", params)
+    report_id = report_id_request['reports'][0]['reportId']
+    verify_report_status_request = requestData(
+        access_token, f'/reports/2021-06-30/reports/{report_id}', [])
+    processingStatus = verify_report_status_request['processingStatus']
+    while True:
+        if processingStatus == 'DONE':
+            reportDocumentId = verify_report_status_request['reportDocumentId']
+            report_data = requestData(
+                access_token, f'/reports/2021-06-30/documents/{reportDocumentId}', [])
+            compression = report_data['compressionAlgorithm']
+            report_link = report_data['url']
+            break
+        else:
+            pass
+
+    def download_and_save_file(url, save_path):
+        # Send a GET request to the URL
+        response = requests.get(url, stream=True)
+
+        # Raise an exception if the request was not successful
+        response.raise_for_status()
+
+        # Open the file for writing in binary mode
+        with open(save_path, 'wb') as f:
+            # Iterate over the content of the response and write it to the file
+            for chunk in response.iter_content(chunk_size=1024):
+                if chunk:
+                    f.write(chunk)
+
+    def decompress_gzip_file(gzip_file_path, decompressed_file_path):
+        with gzip.open(gzip_file_path, 'rb') as f_in:
+            with open(decompressed_file_path, 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+
+    if report_link:
+        file_saved = f'amazon-all-inventory.csv'
+
+        if compression:
+            file_download = f'amazon-all-inventory-{report_id}.{compression}'
+            file_saved = f'amazon-all-inventory-{report_id}.csv'
+            download_and_save_file(report_link, file_download)
+            decompress_gzip_file(file_download, file_saved)
+
+    print(f'{report_id} report has been created')
+
+    return file_saved
 
 
 def filter_orderData(orders_list, order, result, items):
@@ -256,6 +320,11 @@ def save_to_csv(data, filename=""):
                 file_writer.writerow(d)
 
 
+# report = spapi_getListings()
+token = get_access_token()
+links = requests.get('https://sellingpartnerapi-eu.amazon.com/catalog/2022-04-01/items/B0B45WZ39Z', params={"marketplaceIds": 'A33AVAJ2PDY3EV', 'IncludedData': ['attributes', 'dimensions', 'identifiers', 'images', 'productTypes', 'salesRanks', 'summaries', 'relationships', 'vendorDetails']}, headers={
+    'Content-Type': 'application/json',
+    'x-amz-access-token': token})
 orders_list = spapi_getOrders(rate_limit=0.0166, max_requests=20)
 save_to_csv(orders_list, 'amazon')
 print('Done')

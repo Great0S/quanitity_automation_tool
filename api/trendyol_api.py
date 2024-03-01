@@ -3,15 +3,17 @@ import json
 import re
 import time
 import requests
+import os 
 
 # The code snippet is initializing some variables and setting up the headers for making API requests.
 page = 0
 url_addon = ""
 products = []
+auth_hash = os.environ.get('TRENDYOLBASICAUTHHASH')
 headers = {
     'User-Agent': '120101 - SelfIntegration',
     'Content-Type': 'application/json',
-    'Authorization': 'Basic c1V0V1BWT3U4ZWdISldWcE5za0s6QVBhTU5rQjBuUVJQTzZSQ2tjeWc='
+    'Authorization': f'Basic {auth_hash}'
 }
 
 
