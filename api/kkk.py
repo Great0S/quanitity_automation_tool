@@ -1,31 +1,29 @@
-import datetime
-import os
-from sp_api.api import Catalog, Reports, Orders
-from sp_api.base import SellingApiException, Marketplaces
-from sp_api.base.reportTypes import ReportType
-from sp_api.util import throttle_retry, load_all_pages
-from simple_dotenv import GetEnv
+import json
+import requests
 
-credentials=dict(
-        refresh_token=str(GetEnv('SP_API_REFRESH_TOKEN')),
-        lwa_app_id=str(GetEnv('LWA_APP_ID')),
-        lwa_client_secret=str(GetEnv('LWA_CLIENT_SECRET'))
-    )
-market = str(GetEnv('AMAZONTURKEYMARKETID'))
-#wd = Orders(credentials=credentials, marketplace=[os.environ.get('SP_API_DEFAULT_MARKETPLACE')]).get_orders(CreatedAfter=("2019-10-07T17:58:48.017Z"))
+from amazon_seller_api import get_access_token
 
-@throttle_retry(rate=0.0167, tries=10, delay=5)
-@load_all_pages(next_token_param='next_token', use_rate_limit_header=True)
-def load_all_orders(**kwargs):
-    """
-    a generator function to return all pages, obtained by NextToken
-    """
-    return Orders().get_orders(**kwargs)
+url = "https://sellingpartnerapi-eu.amazon.com/listings/2021-08-01/items/A2Z045PNNSBEVP/MER4060"
+access_token = get_access_token()
+params = {
+    "marketplaceIds": "A33AVAJ2PDY3EV",
+    "issueLocale": "en_US",
+    "includedData": "attributes,fulfillmentAvailability",
+    
+}
 
-orders = []
+headers = {
+    "User-Agent": "BlazingAPI/0.1 (Lang=Python/3.11.7; platform=Windows/10)",
+    "x-amz-access-token": access_token
+}
 
-for page in load_all_orders(LastUpdatedAfter=("2019-10-07T17:58:48.017Z")):
-    for order in page.payload.get('Orders'):
-        orders.append(order)
-        print(order['AmazonOrderId'])
-print(len(orders))
+response = requests.get(url, params=params, headers=headers)
+refined = json.loads(response.text)
+
+if response.status_code == 200:
+    # Request was successful
+    data = response.json()
+    # Process the response data as needed
+    print(data)
+else:
+    print(f"Request failed with status code {response.status_code}")
