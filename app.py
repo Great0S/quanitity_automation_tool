@@ -140,8 +140,6 @@ def execute_updates():
         elif post['platform'] == 'N11':
             post_n11_data(post)
 
-# execute_updates()
-
-data, _= get_data(True)
+execute_updates()
 
 print('End')
