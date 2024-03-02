@@ -43,5 +43,6 @@
         "yourconsumersecret",
         "Zahide",
         "zeep"
-    ]
+    ],
+    "wolf.disableHotModeWarning": true
 }
