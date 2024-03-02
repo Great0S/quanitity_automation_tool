@@ -97,8 +97,8 @@ def get_trendyol_stock_data(everyProduct: bool =False):
 
                 products.append({
                     "id": f"{item_id}",
-                    "code": f"{item}",
-                    "stok": quantity
+                    "sku": f"{item}",
+                    "qty": quantity
                 })
         page += 1
         url_addon = f"?page={page}&size=100"
@@ -144,11 +144,11 @@ def post_trendyol_data(product):
                     request_status = batchId_request['items'][0]['status']
                     if request_status == 'SUCCESS':
                         print(
-                    f'Trendyol product with code: {product["code"]}, New value: {product["qty"]}\n')
+                    f'Trendyol product with code: {product["sku"]}, New value: {product["qty"]}\n')
                         break
                     elif request_status == 'FAILED':
                         print(
-                    f'Trendyol product with code: {product["code"]} failed to update || Reason: {batchId_request['items']['failureReasons']}\n')
+                    f'Trendyol product with code: {product["sku"]} failed to update || Reason: {batchId_request['items']['failureReasons']}\n')
                         break
                 else:
                     pass
@@ -157,6 +157,6 @@ def post_trendyol_data(product):
     else:
         post_response.raise_for_status()
         print(
-            f"Request for trendyol product {product['code']} is unsuccessful | Response: {post_response.text}\n")
+            f"Request for trendyol product {product['sku']} is unsuccessful | Response: {post_response.text}\n")
 
 # post_data(products, request_data, prepare_data)

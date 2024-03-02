@@ -3,7 +3,7 @@ import requests
 
 from amazon_seller_api import get_access_token
 
-url = "https://sellingpartnerapi-eu.amazon.com/listings/2021-08-01/items/A2Z045PNNSBEVP/MER4060"
+url = 
 access_token = get_access_token()
 params = {
     "marketplaceIds": "A33AVAJ2PDY3EV",

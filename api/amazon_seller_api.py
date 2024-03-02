@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 import csv
 import gzip
 import json
+import re
 import shutil
 import time
 import requests
@@ -25,24 +26,35 @@ credentials = {
     'lwa_client_secret': client_secret
 }
 
+session = requests.session()
 
-def requestData(operation_uri, params: dict):
-    def get_access_token():
-        token_url = "https://api.amazon.com/auth/o2/token"
-        payload = f'grant_type=refresh_token&client_id={client_id}&client_secret={
-            client_secret}&refresh_token={refresh_token}'
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
-        }
 
-        token_response = requests.request(
-            "POST", token_url, headers=headers, data=payload)
-        response_content = json.loads(token_response.text)
-        access_token = response_content['access_token']
-        return access_token
+def get_access_token():
+
+    token_url = "https://api.amazon.com/auth/o2/token"
+
+    payload = f'grant_type=refresh_token&client_id={client_id}&client_secret={
+        client_secret}&refresh_token={refresh_token}'
+
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+    }
+
+    token_response = requests.request(
+        "POST", token_url, headers=headers, data=payload)
+
+    response_content = json.loads(token_response.text)
+
+    access_token = response_content['access_token']
+
+    return access_token
+
+access_token = get_access_token()
+
+def requestData(session, operation_uri, params: dict):
 
     Endpoint_url = f'https://sellingpartnerapi-eu.amazon.com{operation_uri}?'
-    access_token = get_access_token()
+    
 
     if params:
         uri = '&'.join([f'{k}={params[k]}' for k, v in params.items()])
@@ -54,7 +66,7 @@ def requestData(operation_uri, params: dict):
 
     # Format the time in the desired format
     formatted_time = current_time.strftime('%Y%m%dT%H%M%SZ')
-    report_header = {
+    session.headers = {
         'Accept-Encoding': 'gzip',
         'Content-Type': 'application/json',
         'x-amz-access-token': f'{access_token}',
@@ -62,24 +74,35 @@ def requestData(operation_uri, params: dict):
     }
     while True:
 
-        orders_request = requests.get(
-            f"{Endpoint_url}{uri}", headers=report_header, data=[])
+        orders_request = session.get(f"{Endpoint_url}{uri}", data=[])
 
         if orders_request.status_code == 200 or orders_request.status_code == 400:
+
             jsonify = json.loads(orders_request.text)
+
             break
         elif orders_request.status_code == 403:
-            report_header['x-amz-access-token'] = access_token
+
+            session.headers['x-amz-access-token'] = access_token
+
         elif orders_request.status_code == 429:
+
             time.sleep(65)
+
         else:
-            print(f"An error has occured || {Exception}")
+
+            error_message = json.loads(orders_request.text)['errors'][0]['message']
+
+            print(f"An error has occured || {error_message}")
+
+            jsonify = None
+
             break
 
     return jsonify
 
 
-def spapi_getOrders(rate_limit, max_requests):
+def spapi_getOrders():
 
     params = {
         'MarketplaceIds': MarketPlaceID,
@@ -90,22 +113,33 @@ def spapi_getOrders(rate_limit, max_requests):
     # rate = int(1 / rate_limit)
 
     formatted_data = requestData("/orders/v0/orders/", params)['payload']
+
     orders = formatted_data['Orders']
+
     orders_dict = []
+
     request_count = 1
+
     count = 0
+
     next_token = formatted_data.get('NextToken')
+
     while orders:
+
         futures = []
 
         if next_token:
             params = {'MarketplaceIds': MarketPlaceID,
                       "NextToken": parse.quote(formatted_data['NextToken'])}
+
             futures = requestData("/orders/v0/orders/", params)
 
             result = futures['payload']
+
             next_token = result.get('NextToken', None)
+
             orders = result.get('Orders')
+
             request_count += 1
 
             for oi in orders:
@@ -120,30 +154,52 @@ def spapi_getOrders(rate_limit, max_requests):
                 else:
                     count += 1
                     orders_dict.append(oi)
+
             print(f'{count} orders has been added')
-            if request_count % max_requests == 0:
+
+            if request_count % 30 == 0:
                 print(f"Processing {count} orders please wait!")
-                spapi_getOrderItems(0.5, 30, orders_dict)
+
+                spapi_getOrderItems(30, orders_dict)
+
                 print(f"Processed {count} orders || Orders left: {
                       len(orders_dict)-count}")
+
                 request_count = 0
 
             else:
                 pass
+
     for data in orders_dict:
+
         if 'MarketplaceId' in data:
-            spapi_getOrderItems(0.5, 30, orders_dict)
+
+            spapi_getOrderItems(30, orders_dict)
+
             break
         else:
             continue
 
-    def spapi_getOrderItems(rate_limit, max_requests, orders_list):
+    def spapi_getOrderItems(max_requests, orders_list):
+        """
+        The function `spapi_getOrderItems` retrieves order items data for a list of orders and processes
+        it to extract basic order information.
+
+        :param max_requests: The `max_requests` parameter in the `spapi_getOrderItems` function
+        represents the maximum number of requests that can be made before processing the collected data.
+        In this case, it is used to control how many requests are made before processing the order items
+        data
+        :param orders_list: It seems like the code snippet you provided is incomplete. You mentioned
+        that you wanted to provide information about the `orders_list`, but the code snippet cuts off
+        before the `orders_list` is shown. Could you please provide the `orders_list` data so that I can
+        assist you further with understanding the
+        :return: The function `spapi_getOrderItems` returns the `orders_list` and `count` variables
+        after processing the order items and extracting basic information about each order.
+        """
 
         count = 0
         params = {
             'MarketplaceIds': MarketPlaceID}
-
-        # rate = int(1 / rate_limit)
 
         items_dict = []
         item_request_count = 1
@@ -153,19 +209,28 @@ def spapi_getOrders(rate_limit, max_requests):
             futures = []
 
             for order in orders_list:
+
                 if 'ASIN' not in order:
+
                     futures.append(executor.submit(
                         requestData, f"/orders/v0/orders/{order['AmazonOrderId']}/orderItems", params))
+
                     item_request_count += 1
 
                     if item_request_count % max_requests == 0:
+
                         for future in futures:
+
                             result = future.result()['payload']
+
                             if result:
                                 items_dict.append(result)
+
                         orderBasic_info(
                             orders_list=orders_list, item_list=items_dict)
+
                         item_request_count = 0
+
                         items_dict = []
 
         def orderBasic_info(item_list, orders_list):
@@ -219,29 +284,59 @@ def spapi_getOrders(rate_limit, max_requests):
     return orders_dict
 
 
-def spapi_getListings():
+def spapi_getListings(everyProduct: bool = False):
+    """
+    The function `spapi_getListings` retrieves a report from an API, downloads and decompresses the
+    report file, converts it from CSV to JSON format, and returns the inventory items as a list of
+    dictionaries.
+    :return: The `spapi_getListings` function returns a list of inventory items in JSON format after
+    processing and downloading data from an Amazon API endpoint.
+    """
 
     params = {
         'MarketplaceIds': MarketPlaceID,
         'reportTypes': 'GET_MERCHANT_LISTINGS_ALL_DATA'}
 
-    report_id_request = requestData("/reports/2021-06-30/reports/", params)
+    report_id_request = requestData(
+        session, "/reports/2021-06-30/reports/", params)
+
     report_id = report_id_request['reports'][0]['reportId']
-    verify_report_status_request = requestData(
-        f'/reports/2021-06-30/reports/{report_id}', [])
+
+    verify_report_status_request = requestData(session,
+                                               f'/reports/2021-06-30/reports/{report_id}', [])
+
     processingStatus = verify_report_status_request['processingStatus']
+
     while True:
+
         if processingStatus == 'DONE':
+
             reportDocumentId = verify_report_status_request['reportDocumentId']
-            report_data = requestData(
-                f'/reports/2021-06-30/documents/{reportDocumentId}', [])
+
+            report_data = requestData(session,
+                                      f'/reports/2021-06-30/documents/{reportDocumentId}', [])
+
             compression = report_data['compressionAlgorithm']
+
             report_link = report_data['url']
+
             break
         else:
             pass
 
     def download_and_save_file(url, save_path):
+        """
+        The function `download_and_save_file` downloads a file from a given URL and saves it to a
+        specified path on the local system.
+
+        :param url: The `url` parameter in the `download_and_save_file` function is the URL from which
+        you want to download a file. This URL will be used to send a GET request to retrieve the file
+        content
+        :param save_path: The `save_path` parameter in the `download_and_save_file` function is the path
+        where you want to save the downloaded file. It should be a string representing the file path
+        including the file name and extension where you want to save the downloaded content. For
+        example, if you want to save the
+        """
         # Send a GET request to the URL
         response = requests.get(url, stream=True)
 
@@ -256,8 +351,21 @@ def spapi_getListings():
                     f.write(chunk)
 
     def decompress_gzip_file(gzip_file_path, decompressed_file_path):
+        """
+        The function decompresses a gzip file to a specified decompressed file path.
+
+        :param gzip_file_path: The `gzip_file_path` parameter is the file path to the gzip-compressed
+        file that you want to decompress. This file should be in gzip format for the `gzip.open()`
+        function to be able to decompress it
+        :param decompressed_file_path: The `decompressed_file_path` parameter is the path where you want
+        to save the decompressed file after decompressing the gzip file located at `gzip_file_path`.
+        This parameter should be a string representing the file path where you want to store the
+        decompressed content
+        """
         with gzip.open(gzip_file_path, 'rb') as f_in:
+
             with open(decompressed_file_path, 'wb') as f_out:
+
                 shutil.copyfileobj(f_in, f_out)
 
     if report_link:
@@ -269,39 +377,137 @@ def spapi_getListings():
             download_and_save_file(report_link, file_download)
             decompress_gzip_file(file_download, file_saved)
 
-    print(f'{report_id} report has been created')
+    def csv_to_json(filename=""):
+        """
+        The `csv_to_json` function reads a CSV file, removes the Byte Order Mark (BOM) character if
+        present, and converts the data into a list of dictionaries.
 
-    return file_saved
+        :param filename: The `csv_to_json` function you provided is designed to read a CSV file with
+        tab-delimited values, remove the Byte Order Mark (BOM) character if present, and convert the
+        data into a list of dictionaries where each dictionary represents a row in the CSV file
+        :return: The `csv_to_json` function is returning a list of dictionaries where each dictionary
+        represents a row of data from the CSV file specified by the `filename` parameter. The function
+        reads the CSV file, removes the Byte Order Mark (BOM) character if present, and converts each
+        row into a dictionary where the keys are the column headers and the values are the corresponding
+        values in the row.
+        """
 
+        def remove_bom(text):
+            """
+            The function `remove_bom` removes the Byte Order Mark (BOM) character from the beginning of
+            a text if present.
 
-def getListingDetails(sku: str, includedData: str = "", all_details: bool = False):
+            :param text: The `remove_bom` function is designed to remove the Byte Order Mark (BOM)
+            character from the beginning of a text if it is present. The BOM character is a special
+            Unicode character (U+FEFF) that is sometimes added at the beginning of a text file to
+            indicate the
+            :return: The function `remove_bom` is returning the input text with the Byte Order Mark
+            (BOM) character removed if it is present at the beginning of the text. If the BOM character
+            is not present, the function returns the original text unchanged.
+            """
+            # Remove the BOM character if present
+            if text.startswith('\ufeff'):
 
-    params = {
-        "marketplaceIds": "A33AVAJ2PDY3EV",
-        "issueLocale": "en_US",
-        "includedData": includedData,
+                return text[1:]
 
-    }
+            return text
 
-    listingDetails_request = requestData(
-        f"/listings/2021-08-01/items/A2Z045PNNSBEVP/{sku}/", params)
-    if listingDetails_request:
-        if not all_details:
-            quanitity = listingDetails_request['fulfillmentAvailability'][0].get('quantity')
-            price = listingDetails_request['attributes']['purchasable_offer'][0]['our_price'][0]['schedule'][0].get('value_with_tax')
+        with open(filename, mode='r', newline='', encoding='utf-8-sig') as csv_file:
 
-            return {'sku': sku, 'qty': quanitity, 'price': price}
-        else:
-            return listingDetails_request
+            csv_reader = csv.DictReader(csv_file, delimiter='\t')
 
+            dict_list = []
 
-itemDetail = getListingDetails('SPAS5', "attributes,fulfillmentAvailability")
-pass
+            for row in csv_reader:
+
+                clean_row = {remove_bom(key): remove_bom(val)
+                             for key, val in row.items()}
+
+                dict_list.append(clean_row)
+
+        return dict_list
+
+    inv_items = csv_to_json(file_saved)
+
+    def get_item_details(session, includedData, everyProduct: bool = False):
+
+        request_count = 0
+
+        amazon_products = []
+
+        params = {"marketplaceIds": MarketPlaceID,
+                  "issueLocale": 'en_US',
+                  "includedData": includedData}
+        
+        with ThreadPoolExecutor(max_workers=5) as executor:
+
+            futures = []
+
+            for item in inv_items:
+
+                if not re.search('_fba', item['seller-sku']):
+
+                    sku = item['seller-sku']
+                
+                else:
+                
+                    continue
+
+                futures.append(executor.submit(requestData, session, f'/listings/2021-08-01/items/{AmazonSA_ID}/{sku}', params))
+
+                request_count += 1
+
+                if request_count >= 10:
+                        
+                    for future in futures:
+
+                        result = future.result()
+                         
+                        if not everyProduct and result:   
+                            
+                            # price = item_request['attributes']['purchasable_offer'][0]['our_price'][0]['schedule'][0]['value_with_tax']
+
+                            if 'quantity' in result['fulfillmentAvailability'][0]:
+
+                                quanitity = result['fulfillmentAvailability'][0]['quantity']
+
+                                if result['summaries']:
+
+                                    asin = result['summaries'][0]['asin']
+
+                            else:
+
+                                continue                    
+
+                            amazon_products.append(
+                                {'sku': result['sku'], 'id': asin, 'qty': quanitity})
+
+                        elif everyProduct and result:
+
+                            amazon_products.append(result)
+
+                    time.sleep(5)
+
+                    request_count = 0
+
+                    futures = []
+
+        return amazon_products
+
+    products = get_item_details(
+        session, 'summaries,attributes,fulfillmentAvailability', everyProduct)
+
+    return products
+
 
 def filter_orderData(orders_list, order, result, items):
+
     for item in items:
+
         try:
+
             print(result.get('AmazonOrderId', None))
+
             data = {
                 "ASIN": item.get('ASIN', None),
                 "QuantityShipped": item.get('QuantityShipped', None),
@@ -309,37 +515,47 @@ def filter_orderData(orders_list, order, result, items):
                 "SellerSKU": item.get('SellerSKU', None),
                 "Title": item.get('Title', None)
             }
+
             for order_item in orders_list:
+
                 if result['AmazonOrderId'] == order_item['AmazonOrderId']:
+
                     orders_list.remove(order_item)
+
                     order_item.update(data)
+
                     orders_list.append(order_item)
+
                     break
+
         except KeyError as ex:
+
             if order in orders_list:
+
                 orders_list.remove(order)
+
             continue
+
     return orders_list
 
 
 def save_to_csv(data, filename=""):
+
     if data:
+
         keys = set()
+
         for item in data:
+
             keys.update(item.keys())
 
         with open(f"{filename}_data_list.csv", "w", newline='', encoding="utf-8") as csvfile:
+
             file_writer = csv.DictWriter(csvfile, fieldnames=sorted(keys))
+
             file_writer.writeheader()
+
             for d in data:
+
                 file_writer.writerow(d)
 
-
-# report = spapi_getListings()
-# token = get_access_token()
-# links = requests.get('https://sellingpartnerapi-eu.amazon.com/catalog/2022-04-01/items/B0B45WZ39Z', params={"marketplaceIds": 'A33AVAJ2PDY3EV', 'IncludedData': ['attributes', 'dimensions', 'identifiers', 'images', 'productTypes', 'salesRanks', 'summaries', 'relationships', 'vendorDetails']}, headers={
-#     'Content-Type': 'application/json',
-#     'x-amz-access-token': token})
-# orders_list = spapi_getOrders(rate_limit=0.0166, max_requests=20)
-# save_to_csv(orders_list, 'amazon')
-# print('Done')
