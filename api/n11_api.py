@@ -134,8 +134,8 @@ def get_n11_stock_data(everyProduct: bool=False):
                             product_qty = None
                         raw_elements.append({
                             "id": product_id,
-                            "code": product_code,
-                            "stok": product_qty,
+                            "sku": product_code,
+                            "qty": product_qty,
                         })
             else:
                 print("No products found in the response.")
@@ -323,7 +323,7 @@ def post_n11_data(data):
                               <productId>{data['id']}</productId>
                               <stockItems>
                                 <stockItem>
-                                  <sellerStockCode>{data['code']}</sellerStockCode>
+                                  <sellerStockCode>{data['sku']}</sellerStockCode>
                                   <quantity>{data['qty']}</quantity>
                                 </stockItem>
                               </stockItems>
@@ -335,15 +335,15 @@ def post_n11_data(data):
     if post_response.status_code == 200:
         if re.search('errorMessage', post_response.text) or re.search('failure', post_response.text):
             error_message = assign_vars(post_response, 'UpdateProductBasicResponse', '', True)
-            print(f"Request failure for N11 product {data['code']} | Response: {error_message['result']['errorMessage']}\n")
+            print(f"Request failure for N11 product {data['sku']} | Response: {error_message['result']['errorMessage']}\n")
         else:
-            print(f'N11 product with code: {data["code"]}, New value: {data["qty"]}\n')
+            print(f'N11 product with sku: {data["sku"]}, New value: {data["qty"]}\n')
     elif post_response.status_code == 429:
         time.sleep(15)
     else:
         post_response.raise_for_status()
         print(
-            f"Request for product {data['code']} is unsuccessful | Response: {post_response.text}\n")
+            f"Request for N11 product {data['sku']} is unsuccessful | Response: {post_response.text}\n")
 
 
 # save_to_csv(get_n11_detailed_order_list(url), 'orders')
