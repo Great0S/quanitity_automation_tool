@@ -98,7 +98,7 @@ def hbapi_updateListing(product):
 
     else:
         print(
-            f'Trendyol product with code: {product["sku"]} failed to update || Reason: {batchId_request["items"]["failureReasons"]}\n')
+            f'Trendyol product with code: {product["sku"]} failed to update || Reason: {checkStatus}\n')
 
 
 hbapi_updateListing()

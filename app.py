@@ -1,5 +1,6 @@
 import re
 from api.amazon_seller_api import spapi_getListings, spapi_updateListing
+from api.hepsiburada_api import hbapi_stock_data, hbapi_updateListing
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
 from api.n11_api import get_n11_stock_data, post_n11_data
 
@@ -47,8 +48,10 @@ def get_data(everyProduct: bool = False):
 
     Amazon_data = spapi_getListings(everyProduct)
 
+    HepsiBurada_data = hbapi_stock_data(everyProduct)
+
     data_content = {"Trendyol_data": Trendyol_data,
-                    "N11_data": N11_data, "Amazon_data": Amazon_data}
+                    "N11_data": N11_data, "Amazon_data": Amazon_data, "HepsiBurada_data": HepsiBurada_data}
 
     if everyProduct:
 
@@ -57,7 +60,7 @@ def get_data(everyProduct: bool = False):
     else:
 
         all_codes = list(set([item['sku'] for item in N11_data] +
-                             [item['sku'] for item in Trendyol_data] + [item['sku'] for item in Amazon_data]))
+                             [item['sku'] for item in Trendyol_data] + [item['sku'] for item in Amazon_data] + [item['sku'] for item in HepsiBurada_data]))
 
     return data_content, all_codes
 
@@ -80,7 +83,7 @@ def get_platform_updates(data, all_codes):
 
     changed_values = []
 
-    platforms = ['Trendyol', 'N11', 'Amazon']
+    platforms = ['Trendyol', 'N11', 'Amazon', 'HepsiBurada']
 
     matching_values = []
 
@@ -160,6 +163,10 @@ def execute_updates():
         elif post['platform'] == 'Amazon':
 
             spapi_updateListing(post)
+
+        elif post['platform'] == 'HepsiBurada':
+
+            hbapi_updateListing(post)
 
 
 execute_updates()
