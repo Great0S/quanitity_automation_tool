@@ -7,11 +7,17 @@ import os
 
 # The code snippet is initializing some variables and setting up the headers for making API requests.
 page = 0
+
 url_addon = ""
+
 products = []
-auth_hash = os.environ.get('TRENDYOLBASICAUTHHASH')
+
+auth_hash = os.environ.get('TRENDYOLAUTHHASH')
+
+store_id = os.environ.get('TRENDYOLSTOREID')
+
 headers = {
-    'User-Agent': '120101 - SelfIntegration',
+    'User-Agent': f'{store_id} - SelfIntegration',
     'Content-Type': 'application/json',
     'Authorization': f'Basic {auth_hash}'
 }
@@ -33,18 +39,27 @@ def request_data(url_addons, request_type, payload_content):
     :return: the response object from the API request.
     """
     payload = payload_content
-    url = f"https://api.trendyol.com/sapigw/suppliers/120101/products{url_addons}"
+
+    url = f"https://api.trendyol.com/sapigw/suppliers/{store_id}/products{url_addons}"
+
     while True:
+
         api_request = requests.request(
             request_type, url, headers=headers, data=payload)
+        
         if api_request.status_code == 200:
-            return api_request
-        elif api_request.status_code == 400:
-            return None
-        else:
-            time.sleep(1)
-            continue
 
+            return api_request
+        
+        elif api_request.status_code == 400:
+
+            return None
+        
+        else:
+
+            time.sleep(1)
+
+            continue
 
 def prepare_data(request_data):
     """
@@ -55,7 +70,9 @@ def prepare_data(request_data):
     :return: the decoded data, which is a Python object obtained by parsing the response text as JSON.
     """
     response = request_data
+
     decoded_data = json.loads(response.text)
+
     return decoded_data
 
 
@@ -78,21 +95,35 @@ def get_trendyol_stock_data(everyProduct: bool =False):
     #     endDate = int(datetime.fromordinal(enDate.toordinal()).timestamp())
     #     url_addon = f"?page={page}&size=100&startDate={startDate}&endDate={endDate}"
     # else:
+    
     all_products = []
+
     products = []
+
     url_addon = f"?page={page}&size=100"
+
     decoded_data = prepare_data(request_data(url_addon, "GET", {}))
 
     while page < int(decoded_data['totalPages']):        
+
         for element in range(len(decoded_data['content'])):
+
             data = decoded_data['content'][element]
+
             if everyProduct:
+
                 all_products.append(data)
+
             else:
+
                 item_id = data['barcode']
+
                 if item_id == None:
+
                     pass
+
                 item = data['productMainId']
+
                 quantity = data['quantity']
 
                 products.append({
@@ -100,12 +131,17 @@ def get_trendyol_stock_data(everyProduct: bool =False):
                     "sku": f"{item}",
                     "qty": quantity
                 })
+
         page += 1
+
         url_addon = f"?page={page}&size=100"
+
         decoded_data = prepare_data(request_data(url_addon, "GET", {}))
+
     print(f'Trendyol request is successful. Response: OK')
 
     if everyProduct:
+
         products = all_products
 
     return products
@@ -120,6 +156,7 @@ def post_trendyol_data(product):
     process
     """
     url_addon = "/price-and-inventory"
+
     post_payload = json.dumps(
         {
     "items": [
@@ -132,31 +169,48 @@ def post_trendyol_data(product):
     post_response = request_data(url_addon, "POST", post_payload)
 
     if post_response.status_code == 200:
+        
         if re.search('failure', post_response.text):
-            print(
-                f"Request failure for trendyol product {product['code']} | Response: {post_response.text}\n")
+        
+            print(f"Request failure for trendyol product {product['code']} | Response: {post_response.text}\n")
+        
         else:
+           
             batchRequestId = json.loads(post_response.text)['batchRequestId']
+            
             while True:
+               
                 batchId_request_raw = request_data(f'/batch-requests/{batchRequestId}', "GET", [])
+                
                 batchId_request = json.loads(batchId_request_raw.text)
+               
                 if batchId_request['items']:
+                 
                     request_status = batchId_request['items'][0]['status']
+                   
                     if request_status == 'SUCCESS':
-                        print(
-                    f'Trendyol product with code: {product["sku"]}, New value: {product["qty"]}\n')
+                    
+                        print(f'Trendyol product with code: {product["sku"]}, New value: {product["qty"]}\n')
+                     
                         break
+                 
                     elif request_status == 'FAILED':
-                        print(
-                    f'Trendyol product with code: {product["sku"]} failed to update || Reason: {batchId_request['items']['failureReasons']}\n')
+                    
+                        print(f'Trendyol product with code: {product["sku"]} failed to update || Reason: {batchId_request["items"]["failureReasons"]}\n')
+                    
                         break
                 else:
+              
                     pass
+   
     elif post_response.status_code == 429:
+        
         time.sleep(15)
+   
     else:
+      
         post_response.raise_for_status()
-        print(
-            f"Request for trendyol product {product['sku']} is unsuccessful | Response: {post_response.text}\n")
+       
+        print(f"Request for trendyol product {product['sku']} is unsuccessful | Response: {post_response.text}\n")
 
 # post_data(products, request_data, prepare_data)
