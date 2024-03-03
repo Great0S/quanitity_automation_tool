@@ -33,8 +33,7 @@ def get_access_token():
 
     token_url = "https://api.amazon.com/auth/o2/token"
 
-    payload = f'grant_type=refresh_token&client_id={client_id}&client_secret={
-        client_secret}&refresh_token={refresh_token}'
+    payload = f'grant_type=refresh_token&client_id={client_id}&client_secret={client_secret}&refresh_token={refresh_token}'
 
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
@@ -49,12 +48,13 @@ def get_access_token():
 
     return access_token
 
+
 access_token = get_access_token()
 
-def requestData(session, operation_uri, params: dict):
+
+def requestData(session = None, operation_uri = '', params: dict = {}, payload=[], method='GET'):
 
     Endpoint_url = f'https://sellingpartnerapi-eu.amazon.com{operation_uri}?'
-    
 
     if params:
         uri = '&'.join([f'{k}={params[k]}' for k, v in params.items()])
@@ -66,7 +66,7 @@ def requestData(session, operation_uri, params: dict):
 
     # Format the time in the desired format
     formatted_time = current_time.strftime('%Y%m%dT%H%M%SZ')
-    session.headers = {
+    headers = {
         'Accept-Encoding': 'gzip',
         'Content-Type': 'application/json',
         'x-amz-access-token': f'{access_token}',
@@ -74,24 +74,33 @@ def requestData(session, operation_uri, params: dict):
     }
     while True:
 
-        orders_request = session.get(f"{Endpoint_url}{uri}", data=[])
+        if session:
 
-        if orders_request.status_code == 200 or orders_request.status_code == 400:
+            session.headers = headers
 
-            jsonify = json.loads(orders_request.text)
+            init_request = session.get(f"{Endpoint_url}{uri}", data=payload)
+
+        else:
+
+            init_request = requests.request(method,f"{Endpoint_url}{uri}", headers=headers, data=payload)
+
+        if init_request.status_code == 200 or init_request.status_code == 400:
+
+            jsonify = json.loads(init_request.text)
 
             break
-        elif orders_request.status_code == 403:
+        elif init_request.status_code == 403:
 
             session.headers['x-amz-access-token'] = access_token
 
-        elif orders_request.status_code == 429:
+        elif init_request.status_code == 429:
 
             time.sleep(65)
 
         else:
 
-            error_message = json.loads(orders_request.text)['errors'][0]['message']
+            error_message = json.loads(init_request.text)[
+                'errors'][0]['message']
 
             print(f"An error has occured || {error_message}")
 
@@ -162,8 +171,8 @@ def spapi_getOrders():
 
                 spapi_getOrderItems(30, orders_dict)
 
-                print(f"Processed {count} orders || Orders left: {
-                      len(orders_dict)-count}")
+                print(
+                    f"Processed {count} orders || Orders left: {len(orders_dict)-count}")
 
                 request_count = 0
 
@@ -438,7 +447,7 @@ def spapi_getListings(everyProduct: bool = False):
         params = {"marketplaceIds": MarketPlaceID,
                   "issueLocale": 'en_US',
                   "includedData": includedData}
-        
+
         with ThreadPoolExecutor(max_workers=5) as executor:
 
             futures = []
@@ -448,23 +457,24 @@ def spapi_getListings(everyProduct: bool = False):
                 if not re.search('_fba', item['seller-sku']):
 
                     sku = item['seller-sku']
-                
+
                 else:
-                
+
                     continue
 
-                futures.append(executor.submit(requestData, session, f'/listings/2021-08-01/items/{AmazonSA_ID}/{sku}', params))
+                futures.append(executor.submit(
+                    requestData, session, f'/listings/2021-08-01/items/{AmazonSA_ID}/{sku}', params))
 
                 request_count += 1
 
                 if request_count >= 10:
-                        
+
                     for future in futures:
 
                         result = future.result()
-                         
-                        if not everyProduct and result:   
-                            
+
+                        if not everyProduct and result:
+
                             # price = item_request['attributes']['purchasable_offer'][0]['our_price'][0]['schedule'][0]['value_with_tax']
 
                             if 'quantity' in result['fulfillmentAvailability'][0]:
@@ -477,7 +487,7 @@ def spapi_getListings(everyProduct: bool = False):
 
                             else:
 
-                                continue                    
+                                continue
 
                             amazon_products.append(
                                 {'sku': result['sku'], 'id': asin, 'qty': quanitity})
@@ -559,3 +569,42 @@ def save_to_csv(data, filename=""):
 
                 file_writer.writerow(d)
 
+
+def spapi_updateListing(product):
+
+    sku = product['sku']
+
+    qty = product['qty']
+
+    params = {
+        'marketplaceIds': MarketPlaceID,
+        'issueLocale': 'en_US'}
+
+    data_payload = json.dumps({
+        "productType": "HOME_BED_AND_BATH",
+        "patches": [
+            {
+                "op": "replace",
+                "path": "/attributes/fulfillment_availability",
+                "value": [
+                    {
+                        "fulfillment_channel_code": "DEFAULT",
+                        "quantity": qty,
+                        "marketplace_id": "A33AVAJ2PDY3EV"
+                    }
+                ]
+            }
+        ]
+    })
+
+    listing_update_request = requestData(
+        operation_uri=f"/listings/2021-08-01/items/{AmazonSA_ID}/{sku}", params=params, payload=data_payload, method='PATCH')
+
+    if listing_update_request and listing_update_request['status'] == 'ACCEPTED':
+
+        print(f'Amazon product with code: {sku}, New value: {qty}\n')
+
+    else:
+
+        print(
+            f'Amazon product with code: {product["sku"]} failed to update || Reason: {listing_update_request}\n')

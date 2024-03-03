@@ -1,50 +1,29 @@
-import json
 import requests
+import json
 
-from amazon_seller_api import get_access_token
+url = "https://sellingpartnerapi-eu.amazon.com/listings/2021-08-01/items/A2Z045PNNSBEVP/MER4060?marketplaceIds=A33AVAJ2PDY3EV&issueLocale=en_US&mode=VALIDATION_PREVIEW"
 
-url = 
-access_token = get_access_token()
-params = {
-    "marketplaceIds": "A33AVAJ2PDY3EV",
-    "issueLocale": "en_US",
-    "includedData": "attributes,fulfillmentAvailability",
-    
-}
-
+payload = json.dumps({
+    "productType":"HOME_BED_AND_BATH",
+    "patches":[
+        {
+            "op": "replace",
+            "path": "/attributes/fulfillment_availability",
+            "value": [
+                {
+                     "fulfillment_channel_code": "DEFAULT",
+                     "quantity": 880,
+                     "marketplace_id": "A33AVAJ2PDY3EV"
+                }
+            ]
+        }
+    ]
+})
 headers = {
-    "User-Agent": "BlazingAPI/0.1 (Lang=Python/3.11.7; platform=Windows/10)",
-    "x-amz-access-token": access_token
+    'x-amz-access-token': 'Atza|IwEBIMqaM3eMw7QrTyGT5iAxA7a0ZUMVbiuoKIzUWIsM8QxpO9-Q7MDG82frqt5WEPaJp8i3y8sI2SyQ54B2T61Y4OgCvvVApmjHf0Rk_YXzQkihP4p0ekiN6xc5azYRNd4nQoa5Ec2bi894xxnmwlTOueeAXVL5xSev44pF-XdjJ3C-YYyetWCgwjhv1WvfJNB6o-Nwm6JDn7qAmY6m6ZE0R0XGueeB_yEG_BVPgoWOcwbb4ithFXK5zUvSbIX0kbsas2S0KIXvK1FqgDmqWuBcJFBUZ0qsAfyocIU3Q77rb-45AQYI9A2lRpVsgIIMgFsl44wyYQShQM4IqwgTUm8CbqQLr5x3gIR1ylcafw24Hlgnww',
+    'Content-Type': 'application/json'
 }
 
-response = requests.get(url, params=params, headers=headers)
-refined = json.loads(response.text)
+response = requests.request("PATCH", url, headers=headers, data=payload)
 
-if response.status_code == 200:
-    # Request was successful
-    data = response.json()
-    # Process the response data as needed
-    print(data)
-else:
-    print(f"Request failed with status code {response.status_code}")
-additional_info = {
-    '408-6659271-4223524': {'AdditionalData': 'Some additional data for this order'},
-    # Add more additional info mappings as needed
-}
-
-orders_list = [
-    {'AmazonOrderId': '408-6659271-4223524', 'OrderStatus': 'Shipped', 'EarliestShipDate': '2022-03-07T00:30:00Z', 'LatestShipDate': '2022-03-07T00:30:00Z', 'PurchaseDate': '2022-03-06T11:42:02Z', 'City': None, 'County': 'Levazım Mh.'},
-    # Add more order dictionaries
-]
-
-# Iterate through each order dictionary
-for order in orders_list:
-    # Get the AmazonOrderId for the current order
-    order_id = order['AmazonOrderId']
-    
-    # Check if additional information exists for this order ID
-    if order_id in additional_info:
-        # Merge the additional information with the current order dictionary
-        order.update(additional_info[order_id])
-
-# Now each order dictionary in orders_list should have additional information if available
+print(response.text)

@@ -1,5 +1,5 @@
 import re
-from api.amazon_seller_api import spapi_getListings
+from api.amazon_seller_api import spapi_getListings, spapi_updateListing
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
 from api.n11_api import get_n11_stock_data, post_n11_data
 
@@ -42,8 +42,11 @@ def get_data(everyProduct: bool = False):
     """
     # Retrieve stock data from N11 and Trendyol APIs
     N11_data = get_n11_stock_data(everyProduct)
+
     Trendyol_data = get_trendyol_stock_data(everyProduct)
+
     Amazon_data = spapi_getListings(everyProduct)
+
     data_content = {"Trendyol_data": Trendyol_data,
                     "N11_data": N11_data, "Amazon_data": Amazon_data}
 
@@ -52,6 +55,7 @@ def get_data(everyProduct: bool = False):
         pass
 
     else:
+
         all_codes = list(set([item['sku'] for item in N11_data] +
                              [item['sku'] for item in Trendyol_data] + [item['sku'] for item in Amazon_data]))
 
@@ -120,17 +124,9 @@ def get_platform_updates(data, all_codes):
 
                 lowest_val = min(products, key=lambda x: x['qty'])
 
-                target = []
-
-                target_id = []
-
                 for product in products:
 
                     if product['qty'] > lowest_val['qty']:
-
-                        target.append(product['platform'])
-
-                        target_id.append(product['id'])
 
                         value_diff = int(
                             product['qty']) - int(lowest_val['qty'])
@@ -161,7 +157,11 @@ def execute_updates():
 
             post_n11_data(post)
 
+        elif post['platform'] == 'Amazon':
+
+            spapi_updateListing(post)
+
 
 execute_updates()
 
-print('End')
+print('All updates has finished. The program will exit now!')
