@@ -66,6 +66,7 @@ def requestData(session = None, operation_uri = '', params: dict = {}, payload=[
 
     # Format the time in the desired format
     formatted_time = current_time.strftime('%Y%m%dT%H%M%SZ')
+    
     headers = {
         'Accept-Encoding': 'gzip',
         'Content-Type': 'application/json',
@@ -506,6 +507,8 @@ def spapi_getListings(everyProduct: bool = False):
 
     products = get_item_details(
         session, 'summaries,attributes,fulfillmentAvailability', everyProduct)
+    
+    print(f'Amazon products data request is successful. Response: OK')
 
     return products
 
@@ -602,9 +605,9 @@ def spapi_updateListing(product):
 
     if listing_update_request and listing_update_request['status'] == 'ACCEPTED':
 
-        print(f'Amazon product with code: {sku}, New value: {qty}\n')
+        print(f'Amazon product with code: {sku}, New value: {qty}')
 
     else:
 
         print(
-            f'Amazon product with code: {product["sku"]} failed to update || Reason: {listing_update_request}\n')
+            f'Amazon product with code: {product["sku"]} failed to update || Reason: {listing_update_request}')

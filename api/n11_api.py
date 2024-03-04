@@ -1,11 +1,9 @@
 import csv
-import os
 import re
 import time
 import requests
 from simple_dotenv import GetEnv
 import xmltodict
-import xml.etree.ElementTree as ET
 
 # Setting api value
 API_KEY = str(GetEnv('N11_KEY'))
@@ -19,6 +17,7 @@ headers = {"Content-Type": "text/xml; charset=utf-8"}
 
 
 def assign_vars(response, response_namespace, list_name, error_message=False):
+
     """
     The function `assign_vars` parses XML response data, extracts specific elements based on provided
     namespace and list name, and returns a list of items and total pages if the list exists, otherwise
@@ -55,16 +54,24 @@ def assign_vars(response, response_namespace, list_name, error_message=False):
     # If so, return the list of items and the total number of pages.
     # Otherwise, return None.
     if list_name in response_data and not error_message:
+
         if response_data[list_name]:
+
             items_list = next(iter(response_data[list_name].values()))
             items_total_pages = response_data['pagingData']['pageCount']
 
             return items_list, items_total_pages
+            
         else:
+
             return None, None
+        
     elif error_message:
+
         return response_data
+    
     else:
+
         return None, None
 
 # Function for retrieving stock data from the N11 API.
@@ -152,7 +159,8 @@ def get_n11_stock_data(everyProduct: bool=False):
     else:
         print("Error:", api_call.text)
 
-    print("N11 SOAP Request is Successful. Response:", api_call.reason)
+    print('N11 products data request is successful. Response: ', api_call.reason)
+
 
     if everyProduct:
         raw_elements = all_products
@@ -331,19 +339,31 @@ def post_n11_data(data):
                           </soapenv:Body>
                         </soapenv:Envelope>
                         """
+    
     post_response = requests.request("POST", url, headers=headers, data=post_payload)
+
     if post_response.status_code == 200:
+
         if re.search('errorMessage', post_response.text) or re.search('failure', post_response.text):
+
             error_message = assign_vars(post_response, 'UpdateProductBasicResponse', '', True)
-            print(f"Request failure for N11 product {data['sku']} | Response: {error_message['result']['errorMessage']}\n")
+
+            print(f"Request failure for N11 product {data['sku']} | Response: {error_message['result']['errorMessage']}")
+
         else:
-            print(f'N11 product with sku: {data["sku"]}, New value: {data["qty"]}\n')
+
+            print(f'N11 product with sku: {data["sku"]}, New value: {data["qty"]}')
+            
     elif post_response.status_code == 429:
+
         time.sleep(15)
+
     else:
+
         post_response.raise_for_status()
+        
         print(
-            f"Request for N11 product {data['sku']} is unsuccessful | Response: {post_response.text}\n")
+            f"Request for N11 product {data['sku']} is unsuccessful | Response: {post_response.text}")
 
 
 # save_to_csv(get_n11_detailed_order_list(url), 'orders')
