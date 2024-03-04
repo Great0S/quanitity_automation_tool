@@ -65,11 +65,13 @@ def hbapi_stock_data(everyProduct: bool = False):
         if not everyProduct:
 
             listings_list.append(
-            {'id': data['hepsiburadaSku'], 'sku': data['merchantSku'], 'qty': data['availableStock']})
+                {'id': data['hepsiburadaSku'], 'sku': data['merchantSku'], 'qty': data['availableStock']})
 
         else:
 
             listings_list.append(data)
+
+    print(f'HepsiBurada products data request is successful. Response: OK')
 
     return listings_list
 
@@ -80,25 +82,35 @@ def hbapi_updateListing(product):
         "hepsiburadaSku": product["id"],
         "merchantSku": product["sku"],
         "availableStock": product["qty"]
-    }])
+    }], ensure_ascii=False)
 
     stockUpdate_request_raw = request_data(
         'listing-external', f"/Listings/merchantid/{store_id}/stock-uploads", 'POST', stockUpdate_payload)
 
-    update_stateId = json.loads(stockUpdate_request_raw.text)['id']
+    if stockUpdate_request_raw:
+        update_stateId = json.loads(stockUpdate_request_raw.text)['id']
 
-    checkStatus_request = request_data(
-        'listing-external', f"/Listings/merchantid/{store_id}/stock-uploads/id/{update_stateId}", 'GET', [])
-
-    checkStatus = json.loads(checkStatus_request.text)['status']
-
-    if checkStatus == 'Done':
-        print(
-            f'Trendyol product with code: {product["sku"]}, New value: {product["qty"]}\n')
-
-    else:
-        print(
-            f'Trendyol product with code: {product["sku"]} failed to update || Reason: {checkStatus}\n')
-
-
-hbapi_updateListing()
+        while True:
+        
+            checkStatus_request = request_data(
+                'listing-external', f"/Listings/merchantid/{store_id}/stock-uploads/id/{update_stateId}", 'GET', [])
+            
+            if checkStatus_request:
+            
+                checkStatus = json.loads(checkStatus_request.text)
+    
+                if checkStatus['status'] == 'Done' and not checkStatus['errors']:
+                
+                    print(f'HepsiBurada product with code: {product["sku"]}, New value: {product["qty"]}\n')
+        
+                    break
+                
+                elif checkStatus['errors']:
+                
+                    print(f'HepsiBurada product with code: {product["sku"]} failed to update || Reason: {checkStatus['errors']}\n')
+        
+                    break
+                
+            else:
+            
+                continue

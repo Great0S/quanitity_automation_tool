@@ -75,7 +75,6 @@ def prepare_data(request_data):
 
     return decoded_data
 
-
 def get_trendyol_stock_data(everyProduct: bool =False):
     """
     The function `get_data` retrieves products data from multiple pages and appends it to a list.
@@ -138,7 +137,7 @@ def get_trendyol_stock_data(everyProduct: bool =False):
 
         decoded_data = prepare_data(request_data(url_addon, "GET", {}))
 
-    print(f'Trendyol request is successful. Response: OK')
+    print(f'Trendyol products data request is successful. Response: OK')
 
     if everyProduct:
 
