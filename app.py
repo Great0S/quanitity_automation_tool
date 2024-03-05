@@ -1,6 +1,7 @@
 from api.amazon_seller_api import spapi_getListings, spapi_updateListing
 from api.hepsiburada_api import hbapi_stock_data, hbapi_updateListing
 from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
+from api.pttavm_api import getPTTAVM_procuctskData, pttavm_updateData
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
 from api.n11_api import get_n11_stock_data, post_n11_data
 
@@ -54,11 +55,14 @@ def get_data(everyProduct: bool = False):
 
     Pazarama_data = getPazarama_productsList(everyProduct)
 
+    PTTAVM_data = getPTTAVM_procuctskData(everyProduct)
+
     data_content = {"Trendyol_data": Trendyol_data,
                     "N11_data": N11_data, 
                     "Amazon_data": Amazon_data, 
                     "HepsiBurada_data": HepsiBurada_data, 
-                    "Pazarama_data": Pazarama_data}
+                    "Pazarama_data": Pazarama_data,
+                    "PTTAVM_data": PTTAVM_data}
 
     if everyProduct:
 
@@ -70,7 +74,8 @@ def get_data(everyProduct: bool = False):
                              [item['sku'] for item in Trendyol_data] + 
                              [item['sku'] for item in Amazon_data] + 
                              [item['sku'] for item in HepsiBurada_data] + 
-                             [item['sku'] for item in Pazarama_data]))
+                             [item['sku'] for item in Pazarama_data] + 
+                             [item['sku'] for item in PTTAVM_data]))
 
     return data_content, all_codes
 
@@ -85,8 +90,7 @@ def process_update_data():
     platform_updates, matching_values = get_platform_updates(
         data_lists, all_codes)
 
-    print(f'\nLength of the two lists:- 
-          \nPlatform updates is {len(platform_updates)}\nMatching codes is {len(matching_values)}\n')
+    print(f'\nLength of the two lists:- \nPlatform updates is {len(platform_updates)}\nMatching codes is {len(matching_values)}\n')
 
     return platform_updates
 
@@ -99,7 +103,8 @@ def get_platform_updates(data, all_codes):
                  'N11', 
                  'Amazon', 
                  'HepsiBurada', 
-                 'Pazarama']
+                 'Pazarama',
+                 'PTTAVM']
 
     matching_values = []
 
@@ -126,6 +131,7 @@ def get_platform_updates(data, all_codes):
                             matching_ids[code].append(
                                 {'platform': platform, 
                                  'id': item_id,  
+                                 'price': item.get('price', None),
                                  'qty': quantity})
 
                         else:
@@ -133,6 +139,7 @@ def get_platform_updates(data, all_codes):
                             matching_ids[code] = [
                                 {'platform': platform, 
                                  'id': item_id,  
+                                 'price': item.get('price', None),
                                  'qty': quantity}]
 
                         break
@@ -163,6 +170,7 @@ def get_platform_updates(data, all_codes):
                         changed_values.append(
                             {'id': product['id'], 
                              'sku': item_key, 
+                             'price': product.get('price', None), 
                              'qty': str(lowest_val['qty']), 
                              'platform': product['platform']})
             else:
@@ -197,6 +205,10 @@ def execute_updates():
         elif post['platform'] == 'Pazarama':
 
             pazarama_updateRequest(post)
+
+        elif post['platform'] == 'PTTAVM':
+
+            pttavm_updateData(post)
 
 
 execute_updates()

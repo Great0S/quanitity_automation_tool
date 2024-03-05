@@ -171,7 +171,7 @@ def post_trendyol_data(product):
         
         if re.search('failure', post_response.text):
         
-            print(f"Request failure for trendyol product {product['code']} | Response: {post_response.text}\n")
+            print(f"Request failure for trendyol product {product['code']} | Response: {post_response.text}")
         
         else:
            
@@ -189,13 +189,13 @@ def post_trendyol_data(product):
                    
                     if request_status == 'SUCCESS':
                     
-                        print(f'Trendyol product with code: {product["sku"]}, New value: {product["qty"]}\n')
+                        print(f'Trendyol product with code: {product["sku"]}, New value: {product["qty"]}')
                      
                         break
                  
                     elif request_status == 'FAILED':
                     
-                        print(f'Trendyol product with code: {product["sku"]} failed to update || Reason: {batchId_request["items"]["failureReasons"]}\n')
+                        print(f'Trendyol product with code: {product["sku"]} failed to update || Reason: {batchId_request["items"]["failureReasons"]}')
                     
                         break
                 else:
@@ -210,6 +210,6 @@ def post_trendyol_data(product):
       
         post_response.raise_for_status()
        
-        print(f"Request for trendyol product {product['sku']} is unsuccessful | Response: {post_response.text}\n")
+        print(f"Request for trendyol product {product['sku']} is unsuccessful | Response: {post_response.text}")
 
 # post_data(products, request_data, prepare_data)
