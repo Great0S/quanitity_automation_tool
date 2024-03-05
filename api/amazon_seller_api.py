@@ -33,7 +33,10 @@ def get_access_token():
 
     token_url = "https://api.amazon.com/auth/o2/token"
 
-    payload = f'grant_type=refresh_token&client_id={client_id}&client_secret={client_secret}&refresh_token={refresh_token}'
+    payload = f'grant_type=refresh_token&client_id=
+    {client_id}&client_secret=
+    {client_secret}&refresh_token=
+    {refresh_token}'
 
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
@@ -79,11 +82,15 @@ def requestData(session = None, operation_uri = '', params: dict = {}, payload=[
 
             session.headers = headers
 
-            init_request = session.get(f"{Endpoint_url}{uri}", data=payload)
+            init_request = session.get(f"{Endpoint_url}{uri}", 
+                                       data=payload)
 
         else:
 
-            init_request = requests.request(method,f"{Endpoint_url}{uri}", headers=headers, data=payload)
+            init_request = requests.request(method,
+                                            f"{Endpoint_url}{uri}", 
+                                            headers=headers, 
+                                            data=payload)
 
         if init_request.status_code == 200 or init_request.status_code == 400:
 
@@ -311,12 +318,15 @@ def spapi_getListings(everyProduct: bool = False):
         'reportTypes': 'GET_MERCHANT_LISTINGS_ALL_DATA'}
 
     report_id_request = requestData(
-        session, "/reports/2021-06-30/reports/", params)
+        session, 
+        "/reports/2021-06-30/reports/", 
+        params)
 
     report_id = report_id_request['reports'][0]['reportId']
 
     verify_report_status_request = requestData(session,
-                                               f'/reports/2021-06-30/reports/{report_id}', [])
+                                               f'/reports/2021-06-30/reports/{report_id}', 
+                                               [])
 
     processingStatus = verify_report_status_request['processingStatus']
 
@@ -327,7 +337,8 @@ def spapi_getListings(everyProduct: bool = False):
             reportDocumentId = verify_report_status_request['reportDocumentId']
 
             report_data = requestData(session,
-                                      f'/reports/2021-06-30/documents/{reportDocumentId}', [])
+                                      f'/reports/2021-06-30/documents/{reportDocumentId}', 
+                                      [])
 
             compression = report_data['compressionAlgorithm']
 
@@ -565,7 +576,10 @@ def save_to_csv(data, filename=""):
 
             keys.update(item.keys())
 
-        with open(f"{filename}_data_list.csv", "w", newline='', encoding="utf-8") as csvfile:
+        with open(f"{filename}_data_list.csv", 
+                  "w", 
+                  newline='', 
+                  encoding="utf-8") as csvfile:
 
             file_writer = csv.DictWriter(csvfile, fieldnames=sorted(keys))
 
@@ -604,7 +618,10 @@ def spapi_updateListing(product):
     })
 
     listing_update_request = requestData(
-        operation_uri=f"/listings/2021-08-01/items/{AmazonSA_ID}/{sku}", params=params, payload=data_payload, method='PATCH')
+        operation_uri=f"/listings/2021-08-01/items/{AmazonSA_ID}/{sku}", 
+        params=params, 
+        payload=data_payload, 
+        method='PATCH')
 
     if listing_update_request and listing_update_request['status'] == 'ACCEPTED':
 
