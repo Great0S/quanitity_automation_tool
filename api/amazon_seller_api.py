@@ -89,7 +89,8 @@ def requestData(session = None, operation_uri = '', params: dict = {}, payload=[
 
             jsonify = json.loads(init_request.text)
 
-            break
+            return jsonify
+        
         elif init_request.status_code == 403:
 
             session.headers['x-amz-access-token'] = access_token
@@ -102,14 +103,16 @@ def requestData(session = None, operation_uri = '', params: dict = {}, payload=[
 
             error_message = json.loads(init_request.text)[
                 'errors'][0]['message']
+            
+            if re.search('not found', error_message):
 
-            print(f"An error has occured || {error_message}")
+                return None
+            
+            else:
 
-            jsonify = None
+                print(f"An error has occured || {error_message}")
 
-            break
-
-    return jsonify
+                return None
 
 
 def spapi_getOrders():

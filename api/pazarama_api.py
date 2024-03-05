@@ -114,6 +114,3 @@ def pazarama_updateRequest(product):
         else:
 
             print(f'Pazarama product with code: {sku} failed to update || Reason: {update_request['data'][0]['error']}')
-
-
-pazarama_updateRequest({'sku': 'BPS13', 'id': '0789393946934', 'qty': 86})
