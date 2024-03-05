@@ -25,8 +25,7 @@ def get_access_token():
 
     else:
 
-        print(f'Pazarama access token request has failed || Reason: {
-              response.text}')
+        print(f'Pazarama access token request has failed || Reason: {response.text}')
 
 
 def request_data(method='GET', uri='', params={}, payload=[]):
