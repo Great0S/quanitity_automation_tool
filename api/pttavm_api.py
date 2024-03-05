@@ -19,8 +19,8 @@ def requestData(method: str = 'POST', uri: str = '', params: dict = {}, data: li
     <soapenv:Header>
         <wsse:Security soapenv:mustUnderstand="1" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
             <wsse:UsernameToken>
-                <wsse:Username>myfloor</wsse:Username>
-                <wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">wXHmQN</wsse:Password>
+                <wsse:Username>{username}</wsse:Username>
+                <wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">{password}</wsse:Password>
             </wsse:UsernameToken>
         </wsse:Security>
     </soapenv:Header>
