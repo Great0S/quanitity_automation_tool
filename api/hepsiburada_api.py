@@ -107,7 +107,7 @@ def hbapi_updateListing(product):
                 
                 elif checkStatus['errors']:
                 
-                    print(f'HepsiBurada product with code: {product["sku"]} failed to update || Reason: {checkStatus['errors']}')
+                    print(f'HepsiBurada product with code: {product["sku"]} failed to update || Reason: {checkStatus["errors"]}')
         
                     break
                 
