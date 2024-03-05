@@ -12,20 +12,20 @@ def requestData(method: str ='POST', uri: str ='', params: dict ={}, data: list 
 
     url = "https://ws.pttavm.com:93/service.svc"
 
-    payload = f"""<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-    <soap:Header>
-        <wsse:Security soap:mustUnderstand="1" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
+    payload = f"""
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tem="http://tempuri.org/">
+    <soapenv:Header>
+        <wsse:Security soapenv:mustUnderstand="1" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
             <wsse:UsernameToken>
                 <wsse:Username>{username}</wsse:Username>
                 <wsse:Password>{password}</wsse:Password>
             </wsse:UsernameToken>
         </wsse:Security>
-    </soap:Header>
-    <soap:Body>
+    </soapenv:Header>
+    <soapenv:Body>
     {data}
-    </soap:Body>
-</soap:Envelope>"""
+    </soapenv:Body>
+</soapenv:Envelope>"""
 
     headers = {
   'Content-Type': 'text/xml; charset=utf-8',
@@ -84,21 +84,19 @@ def getPTTAVM_procuctskData(everyProduct: bool = False):
 
             return products_list
 
-      
-
 def pttavm_updateData(product):
 
     sku = product['sku']
     item_id = product['id']
     qty = product['qty']
 
-    update_payload = f"""<tem:StokFiyatGuncelle2>
+    update_payload = f"""<tem:StokFiyatGuncelle3>
             <tem:ShopId>{TedarikciId}</tem:ShopId>
             <tem:Barkod>{item_id}</tem:Barkod>
             <tem:Miktar>{qty}</tem:Miktar>
-        </tem:StokFiyatGuncelle2>"""
+        </tem:StokFiyatGuncelle3>"""
     
-    update_request = requestData(uri='StokFiyatGuncelle2', data=update_payload)
+    update_request = requestData(uri='StokFiyatGuncelle3', data=update_payload)
 
     if update_request.status_code == 200:
 
