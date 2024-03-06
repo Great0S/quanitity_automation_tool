@@ -1,25 +1,22 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+from urllib import parse
 import csv
 import gzip
 import json
+import os
 import re
 import shutil
 import time
 import requests
-from simple_dotenv import GetEnv
-from sp_api.api import Catalog, Reports, Orders
-from sp_api.base import SellingApiException, Marketplaces
-from sp_api.base.reportTypes import ReportType
-from datetime import datetime, timedelta, timezone
-
-from urllib import parse
 
 
-client_id = str(GetEnv('LWA_APP_ID'))
-client_secret = str(GetEnv('LWA_CLIENT_SECRET'))
-refresh_token = str(GetEnv('SP_API_REFRESH_TOKEN'))
-MarketPlaceID = str(GetEnv("AMAZONTURKEYMARKETID"))
-AmazonSA_ID = str(GetEnv('AMAZONSELLERACCOUNTID'))
+
+client_id = os.environ.get('LWA_APP_ID')
+client_secret = os.environ.get('LWA_CLIENT_SECRET')
+refresh_token = os.environ.get('SP_API_REFRESH_TOKEN')
+MarketPlaceID = os.environ.get("AMAZONTURKEYMARKETID")
+AmazonSA_ID = os.environ.get('AMAZONSELLERACCOUNTID')
 credentials = {
     'refresh_token': refresh_token,
     'lwa_app_id': client_id,
@@ -33,10 +30,7 @@ def get_access_token():
 
     token_url = "https://api.amazon.com/auth/o2/token"
 
-    payload = f'grant_type=refresh_token&client_id=
-    {client_id}&client_secret=
-    {client_secret}&refresh_token=
-    {refresh_token}'
+    payload = f"""grant_type=refresh_token&client_id={client_id}&client_secret={client_secret}&refresh_token={refresh_token}"""
 
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
@@ -305,6 +299,7 @@ def spapi_getOrders():
 
 
 def spapi_getListings(everyProduct: bool = False):
+
     """
     The function `spapi_getListings` retrieves a report from an API, downloads and decompresses the
     report file, converts it from CSV to JSON format, and returns the inventory items as a list of
@@ -402,6 +397,7 @@ def spapi_getListings(everyProduct: bool = False):
             decompress_gzip_file(file_download, file_saved)
 
     def csv_to_json(filename=""):
+
         """
         The `csv_to_json` function reads a CSV file, removes the Byte Order Mark (BOM) character if
         present, and converts the data into a list of dictionaries.
@@ -417,6 +413,7 @@ def spapi_getListings(everyProduct: bool = False):
         """
 
         def remove_bom(text):
+
             """
             The function `remove_bom` removes the Byte Order Mark (BOM) character from the beginning of
             a text if present.
@@ -429,6 +426,7 @@ def spapi_getListings(everyProduct: bool = False):
             (BOM) character removed if it is present at the beginning of the text. If the BOM character
             is not present, the function returns the original text unchanged.
             """
+
             # Remove the BOM character if present
             if text.startswith('\ufeff'):
 
