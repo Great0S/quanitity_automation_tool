@@ -116,15 +116,15 @@ def pttavm_updateData(product):
 
     update_request = requestData(uri='StokFiyatGuncelle3', data=update_payload)
 
-    if update_request.status_code == 200:
+    response_feedback = formatData(update_request)
 
-        response_feedback = formatData(update_request)
+    if update_request.status_code == 200:        
 
         print(f'PTTAVM product with sku: {sku}, New value: {qty}')
 
     else:
 
-        print(f"Request failure for PTTAVM product {sku} | Response: {update_request}")
+        print(f"Request failure for PTTAVM product {sku} | Response: {response_feedback['StokFiyatGuncelle3Response']['StokFiyatGuncelle3Result']}")
 
 
 def save_to_csv(data, filename=""):
