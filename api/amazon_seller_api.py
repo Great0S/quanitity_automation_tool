@@ -1,25 +1,22 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+from urllib import parse
 import csv
 import gzip
 import json
+import os
 import re
 import shutil
 import time
 import requests
-from simple_dotenv import GetEnv
-from sp_api.api import Catalog, Reports, Orders
-from sp_api.base import SellingApiException, Marketplaces
-from sp_api.base.reportTypes import ReportType
-from datetime import datetime, timedelta, timezone
-
-from urllib import parse
 
 
-client_id = str(GetEnv('LWA_APP_ID'))
-client_secret = str(GetEnv('LWA_CLIENT_SECRET'))
-refresh_token = str(GetEnv('SP_API_REFRESH_TOKEN'))
-MarketPlaceID = str(GetEnv("AMAZONTURKEYMARKETID"))
-AmazonSA_ID = str(GetEnv('AMAZONSELLERACCOUNTID'))
+
+client_id = os.environ.get('LWA_APP_ID')
+client_secret = os.environ.get('LWA_CLIENT_SECRET')
+refresh_token = os.environ.get('SP_API_REFRESH_TOKEN')
+MarketPlaceID = os.environ.get("AMAZONTURKEYMARKETID")
+AmazonSA_ID = os.environ.get('AMAZONSELLERACCOUNTID')
 credentials = {
     'refresh_token': refresh_token,
     'lwa_app_id': client_id,
@@ -33,7 +30,7 @@ def get_access_token():
 
     token_url = "https://api.amazon.com/auth/o2/token"
 
-    payload = f'grant_type=refresh_token&client_id={client_id}&client_secret={client_secret}&refresh_token={refresh_token}'
+    payload = f"""grant_type=refresh_token&client_id={client_id}&client_secret={client_secret}&refresh_token={refresh_token}"""
 
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
@@ -79,17 +76,22 @@ def requestData(session = None, operation_uri = '', params: dict = {}, payload=[
 
             session.headers = headers
 
-            init_request = session.get(f"{Endpoint_url}{uri}", data=payload)
+            init_request = session.get(f"{Endpoint_url}{uri}", 
+                                       data=payload)
 
         else:
 
-            init_request = requests.request(method,f"{Endpoint_url}{uri}", headers=headers, data=payload)
+            init_request = requests.request(method,
+                                            f"{Endpoint_url}{uri}", 
+                                            headers=headers, 
+                                            data=payload)
 
         if init_request.status_code == 200 or init_request.status_code == 400:
 
             jsonify = json.loads(init_request.text)
 
-            break
+            return jsonify
+        
         elif init_request.status_code == 403:
 
             session.headers['x-amz-access-token'] = access_token
@@ -102,14 +104,16 @@ def requestData(session = None, operation_uri = '', params: dict = {}, payload=[
 
             error_message = json.loads(init_request.text)[
                 'errors'][0]['message']
+            
+            if re.search('not found', error_message):
 
-            print(f"An error has occured || {error_message}")
+                return None
+            
+            else:
 
-            jsonify = None
+                print(f"An error has occured || {error_message}")
 
-            break
-
-    return jsonify
+                return None
 
 
 def spapi_getOrders():
@@ -295,6 +299,7 @@ def spapi_getOrders():
 
 
 def spapi_getListings(everyProduct: bool = False):
+
     """
     The function `spapi_getListings` retrieves a report from an API, downloads and decompresses the
     report file, converts it from CSV to JSON format, and returns the inventory items as a list of
@@ -308,12 +313,15 @@ def spapi_getListings(everyProduct: bool = False):
         'reportTypes': 'GET_MERCHANT_LISTINGS_ALL_DATA'}
 
     report_id_request = requestData(
-        session, "/reports/2021-06-30/reports/", params)
+        session, 
+        "/reports/2021-06-30/reports/", 
+        params)
 
     report_id = report_id_request['reports'][0]['reportId']
 
     verify_report_status_request = requestData(session,
-                                               f'/reports/2021-06-30/reports/{report_id}', [])
+                                               f'/reports/2021-06-30/reports/{report_id}', 
+                                               [])
 
     processingStatus = verify_report_status_request['processingStatus']
 
@@ -324,7 +332,8 @@ def spapi_getListings(everyProduct: bool = False):
             reportDocumentId = verify_report_status_request['reportDocumentId']
 
             report_data = requestData(session,
-                                      f'/reports/2021-06-30/documents/{reportDocumentId}', [])
+                                      f'/reports/2021-06-30/documents/{reportDocumentId}', 
+                                      [])
 
             compression = report_data['compressionAlgorithm']
 
@@ -388,6 +397,7 @@ def spapi_getListings(everyProduct: bool = False):
             decompress_gzip_file(file_download, file_saved)
 
     def csv_to_json(filename=""):
+
         """
         The `csv_to_json` function reads a CSV file, removes the Byte Order Mark (BOM) character if
         present, and converts the data into a list of dictionaries.
@@ -403,6 +413,7 @@ def spapi_getListings(everyProduct: bool = False):
         """
 
         def remove_bom(text):
+
             """
             The function `remove_bom` removes the Byte Order Mark (BOM) character from the beginning of
             a text if present.
@@ -415,6 +426,7 @@ def spapi_getListings(everyProduct: bool = False):
             (BOM) character removed if it is present at the beginning of the text. If the BOM character
             is not present, the function returns the original text unchanged.
             """
+
             # Remove the BOM character if present
             if text.startswith('\ufeff'):
 
@@ -562,7 +574,10 @@ def save_to_csv(data, filename=""):
 
             keys.update(item.keys())
 
-        with open(f"{filename}_data_list.csv", "w", newline='', encoding="utf-8") as csvfile:
+        with open(f"{filename}_data_list.csv", 
+                  "w", 
+                  newline='', 
+                  encoding="utf-8") as csvfile:
 
             file_writer = csv.DictWriter(csvfile, fieldnames=sorted(keys))
 
@@ -601,7 +616,10 @@ def spapi_updateListing(product):
     })
 
     listing_update_request = requestData(
-        operation_uri=f"/listings/2021-08-01/items/{AmazonSA_ID}/{sku}", params=params, payload=data_payload, method='PATCH')
+        operation_uri=f"/listings/2021-08-01/items/{AmazonSA_ID}/{sku}", 
+        params=params, 
+        payload=data_payload, 
+        method='PATCH')
 
     if listing_update_request and listing_update_request['status'] == 'ACCEPTED':
 

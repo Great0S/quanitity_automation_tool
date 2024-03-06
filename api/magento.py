@@ -186,10 +186,8 @@ def fetch_products(base_url, callback, consumer_key, consumer_secret, username, 
         consumer_key, consumer_secret, base_url, callback, 'GET', username, password)
     client = create_headers(key=consumer_key, secret=consumer_secret,
                             callback=callback, verifier=access_tokens['verifier_token'], token=access_tokens['access_token'])
-    header = Client.sign(
-        client, uri=f'{base_url}/api/rest/products?limit=100', http_method='GET')[1]
-    content = requests.get(
-        f'{base_url}/api/rest/products?limit=100', headers=header, data={})
+    header = Client.sign(client, uri=f'{base_url}/api/rest/products?limit=100', http_method='GET')[1]
+    content = requests.get(f'{base_url}/api/rest/products?limit=100', headers=header, data={})
     products = json.loads(content.text)
 
     page = 1
@@ -203,12 +201,9 @@ def fetch_products(base_url, callback, consumer_key, consumer_secret, username, 
             break
 
         page += 1
-        loop_client = create_headers(key=consumer_key, secret=consumer_secret,
-                                     callback=callback, verifier=access_tokens['verifier_token'], token=access_tokens['access_token'])
-        looping_header = Client.sign(loop_client, uri=f'{
-                                     base_url}/api/rest/products?limit=100&page={page}', http_method='GET')[1]
-        products = json.loads(requests.get(
-            f'{base_url}/api/rest/products?limit=100&page={page}', headers=looping_header, data={}).text)
+        loop_client = create_headers(key=consumer_key, secret=consumer_secret,callback=callback, verifier=access_tokens['verifier_token'], token=access_tokens['access_token'])
+        looping_header = Client.sign(loop_client, uri=f'{base_url}/api/rest/products?limit=100&page={page}', http_method='GET')[1]
+        products = json.loads(requests.get(f'{base_url}/api/rest/products?limit=100&page={page}', headers=looping_header, data={}).text)
 
     return product
 
@@ -386,8 +381,7 @@ def extract_data(source_url: str, target_url: str, source_env: str, target_env: 
                     found.append(
                         {"entity_id": f"{updates_target_item_id}", "price": f"{updates_source_price}"})
             else:
-                non_found.append({"sku": updates_target_sku, "entity_id": f"{
-                                 updates_target_item_id}", "price": f"{updates_target_price}"})
+                non_found.append({"sku": updates_target_sku, "entity_id": f"{updates_target_item_id}", "price": f"{updates_target_price}"})
     else:
         updates_target = get_products_list(target_url)
         updates_target_items = [{'id': item['entity_id'], 'sku': item['sku'],
@@ -417,8 +411,7 @@ def extract_data(source_url: str, target_url: str, source_env: str, target_env: 
                         {"entity_id": f"{updates_target_item_id}", "price": f"{updates_source_price}"})
             else:
                 # Non found items from the first website (Updates target) in the second website (Updates source)
-                non_found.append({"sku": updates_target_sku, "entity_id": f"{
-                                 updates_target_item_id}", "price": f"{updates_target_price}"})
+                non_found.append({"sku": updates_target_sku, "entity_id": f"{updates_target_item_id}", "price": f"{updates_target_price}"})
 
     if non_found:
         not_found_file = f'{target_url}_non_found.csv'

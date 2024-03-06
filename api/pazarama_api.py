@@ -25,8 +25,7 @@ def get_access_token():
 
     else:
 
-        print(f'Pazarama access token request has failed || Reason: {
-              response.text}')
+        print(f'Pazarama access token request has failed || Reason: {response.text}')
 
 
 def request_data(method='GET', uri='', params={}, payload=[]):
@@ -114,6 +113,3 @@ def pazarama_updateRequest(product):
         else:
 
             print(f'Pazarama product with code: {sku} failed to update || Reason: {update_request['data'][0]['error']}')
-
-
-pazarama_updateRequest({'sku': 'BPS13', 'id': '0789393946934', 'qty': 86})

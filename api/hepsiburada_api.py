@@ -101,13 +101,13 @@ def hbapi_updateListing(product):
     
                 if checkStatus['status'] == 'Done' and not checkStatus['errors']:
                 
-                    print(f'HepsiBurada product with code: {product["sku"]}, New value: {product["qty"]}\n')
+                    print(f'HepsiBurada product with code: {product["sku"]}, New value: {product["qty"]}')
         
                     break
                 
                 elif checkStatus['errors']:
                 
-                    print(f'HepsiBurada product with code: {product["sku"]} failed to update || Reason: {checkStatus['errors']}\n')
+                    print(f'HepsiBurada product with code: {product["sku"]} failed to update || Reason: {checkStatus["errors"]}')
         
                     break
                 
