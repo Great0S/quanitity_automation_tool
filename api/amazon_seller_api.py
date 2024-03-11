@@ -1,3 +1,6 @@
+""" importing necessary modules and libraries for performing various
+ tasks related to handling data, making HTTP requests, and working with concurrency """
+
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from urllib import parse
@@ -9,7 +12,6 @@ import re
 import shutil
 import time
 import requests
-
 
 
 client_id = os.environ.get('LWA_APP_ID')
@@ -27,17 +29,25 @@ session = requests.session()
 
 
 def get_access_token():
+    """
+    The function `get_access_token` retrieves an access token by sending a POST request to a specified
+    URL with necessary parameters.
+    :return: The function `get_access_token` is returning the access token obtained from the API
+    response after making a POST request to the token URL with the provided payload containing the
+    client ID, client secret, and refresh token.
+    """
 
     token_url = "https://api.amazon.com/auth/o2/token"
 
-    payload = f"""grant_type=refresh_token&client_id={client_id}&client_secret={client_secret}&refresh_token={refresh_token}"""
+    payload = f"""grant_type=refresh_token&client_id={client_id}&
+    client_secret={client_secret}&refresh_token={refresh_token}"""
 
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
     }
 
     token_response = requests.request(
-        "POST", token_url, headers=headers, data=payload)
+        "POST", token_url, headers=headers, data=payload, timeout=30)
 
     response_content = json.loads(token_response.text)
 
@@ -49,9 +59,37 @@ def get_access_token():
 access_token = get_access_token()
 
 
-def requestData(session = None, operation_uri = '', params: dict = {}, payload=[], method='GET'):
+def request_data(session=None, operation_uri='', params: dict = None, payload = None, method='GET'):
+    """
+    The function `request_data` sends a request to a specified API endpoint with optional parameters and
+    handles various response scenarios.
+    
+    :param session: The `session` parameter is used to pass an existing session object for making HTTP
+    requests. This can be helpful for maintaining the state of the session across multiple requests,
+    such as handling cookies or other session-related data. If `session` is provided, the function will
+    use it to make the request;
+    :param operation_uri: The `operation_uri` parameter in the `request_data` function is used to specify
+    the URI path for the API operation you want to call. It is a string that represents the specific
+    endpoint or resource you are targeting within the Selling Partner API. This parameter is appended to
+    the base endpoint URL to construct the
+    :param params: The `params` parameter in the `request_data` function is a dictionary that contains
+    key-value pairs of parameters that will be included in the API request URL as query parameters.
+    These parameters are used to specify additional information or filters for the API request
+    :type params: dict
+    :param payload: The `payload` parameter in the `request_data` function is used to pass data that
+    needs to be sent with the request. It can be a dictionary, list, or any other data structure that
+    you want to include in the request body. This data will be sent along with the request to the
+    specified
+    :param method: The `method` parameter in the `request_data` function specifies the HTTP method to be
+    used for the request. It has a default value of 'GET', but you can also specify other HTTP methods
+    like 'POST', 'PUT', 'DELETE', etc, defaults to GET (optional)
+    :return: The function `request_data` returns a JSON object if the initial request status code is
+    either 200 or 400. If the status code is 403, it updates the session header with the access token
+    and retries the request. If the status code is 429, it sleeps for 65 seconds and then retries the
+    request. If the status code indicates an error other than 403 or 429,
+    """
 
-    Endpoint_url = f'https://sellingpartnerapi-eu.amazon.com{operation_uri}?'
+    endpoint_url = f'https://sellingpartnerapi-eu.amazon.com{operation_uri}?'
 
     if params:
         uri = '&'.join([f'{k}={params[k]}' for k, v in params.items()])
@@ -63,7 +101,7 @@ def requestData(session = None, operation_uri = '', params: dict = {}, payload=[
 
     # Format the time in the desired format
     formatted_time = current_time.strftime('%Y%m%dT%H%M%SZ')
-    
+
     headers = {
         'Accept-Encoding': 'gzip',
         'Content-Type': 'application/json',
@@ -76,23 +114,24 @@ def requestData(session = None, operation_uri = '', params: dict = {}, payload=[
 
             session.headers = headers
 
-            init_request = session.get(f"{Endpoint_url}{uri}", 
+            init_request = session.get(f"{endpoint_url}{uri}",
                                        data=payload)
 
         else:
 
             init_request = requests.request(method,
-                                            f"{Endpoint_url}{uri}", 
-                                            headers=headers, 
-                                            data=payload)
+                                            f"{endpoint_url}{uri}",
+                                            headers=headers,
+                                            data=payload,
+                                            timeout=30)
 
-        if init_request.status_code == 200 or init_request.status_code == 400:
+        if init_request.status_code in (200, 400):
 
             jsonify = json.loads(init_request.text)
 
             return jsonify
-        
-        elif init_request.status_code == 403:
+
+        if init_request.status_code == 403:
 
             session.headers['x-amz-access-token'] = access_token
 
@@ -104,11 +143,11 @@ def requestData(session = None, operation_uri = '', params: dict = {}, payload=[
 
             error_message = json.loads(init_request.text)[
                 'errors'][0]['message']
-            
+
             if re.search('not found', error_message):
 
                 return None
-            
+
             else:
 
                 print(f"An error has occured || {error_message}")
@@ -116,7 +155,11 @@ def requestData(session = None, operation_uri = '', params: dict = {}, payload=[
                 return None
 
 
-def spapi_getOrders():
+def spapi_get_orders():
+    """
+    The function `spapi_get_orders` retrieves orders with a status of 'Shipped' from a specified
+    marketplace and processes them in batches of 30.
+    """
 
     params = {
         'MarketplaceIds': MarketPlaceID,
@@ -124,9 +167,7 @@ def spapi_getOrders():
         'MaxResultsPerPage': 100,
         'CreatedAfter': "2019-10-07T17:58:48.017Z"}
 
-    # rate = int(1 / rate_limit)
-
-    formatted_data = requestData("/orders/v0/orders/", params)['payload']
+    formatted_data = request_data("/orders/v0/orders/", params)['payload']
 
     orders = formatted_data['Orders']
 
@@ -138,63 +179,7 @@ def spapi_getOrders():
 
     next_token = formatted_data.get('NextToken')
 
-    while orders:
-
-        futures = []
-
-        if next_token:
-            params = {'MarketplaceIds': MarketPlaceID,
-                      "NextToken": parse.quote(formatted_data['NextToken'])}
-
-            futures = requestData("/orders/v0/orders/", params)
-
-            result = futures['payload']
-
-            next_token = result.get('NextToken', None)
-
-            orders = result.get('Orders')
-
-            request_count += 1
-
-            for oi in orders:
-                if orders_dict:
-                    for io in orders_dict:
-                        if io['AmazonOrderId'] == oi['AmazonOrderId']:
-                            break
-                        else:
-                            count += 1
-                            orders_dict.append(oi)
-                            break
-                else:
-                    count += 1
-                    orders_dict.append(oi)
-
-            print(f'{count} orders has been added')
-
-            if request_count % 30 == 0:
-                print(f"Processing {count} orders please wait!")
-
-                spapi_getOrderItems(30, orders_dict)
-
-                print(
-                    f"Processed {count} orders || Orders left: {len(orders_dict)-count}")
-
-                request_count = 0
-
-            else:
-                pass
-
-    for data in orders_dict:
-
-        if 'MarketplaceId' in data:
-
-            spapi_getOrderItems(30, orders_dict)
-
-            break
-        else:
-            continue
-
-    def spapi_getOrderItems(max_requests, orders_list):
+    def spapi_getorderitems(max_requests, orders_list):
         """
         The function `spapi_getOrderItems` retrieves order items data for a list of orders and processes
         it to extract basic order information.
@@ -227,7 +212,7 @@ def spapi_getOrders():
                 if 'ASIN' not in order:
 
                     futures.append(executor.submit(
-                        requestData, f"/orders/v0/orders/{order['AmazonOrderId']}/orderItems", params))
+                        request_data, f"/orders/v0/orders/{order['AmazonOrderId']}/orderItems", params))
 
                     item_request_count += 1
 
@@ -240,66 +225,148 @@ def spapi_getOrders():
                             if result:
                                 items_dict.append(result)
 
-                        orderBasic_info(
+                        orderbasic_info(
                             orders_list=orders_list, item_list=items_dict)
 
                         item_request_count = 0
 
                         items_dict = []
 
-        def orderBasic_info(item_list, orders_list):
+        return orders_list, count
 
-            city = None
-            county = None
-            count = 0
+    def orderbasic_info(item_list, orders_list):
+        """
+        The function `orderBasic_info` processes item and order data to extract relevant information and
+        append it to a list.
 
-            for order in orders_list:
-                for item_data in item_list:
-                    if item_data['AmazonOrderId'] == order['AmazonOrderId']:
-                        try:
-                            if "ShippingAddress" in order and order['FulfillmentChannel'] == "MFN" and isinstance(order['ShippingAddress'], dict):
-                                city = order['ShippingAddress']['City']
-                                county = order['ShippingAddress'].get(
-                                    'County', None)
+        :param item_list: The `item_list` parameter is a list containing information about items, such
+        as their ASIN, quantity shipped, price, seller SKU, title, etc. Each item in the list is
+        represented as a dictionary with various key-value pairs
+        :param orders_list: The function `orderbasic_info` takes two parameters: `item_list` and
+        `orders_list`. The `item_list` parameter is a list of items with their information, and the
+        `orders_list` parameter is a list of orders with order details
+        :return: The function `orderbasic_info` returns two values: 
+        1. The updated `orders_list` after processing the item and order data.
+        2. The count of items processed and added to the `orders_list`.
+        """
 
-                            # Create a dictionary for each item's information and append it to data_list
-                            if 'ASIN' not in order:
-                                for item in item_data['OrderItems']:
-                                    data = {
-                                        "AmazonOrderId": order.get('AmazonOrderId', None),
-                                        "OrderStatus": order.get('OrderStatus', None),
-                                        "EarliestShipDate": order.get('EarliestShipDate', None),
-                                        "LatestShipDate": order.get('LatestShipDate', None),
-                                        "PurchaseDate": order.get('PurchaseDate', None),
-                                        "City": city,
-                                        "County": county,
-                                        "ASIN": item.get('ASIN', None),
-                                        "QuantityShipped": item.get('QuantityShipped', None),
-                                        "Amount": item['ItemPrice']['Amount'],
-                                        "SellerSKU": item.get('SellerSKU', None),
-                                        "Title": item.get('Title', None)
-                                    }
-                                    orders_list.append(data)
-                                    count += 1
-                        except KeyError:
-                            if order in orders_list:
-                                orders_list.remove(order)
-                            pass
+        city = None
+        county = None
+        count = 0
 
-            for index, order in enumerate(orders_list):
-                for item_data in item_list:
-                    if item_data['AmazonOrderId'] == order['AmazonOrderId'] and 'ASIN' not in order:
-                        del orders_list[index]
+        for order in orders_list:
 
-            return orders_list, count
+            for item_data in item_list:
+
+                if item_data['AmazonOrderId'] == order['AmazonOrderId']:
+
+                    try:
+                        if "ShippingAddress" in order and order['FulfillmentChannel'] == "MFN" and isinstance(order['ShippingAddress'], dict):
+                            city = order['ShippingAddress']['City']
+                            county = order['ShippingAddress'].get(
+                                'County', None)
+
+                        # Create a dictionary for each item's information and append it to data_list
+                        if 'ASIN' not in order:
+
+                            for item in item_data['OrderItems']:
+
+                                data = {
+                                    "AmazonOrderId": order.get('AmazonOrderId', None),
+                                    "OrderStatus": order.get('OrderStatus', None),
+                                    "EarliestShipDate": order.get('EarliestShipDate', None),
+                                    "LatestShipDate": order.get('LatestShipDate', None),
+                                    "PurchaseDate": order.get('PurchaseDate', None),
+                                    "City": city,
+                                    "County": county,
+                                    "ASIN": item.get('ASIN', None),
+                                    "QuantityShipped": item.get('QuantityShipped', None),
+                                    "Amount": item['ItemPrice']['Amount'],
+                                    "SellerSKU": item.get('SellerSKU', None),
+                                    "Title": item.get('Title', None)
+                                }
+                                orders_list.append(data)
+                                count += 1
+
+                    except KeyError:
+
+                        if order in orders_list:
+
+                            orders_list.remove(order)
+
+        for index, order in enumerate(orders_list):
+            for item_data in item_list:
+                if item_data['AmazonOrderId'] == order['AmazonOrderId'] and 'ASIN' not in order:
+                    del orders_list[index]
 
         return orders_list, count
+
+    while orders:
+
+        futures = []
+
+        if next_token:
+            params = {'MarketplaceIds': MarketPlaceID,
+                      "NextToken": parse.quote(formatted_data['NextToken'])}
+
+            futures = request_data("/orders/v0/orders/", params)
+
+            result = futures['payload']
+
+            next_token = result.get('NextToken', None)
+
+            orders = result.get('Orders')
+
+            request_count += 1
+
+            for oi in orders:
+
+                if orders_dict:
+
+                    for io in orders_dict:
+
+                        if io['AmazonOrderId'] == oi['AmazonOrderId']:
+
+                            break
+
+                        count += 1
+
+                        orders_dict.append(oi)
+
+                        break
+                else:
+                    count += 1
+                    orders_dict.append(oi)
+
+            print(f'{count} orders has been added')
+
+            if request_count % 30 == 0:
+                print(f"Processing {count} orders please wait!")
+
+                spapi_getorderitems(30, orders_dict)
+
+                print(
+                    f"Processed {count} orders || Orders left: {len(orders_dict)-count}")
+
+                request_count = 0
+
+            else:
+                pass
+
+    for data in orders_dict:
+
+        if 'MarketplaceId' in data:
+
+            spapi_getorderitems(30, orders_dict)
+
+            break
+        else:
+            continue
 
     return orders_dict
 
 
-def spapi_getListings(everyProduct: bool = False):
-
+def spapi_getlistings(every_product: bool = False):
     """
     The function `spapi_getListings` retrieves a report from an API, downloads and decompresses the
     report file, converts it from CSV to JSON format, and returns the inventory items as a list of
@@ -312,27 +379,29 @@ def spapi_getListings(everyProduct: bool = False):
         'MarketplaceIds': MarketPlaceID,
         'reportTypes': 'GET_MERCHANT_LISTINGS_ALL_DATA'}
 
-    report_id_request = requestData(
-        session, 
-        "/reports/2021-06-30/reports/", 
+    report_id_request = request_data(
+        session,
+        "/reports/2021-06-30/reports/",
         params)
 
     report_id = report_id_request['reports'][0]['reportId']
 
-    verify_report_status_request = requestData(session,
-                                               f'/reports/2021-06-30/reports/{report_id}', 
+    verify_report_status_request = request_data(session,
+                                               f'/reports/2021-06-30/reports/{
+                                                   report_id}',
                                                [])
 
-    processingStatus = verify_report_status_request['processingStatus']
+    processing_status = verify_report_status_request['processingStatus']
 
     while True:
 
-        if processingStatus == 'DONE':
+        if processing_status == 'DONE':
 
-            reportDocumentId = verify_report_status_request['reportDocumentId']
+            report_document_id = verify_report_status_request['reportDocumentId']
 
-            report_data = requestData(session,
-                                      f'/reports/2021-06-30/documents/{reportDocumentId}', 
+            report_data = request_data(session,
+                                      f'/reports/2021-06-30/documents/{
+                                          report_document_id}',
                                       [])
 
             compression = report_data['compressionAlgorithm']
@@ -357,7 +426,7 @@ def spapi_getListings(everyProduct: bool = False):
         example, if you want to save the
         """
         # Send a GET request to the URL
-        response = requests.get(url, stream=True)
+        response = requests.get(url, stream=True, timeout=30)
 
         # Raise an exception if the request was not successful
         response.raise_for_status()
@@ -397,7 +466,6 @@ def spapi_getListings(everyProduct: bool = False):
             decompress_gzip_file(file_download, file_saved)
 
     def csv_to_json(filename=""):
-
         """
         The `csv_to_json` function reads a CSV file, removes the Byte Order Mark (BOM) character if
         present, and converts the data into a list of dictionaries.
@@ -413,7 +481,6 @@ def spapi_getListings(everyProduct: bool = False):
         """
 
         def remove_bom(text):
-
             """
             The function `remove_bom` removes the Byte Order Mark (BOM) character from the beginning of
             a text if present.
@@ -451,7 +518,7 @@ def spapi_getListings(everyProduct: bool = False):
 
     inv_items = csv_to_json(file_saved)
 
-    def get_item_details(session, includedData, everyProduct: bool = False):
+    def get_item_details(session, included_data, every_product: bool = False):
 
         request_count = 0
 
@@ -459,7 +526,7 @@ def spapi_getListings(everyProduct: bool = False):
 
         params = {"marketplaceIds": MarketPlaceID,
                   "issueLocale": 'en_US',
-                  "includedData": includedData}
+                  "includedData": included_data}
 
         with ThreadPoolExecutor(max_workers=5) as executor:
 
@@ -476,7 +543,7 @@ def spapi_getListings(everyProduct: bool = False):
                     continue
 
                 futures.append(executor.submit(
-                    requestData, session, f'/listings/2021-08-01/items/{AmazonSA_ID}/{sku}', params))
+                    request_data, session, f'/listings/2021-08-01/items/{AmazonSA_ID}/{sku}', params))
 
                 request_count += 1
 
@@ -486,7 +553,7 @@ def spapi_getListings(everyProduct: bool = False):
 
                         result = future.result()
 
-                        if not everyProduct and result:
+                        if not every_product and result:
 
                             # price = item_request['attributes']['purchasable_offer'][0]['our_price'][0]['schedule'][0]['value_with_tax']
 
@@ -505,7 +572,7 @@ def spapi_getListings(everyProduct: bool = False):
                             amazon_products.append(
                                 {'sku': result['sku'], 'id': asin, 'qty': quanitity})
 
-                        elif everyProduct and result:
+                        elif every_product and result:
 
                             amazon_products.append(result)
 
@@ -518,14 +585,36 @@ def spapi_getListings(everyProduct: bool = False):
         return amazon_products
 
     products = get_item_details(
-        session, 'summaries,attributes,fulfillmentAvailability', everyProduct)
-    
-    print(f'Amazon products data request is successful. Response: OK')
+        session, included_data='summaries,attributes,fulfillmentAvailability', every_product=every_product)
+
+    print('Amazon products data request is successful. Response: OK')
 
     return products
 
 
-def filter_orderData(orders_list, order, result, items):
+def filter_order_data(orders_list, order, result, items):
+    """
+    The function `filter_orderData` updates order data in a list based on specified items and order
+    information.
+
+    :param orders_list: The `orders_list` parameter in the `filter_orderData` function seems to be a
+    list of orders. The function appears to iterate over each item in the `items` parameter, extract
+    specific data from each item, and then update the corresponding order in the `orders_list` with this
+    extracted data
+    :param order: The `order` parameter seems to be missing in the provided code snippet. Could you
+    please provide the definition or explanation of the `order` parameter so that I can assist you
+    further with the `filter_orderData` function?
+    :param result: The `result` parameter in the `filter_orderData` function seems to be a dictionary
+    containing order data. The function iterates over a list of items and updates the order data in the
+    `orders_list` based on certain conditions. The `result` dictionary is used to retrieve the
+    'AmazonOrderId
+    :param items: The `items` parameter in the `filter_orderData` function seems to be a list of items
+    that contain information about an order, such as ASIN, QuantityShipped, Amount, SellerSKU, and
+    Title. The function iterates over these items and updates the corresponding order information in the
+    `
+    :return: The function `filter_orderData` is returning the updated `orders_list` after filtering and
+    updating the order data based on the provided items.
+    """
 
     for item in items:
 
@@ -553,7 +642,7 @@ def filter_orderData(orders_list, order, result, items):
 
                     break
 
-        except KeyError as ex:
+        except KeyError:
 
             if order in orders_list:
 
@@ -565,6 +654,18 @@ def filter_orderData(orders_list, order, result, items):
 
 
 def save_to_csv(data, filename=""):
+    """
+    The function `save_to_csv` takes a list of dictionaries, extracts keys from the dictionaries, and
+    writes the data to a CSV file.
+
+    :param data: The `data` parameter in the `save_to_csv` function is expected to be a list of
+    dictionaries where each dictionary represents a row of data to be written to the CSV file. Each
+    dictionary should have keys that represent the column headers in the CSV file, and the values
+    represent the data for each
+    :param filename: The `filename` parameter in the `save_to_csv` function is a string that represents
+    the name of the CSV file where the data will be saved. If no filename is provided, the default value
+    is an empty string
+    """
 
     if data:
 
@@ -574,9 +675,9 @@ def save_to_csv(data, filename=""):
 
             keys.update(item.keys())
 
-        with open(f"{filename}_data_list.csv", 
-                  "w", 
-                  newline='', 
+        with open(f"{filename}_data_list.csv",
+                  "w",
+                  newline='',
                   encoding="utf-8") as csvfile:
 
             file_writer = csv.DictWriter(csvfile, fieldnames=sorted(keys))
@@ -588,7 +689,14 @@ def save_to_csv(data, filename=""):
                 file_writer.writerow(d)
 
 
-def spapi_updateListing(product):
+def spapi_update_listing(product):
+    """
+    The function `spapi_updateListing` updates a product listing on Amazon Seller Central with a new
+    quantity value.
+    
+    :param product: The `spapi_updateListing` function is designed to update a listing on Amazon 
+    Seller Central using the Selling Partner API
+    """
 
     sku = product['sku']
 
@@ -615,10 +723,10 @@ def spapi_updateListing(product):
         ]
     })
 
-    listing_update_request = requestData(
-        operation_uri=f"/listings/2021-08-01/items/{AmazonSA_ID}/{sku}", 
-        params=params, 
-        payload=data_payload, 
+    listing_update_request = request_data(
+        operation_uri=f"/listings/2021-08-01/items/{AmazonSA_ID}/{sku}",
+        params=params,
+        payload=data_payload,
         method='PATCH')
 
     if listing_update_request and listing_update_request['status'] == 'ACCEPTED':
@@ -627,5 +735,5 @@ def spapi_updateListing(product):
 
     else:
 
-        print(
-            f'Amazon product with code: {product["sku"]} failed to update || Reason: {listing_update_request}')
+        print(f"""Amazon product with code: {product["sku"]} failed
+              to update || Reason: {listing_update_request}""")

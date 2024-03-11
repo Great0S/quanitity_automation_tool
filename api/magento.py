@@ -339,6 +339,7 @@ def update_request(tokens, item: dict ):
 
 
 def extract_data(source_url: str, target_url: str, source_env: str, target_env: str, data_exist: list):
+    
     """
     The function `extract_data` compares data from two websites and returns a list of items that are
     found and not found in the second website.

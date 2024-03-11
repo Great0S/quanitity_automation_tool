@@ -1,86 +1,72 @@
-from api.amazon_seller_api import spapi_getListings, spapi_updateListing
-from api.hepsiburada_api import hbapi_stock_data, hbapi_updateListing
+""" These lines of code are importing specific functions from different API modules. Each API module
+ seems to be related to a specific platform or service, such as Amazon, Hepsiburada, Pazarama,
+ PTTAVM, Trendyol, and N11. By importing these functions, the main script can utilize the
+ functionalities provided by these APIs to retrieve stock data, update listings, and perform other
+ operations related to each platform."""
+
+from api.amazon_seller_api import spapi_getlistings, spapi_update_listing
+from api.hepsiburada_api import hbapi_stock_data, hbapi_update_listing
 from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
 from api.pttavm_api import getPTTAVM_procuctskData, pttavm_updateData
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
 from api.n11_api import get_n11_stock_data, post_n11_data
 
-# Options = {
-#     "OPTION_1": 1,
-#     "OPTION_2": 2,
-#     "startDate": None,
-#     "endDate": None}
 
-# print("Do you want to filter by specific date?\nChoose by entering the option number from below:\n1. Yes\n2. No")
-
-# user_input = int(input())
-
-# if user_input == Options['OPTION_1']:
-#     print('Please enter start date ? Ex: 22/03/2024')
-#     Options['startDate'] = input()
-#     print('Please enter end date ? Ex: 22/04/2024')
-#     Options['endDate'] = input()
-#     print("Loading data ...")
-#     N11_data = get_details()
-#     Trendyol_data = get_data(Options['startDate'], Options['endDate'])
-
-# elif user_input == Options['OPTION_2']:
-#     N11_data = get_details()
-#     Trendyol_data = get_data(Options['startDate'], Options['endDate'])
-# else:
-#     print("Invalid input. Please try again.")
-
-
-def get_data(everyProduct: bool = False):
-    
+def get_data(every_product: bool = False):
     """
-    The function `get_data()` retrieves stock data from N11 and Trendyol, and returns various lists and
+    The function `get_data()` retrieves stock data from N11
+    and Trendyol, and returns various lists and
     data related to the retrieved data.
     :return: the following variables:
-    - N11_data: data from N11 stock
-    - Trendyol_data: data from Trendyol stock
+    - n11_data: data from N11 stock
+    - trendyol_data: data from Trendyol stock
     - all_codes: a list of all unique product codes from both N11 and Trendyol data
     - n11_ids: a list of product IDs from N11 data
     - trendyol_ids: a list of product IDs from Trendyol
     """
 
     # Retrieve stock data from N11 and Trendyol APIs
-    N11_data = get_n11_stock_data(everyProduct)
+    n11_data = get_n11_stock_data(every_product)
 
-    Trendyol_data = get_trendyol_stock_data(everyProduct)
+    trendyol_data = get_trendyol_stock_data(every_product)
 
-    Amazon_data = spapi_getListings(everyProduct)
+    amazon_data = spapi_getlistings(every_product)
 
-    HepsiBurada_data = hbapi_stock_data(everyProduct)
+    hepsiburada_data = hbapi_stock_data(every_product)
 
-    Pazarama_data = getPazarama_productsList(everyProduct)
+    pazarama_data = getPazarama_productsList(every_product)
 
-    PTTAVM_data = getPTTAVM_procuctskData(everyProduct)
+    pttavm_data = getPTTAVM_procuctskData(every_product)
 
-    data_content = {"Trendyol_data": Trendyol_data,
-                    "N11_data": N11_data, 
-                    "Amazon_data": Amazon_data, 
-                    "HepsiBurada_data": HepsiBurada_data, 
-                    "Pazarama_data": Pazarama_data,
-                    "PTTAVM_data": PTTAVM_data}
+    data_content = {"trendyol_data": trendyol_data,
+                    "n11_data": n11_data,
+                    "amazon_data": amazon_data,
+                    "hepsiburada_data": hepsiburada_data,
+                    "pazarama_data": pazarama_data,
+                    "pttavm_data": pttavm_data}
 
-    if everyProduct:
+    if every_product:
 
         pass
 
     else:
 
-        all_codes = list(set([item['sku'] for item in N11_data] +
-                             [item['sku'] for item in Trendyol_data] + 
-                             [item['sku'] for item in Amazon_data] + 
-                             [item['sku'] for item in HepsiBurada_data] + 
-                             [item['sku'] for item in Pazarama_data] + 
-                             [item['sku'] for item in PTTAVM_data]))
+        all_codes = list(set([item['sku'] for item in n11_data] +
+                             [item['sku'] for item in trendyol_data] +
+                             [item['sku'] for item in amazon_data] +
+                             [item['sku'] for item in hepsiburada_data] +
+                             [item['sku'] for item in pazarama_data] +
+                             [item['sku'] for item in pttavm_data]))
 
     return data_content, all_codes
 
 
 def process_update_data():
+    """
+    The function `process_update_data` retrieves data, processes stock updates from different platforms,
+    and returns the platform updates.
+    :return: The function `process_update_data()` is returning the list `platform_updates`.
+    """
 
     #  This allows us to access and use these variables
     data_lists, all_codes = get_data()
@@ -90,19 +76,37 @@ def process_update_data():
     platform_updates, matching_values = get_platform_updates(
         data_lists, all_codes)
 
-    print(f'\nLength of the two lists:- \nPlatform updates is {len(platform_updates)}\nMatching codes is {len(matching_values)}\n')
+    print(f'\nLength of the two lists:- \nPlatform updates is {
+          len(platform_updates)}\nMatching codes is {len(matching_values)}\n')
 
     return platform_updates
 
 
 def get_platform_updates(data, all_codes):
+    """
+    The function `get_platform_updates` compares quantity values
+    for items across different platforms and returns a list of
+    changed values and matching values.
+    
+    :param data: The function `get_platform_updates` takes two
+    parameters: `data` and `all_codes`. The `data` parameter
+    seems to be a dictionary containing platform data for different
+    platforms like Trendyol, N11, Amazon, HepsiBurada, Pazarama, and PTTAVM
+    :param all_codes: All_codes is a list of SKU codes that you want to check
+    for updates on different platforms. The function `get_platform_updates`
+    takes this list along with some data containing platform information
+    and compares the quantities of products with the same SKU on different
+    platforms. It then identifies any discrepancies in quantities and returns a
+    :return: The function `get_platform_updates` returns two lists: `changed_values` and
+    `matching_values`.
+    """
 
     changed_values = []
 
-    platforms = ['Trendyol', 
-                 'N11', 
-                 'Amazon', 
-                 'HepsiBurada', 
+    platforms = ['Trendyol',
+                 'N11',
+                 'Amazon',
+                 'HepsiBurada',
                  'Pazarama',
                  'PTTAVM']
 
@@ -129,16 +133,16 @@ def get_platform_updates(data, all_codes):
                         if code in matching_ids:
 
                             matching_ids[code].append(
-                                {'platform': platform, 
-                                 'id': item_id,  
+                                {'platform': platform,
+                                 'id': item_id,
                                  'price': item.get('price', None),
                                  'qty': quantity})
 
                         else:
 
                             matching_ids[code] = [
-                                {'platform': platform, 
-                                 'id': item_id,  
+                                {'platform': platform,
+                                 'id': item_id,
                                  'price': item.get('price', None),
                                  'qty': quantity}]
 
@@ -162,16 +166,16 @@ def get_platform_updates(data, all_codes):
                             product['qty']) - int(lowest_val['qty'])
 
                         matching_values.append(
-                            {'sku': product['id'], 
-                             'qty1': product['qty'], 
-                             'qty2': lowest_val['qty'], 
+                            {'sku': product['id'],
+                             'qty1': product['qty'],
+                             'qty2': lowest_val['qty'],
                              'value_difference': value_diff})
 
                         changed_values.append(
-                            {'id': product['id'], 
-                             'sku': item_key, 
-                             'price': product.get('price', None), 
-                             'qty': str(lowest_val['qty']), 
+                            {'id': product['id'],
+                             'sku': item_key,
+                             'price': product.get('price', None),
+                             'qty': str(lowest_val['qty']),
                              'platform': product['platform']})
             else:
 
@@ -181,6 +185,11 @@ def get_platform_updates(data, all_codes):
 
 
 def execute_updates():
+    """
+    The function `execute_updates` processes update data
+    for different platforms and calls corresponding
+    update functions based on the platform.
+    """
 
     post_data = process_update_data()
 
@@ -196,11 +205,11 @@ def execute_updates():
 
         elif post['platform'] == 'Amazon':
 
-            spapi_updateListing(post)
+            spapi_update_listing(post)
 
         elif post['platform'] == 'HepsiBurada':
 
-            hbapi_updateListing(post)
+            hbapi_update_listing(post)
 
         elif post['platform'] == 'Pazarama':
 

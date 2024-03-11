@@ -254,7 +254,24 @@ def get_n11_detailed_order_list(url):
 
 
 def flatten_dict(data, prefix=""):
+    """
+    The `flatten_dict` function recursively flattens a nested dictionary into a single-level dictionary
+    with keys concatenated based on the original structure.
+    
+    :param data: The `data` parameter in the `flatten_dict` function is a dictionary that you want to
+    flatten. This function takes a nested dictionary as input and flattens it into a single-level
+    dictionary where the keys are concatenated with underscores to represent the nested structure
+    :param prefix: The `prefix` parameter in the `flatten_dict` function is used to specify a prefix
+    string that will be added to the keys of the flattened dictionary. This prefix is helpful when you
+    want to differentiate keys that are derived from nested structures or to avoid key conflicts when
+    flattening nested dictionaries
+    :return: The `flatten_dict` function takes a nested dictionary `data` as input and flattens it into
+    a single-level dictionary where the keys are concatenated with underscores to represent the nested
+    structure. The function returns the flattened dictionary `item`.
+    """
+
     item = {}
+    
     for item_key, item_value in data.items():
         if isinstance(item_value, dict):
             for sub_key, sub_value in item_value.items():
@@ -290,9 +307,29 @@ def flatten_dict(data, prefix=""):
 
 
 def looper(link, payload_dump, namespace, list_name):
+    """
+    The function `looper` continuously makes API calls until a successful response is received, then
+    assigns variables based on the response.
+    
+    :param link: The `link` parameter is the URL endpoint where the API call is being made. It is the
+    target URL to which the POST request is sent in the `looper` function
+    :param payload_dump: The `payload_dump` parameter in the `looper` function is typically a dictionary
+    or string containing the data that will be sent in the POST request to the specified `link`. It
+    usually includes the necessary information for the API call to be successful, such as authentication
+    tokens, parameters, and any other
+    :param namespace: The `namespace` parameter in the `looper` function is typically used to specify a
+    specific context or scope within which variables, functions, or objects exist. It helps in
+    organizing and managing the elements within a program by providing a unique identifier or name for a
+    particular set of elements
+    :param list_name: The `list_name` parameter in the `looper` function is used to specify the name of
+    the list where the orders will be stored. It is passed as an argument to the `assign_vars` function
+    along with other parameters
+    :return: The `looper` function is returning `orders_list` and `orders_total` variables when the API
+    call response contains the word "success".
+    """
     while True:
         api_call_loop = requests.post(
-            link, headers=headers, data=payload_dump)
+            link, headers=headers, data=payload_dump, timeout=30)
         if re.search("success", api_call_loop.text):
             orders_list, orders_total = assign_vars(
                 api_call_loop, namespace, list_name)
@@ -303,6 +340,17 @@ def looper(link, payload_dump, namespace, list_name):
 
 # Function for saving data to a CSV file.
 def save_to_csv(data, filename=""):
+    """
+    The function `save_to_csv` takes a list of dictionaries and saves it to a CSV file with the
+    specified filename.
+    
+    :param data: The `data` parameter in the `save_to_csv` function is expected to be a list of
+    dictionaries. Each dictionary in the list represents a row of data to be written to the CSV file.
+    The keys of the dictionaries will be used as the column headers in the CSV file
+    :param filename: The `filename` parameter in the `save_to_csv` function is a string that represents
+    the name of the CSV file where the data will be saved. If no filename is provided, the default value
+    is an empty string
+    """
     if data:
         keys = set()
         for item in data:
@@ -316,6 +364,15 @@ def save_to_csv(data, filename=""):
 
 # Function for updating product data on N11
 def post_n11_data(data):
+    """
+    The `post_n11_data` function sends a SOAP request to update the stock quantity of a product on the
+    N11 platform and handles the response accordingly.
+    
+    :param data: It looks like the code snippet you provided is a function `post_n11_data` that is
+    responsible for updating the stock quantity of a product on the N11 platform using a SOAP request.
+    The function takes a `data` parameter which seems to be a dictionary containing information about
+    the product to be updated
+    """
 
     # The `post_payload` variable is a string that contains an XML request payload for updating the
     # stock quantity of a product on the N11 platform.
@@ -340,7 +397,7 @@ def post_n11_data(data):
                         </soapenv:Envelope>
                         """
     
-    post_response = requests.request("POST", url, headers=headers, data=post_payload)
+    post_response = requests.request("POST", url, headers=headers, data=post_payload, timeout=30)
 
     if post_response.status_code == 200:
 
