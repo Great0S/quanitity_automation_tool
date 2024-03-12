@@ -219,10 +219,10 @@ def get_products_list(url):
 def assign_vars(url):
     load_dotenv()
     env = re.sub(r'\.com$', '', url).upper()
-    consumer_key = os.getenv(f'{env}_KEY')
-    consumer_secret = os.getenv(f'{env}_SECRET')
-    username = os.getenv('USER')
-    password = os.getenv('PASSWORD')
+    consumer_key = os.environ.get(f'{env}_KEY')
+    consumer_secret = os.environ.get(f'{env}_SECRET')
+    username = os.environ.get('USER')
+    password = os.environ.get('PASSWORD')
     base_url = f"https://www.{url}"
     callback_address = f"https://www.{url}/hakkimizda"
 
@@ -258,7 +258,7 @@ def process_updates(source_url: str, target_url: str):
                 if len(successful) == len(found):
                     print(f'{len(successful)} products were updated successfully.')
         elif len(found) == 0 and not_found:
-            print(f'Do you want to continue processing non found products? ')
+            print('Do you want to continue processing non found products? ')
             user_input = input('1. Continue\n2. Exit\n')
 
             if user_input == '1':

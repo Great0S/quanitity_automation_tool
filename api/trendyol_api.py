@@ -137,7 +137,7 @@ def get_trendyol_stock_data(everyProduct: bool =False):
 
         decoded_data = prepare_data(request_data(url_addon, "GET", {}))
 
-    print(f'Trendyol products data request is successful. Response: OK')
+    print('Trendyol products data request is successful. Response: OK')
 
     if everyProduct:
 

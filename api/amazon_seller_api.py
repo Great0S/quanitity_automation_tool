@@ -11,10 +11,6 @@ import os
 import re
 import shutil
 import time
-import os
-import re
-import shutil
-import time
 import requests
 
 
@@ -461,7 +457,7 @@ def spapi_getlistings(every_product: bool = False):
                 shutil.copyfileobj(f_in, f_out)
 
     if report_link:
-        file_saved = f'amazon-all-inventory.csv'
+        file_saved = 'amazon-all-inventory.csv'
 
         if compression:
             file_download = f'amazon-all-inventory-{report_id}.{compression}'
