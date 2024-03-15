@@ -136,8 +136,8 @@ def hbapi_update_listing(product):
 
                 if check_status['status'] == 'Done' and not check_status['errors']:
 
-                    printr(f'[orange_red1]HepsiBurada[/orange_red1] product with code: {
-                           product["sku"]}, New value: [green]{product["qty"]}[/green]')
+                    printr(f"""[orange_red1]HepsiBurada[/orange_red1] product with code: {
+                           product["sku"]}, New value: [green]{product["qty"]}[/green]""")
 
                     break
 

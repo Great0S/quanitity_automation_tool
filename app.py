@@ -62,6 +62,7 @@ def get_data(every_product: bool = False):
 
 
 def process_update_data():
+
     """
     The function `process_update_data` retrieves data, processes stock updates from different platforms,
     and returns the platform updates.
@@ -71,7 +72,8 @@ def process_update_data():
     #  This allows us to access and use these variables
     data_lists, all_codes = get_data()
 
-    # Initializing empty lists. These lists will be used to store data during the processing of stock
+    # Initializing empty lists. These lists will be used
+    # to store data during the processing of stock
     # data from N11 and Trendyol APIs.
     platform_updates, matching_values = get_platform_updates(
         data_lists, all_codes)
@@ -83,6 +85,7 @@ def process_update_data():
 
 
 def get_platform_updates(data, all_codes):
+
     """
     The function `get_platform_updates` compares quantity values
     for items across different platforms and returns a list of
@@ -103,12 +106,12 @@ def get_platform_updates(data, all_codes):
 
     changed_values = []
 
-    platforms = ['Trendyol',
-                 'N11',
-                 'Amazon',
-                 'HepsiBurada',
-                 'Pazarama',
-                 'PTTAVM']
+    platforms = ['trendyol',
+                 'n11',
+                 'amazon',
+                 'hepsiburada',
+                 'pazarama',
+                 'pttavm']
 
     matching_values = []
 
@@ -150,9 +153,9 @@ def get_platform_updates(data, all_codes):
 
     if matching_ids:
 
-        for item_key in matching_ids:
+        for item_key, item_val in matching_ids.items():
 
-            products = matching_ids[item_key]
+            products = item_val
 
             if len(products) > 1:
 

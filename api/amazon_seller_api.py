@@ -3,6 +3,7 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from rich import print as printr
 from urllib import parse
 import csv
 import gzip
@@ -39,8 +40,8 @@ def get_access_token():
 
     token_url = "https://api.amazon.com/auth/o2/token"
 
-    payload = f"""grant_type=refresh_token&client_id={client_id}&
-    client_secret={client_secret}&refresh_token={refresh_token}"""
+    payload = f"""grant_type=refresh_token&client_id={client_id}&client_secret={
+        client_secret}&refresh_token={refresh_token}"""
 
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
@@ -59,11 +60,11 @@ def get_access_token():
 access_token = get_access_token()
 
 
-def request_data(session=None, operation_uri='', params: dict = None, payload = None, method='GET'):
+def request_data(session=None, operation_uri='', params: dict = None, payload=None, method='GET'):
     """
     The function `request_data` sends a request to a specified API endpoint with optional parameters and
     handles various response scenarios.
-    
+
     :param session: The `session` parameter is used to pass an existing session object for making HTTP
     requests. This can be helpful for maintaining the state of the session across multiple requests,
     such as handling cookies or other session-related data. If `session` is provided, the function will
@@ -150,7 +151,7 @@ def request_data(session=None, operation_uri='', params: dict = None, payload = 
 
             else:
 
-                print(f"An error has occured || {error_message}")
+                printr(f"An error has occured || {error_message}")
 
                 return None
 
@@ -338,14 +339,14 @@ def spapi_get_orders():
                     count += 1
                     orders_dict.append(oi)
 
-            print(f'{count} orders has been added')
+            printr(f'{count} orders has been added')
 
             if request_count % 30 == 0:
-                print(f"Processing {count} orders please wait!")
+                printr(f"Processing {count} orders please wait!")
 
                 spapi_getorderitems(30, orders_dict)
 
-                print(
+                printr(
                     f"Processed {count} orders || Orders left: {len(orders_dict)-count}")
 
                 request_count = 0
@@ -387,9 +388,9 @@ def spapi_getlistings(every_product: bool = False):
     report_id = report_id_request['reports'][0]['reportId']
 
     verify_report_status_request = request_data(session,
-                                               f'/reports/2021-06-30/reports/{
-                                                   report_id}',
-                                               [])
+                                                f'/reports/2021-06-30/reports/{
+                                                    report_id}',
+                                                [])
 
     processing_status = verify_report_status_request['processingStatus']
 
@@ -400,9 +401,9 @@ def spapi_getlistings(every_product: bool = False):
             report_document_id = verify_report_status_request['reportDocumentId']
 
             report_data = request_data(session,
-                                      f'/reports/2021-06-30/documents/{
-                                          report_document_id}',
-                                      [])
+                                       f'/reports/2021-06-30/documents/{
+                                           report_document_id}',
+                                       [])
 
             compression = report_data['compressionAlgorithm']
 
@@ -587,7 +588,7 @@ def spapi_getlistings(every_product: bool = False):
     products = get_item_details(
         session, included_data='summaries,attributes,fulfillmentAvailability', every_product=every_product)
 
-    print('Amazon products data request is successful. Response: OK')
+    printr('[white]Amazon[/white] products data request is successful. Response: OK')
 
     return products
 
@@ -620,7 +621,7 @@ def filter_order_data(orders_list, order, result, items):
 
         try:
 
-            print(result.get('AmazonOrderId', None))
+            printr(result.get('AmazonOrderId', None))
 
             data = {
                 "ASIN": item.get('ASIN', None),
@@ -693,7 +694,7 @@ def spapi_update_listing(product):
     """
     The function `spapi_updateListing` updates a product listing on Amazon Seller Central with a new
     quantity value.
-    
+
     :param product: The `spapi_updateListing` function is designed to update a listing on Amazon 
     Seller Central using the Selling Partner API
     """
@@ -731,9 +732,10 @@ def spapi_update_listing(product):
 
     if listing_update_request and listing_update_request['status'] == 'ACCEPTED':
 
-        print(f'Amazon product with code: {sku}, New value: {qty}')
+        printr(f"""[white]Amazon[/white] product with code: {
+                           product["sku"]}, New value: [green]{product["qty"]}[/green]""")
 
     else:
 
-        print(f"""Amazon product with code: {product["sku"]} failed
-              to update || Reason: {listing_update_request}""")
+        printr(f"""[white]Amazon[/white] product with code: {product["sku"]} failed
+              to update || Reason: [red]{listing_update_request}[/red]""")
