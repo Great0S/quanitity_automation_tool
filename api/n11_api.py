@@ -382,13 +382,16 @@ def save_to_csv(data, filename=""):
 
 def post_n11_data(data):
     """
-    The `post_n11_data` function sends a SOAP request to update the stock quantity of a product on the
+    The `post_n11_data` function sends a SOAP request to 
+    update the stock quantity of a product on the
     N11 platform and handles the response accordingly.
 
-    :param data: It looks like the code snippet you provided is a function `post_n11_data` that is
-    responsible for updating the stock quantity of a product on the N11 platform using a SOAP request.
-    The function takes a `data` parameter which seems to be a dictionary containing information about
-    the product to be updated
+    :param data: It looks like the code snippet you provided
+    is a function `post_n11_data` that is responsible for 
+    updating the stock quantity of a product on the N11 platform 
+    using a SOAP request.
+    The function takes a `data` parameter which seems to be a dictionary 
+    containing information about the product to be updated
     """
 
     # The `post_payload` variable is a string that contains an XML request payload for updating the
@@ -397,19 +400,18 @@ def post_n11_data(data):
                         <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
                           <soapenv:Header/>
                           <soapenv:Body>
-                            <sch:UpdateProductBasicRequest>
+                            <sch:UpdateStockByStockSellerCodeRequest>
                               <auth>
                                 <appKey>{API_KEY}</appKey>
                                 <appSecret>{API_SECRET}</appSecret>
                               </auth>
-                              <productId>{data['id']}</productId>
                               <stockItems>
                                 <stockItem>
                                   <sellerStockCode>{data['sku']}</sellerStockCode>
                                   <quantity>{data['qty']}</quantity>
                                 </stockItem>
                               </stockItems>
-                            </sch:UpdateProductBasicRequest>
+                            </sch:UpdateStockByStockSellerCodeRequest>
                           </soapenv:Body>
                         </soapenv:Envelope>
                         """
