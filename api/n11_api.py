@@ -426,7 +426,7 @@ def post_n11_data(data):
                                                       post_response.text):
 
             error_message = assign_vars(
-                post_response, 'UpdateProductBasicResponse', '', True)
+                post_response, 'UpdateStockByStockSellerCodeResponse', '', True)
 
             printr(f"""Request failure for [purple4]N11[/purple4] product {
                 data['sku']} | Response: {error_message['result']['errorMessage']}""")

@@ -232,7 +232,7 @@ def get_platform_updates(data, all_codes, source):
 
                 if source:
 
-                    pass
+                    source_val = item_val[0]
 
                 else:
 
@@ -242,13 +242,7 @@ def get_platform_updates(data, all_codes, source):
 
                     if source:
 
-                        if source == product['platform'] and products[0]['qty'] != product['qty']:
-
-                            source_val['qty'] = products[0]['qty']
-
-                        else:
-
-                            source_val = 0
+                        if source_val['qty'] == product['qty']:
 
                             continue
 
