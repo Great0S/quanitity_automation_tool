@@ -240,11 +240,9 @@ def get_platform_updates(data, all_codes, source):
 
                 for product in products:
 
-                    if source:
+                    if source_val['qty'] == product['qty']:
 
-                        if source_val['qty'] == product['qty']:
-
-                            continue
+                        continue
 
                     matching_values.append(
                         {'sku': product['id'],
