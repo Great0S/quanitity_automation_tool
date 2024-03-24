@@ -45,8 +45,9 @@ def assign_vars(response, response_namespace, list_name, error_message=False):
     # XML raw data trimming
     revised_response = (
         raw_xml.replace(
-            """<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body>""",
-                        "")).replace("""</SOAP-ENV:Body></SOAP-ENV:Envelope>""", "")
+            """<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
+            <SOAP-ENV:Header/><SOAP-ENV:Body>""",
+            "")).replace("""</SOAP-ENV:Body></SOAP-ENV:Envelope>""", "")
 
     # Parse the XML response into a dictionary using xmltodict library.
     response_json = xmltodict.parse(revised_response)
@@ -78,7 +79,6 @@ def assign_vars(response, response_namespace, list_name, error_message=False):
 
 
 def get_n11_stock_data(every_product: bool = False):
-
     """
     The function `get_n11_stock_data` sends a SOAP request to the N11 API 
     to retrieve a list of products and their stock information.
@@ -118,39 +118,56 @@ def get_n11_stock_data(every_product: bool = False):
     current_page = 0
     all_products = []
 
-    # Status code of 200 means that the request was successful 
+    # Status code of 200 means that the request was successful
     # and the server returned the expected response.
     if api_call.status_code == 200:
+
         products_list, products_total_pages = assign_vars(
             api_call, "GetProductListResponse", "products")
         raw_elements = []
 
         # Process all pages found
         while current_page < int(products_total_pages):
+
             if products_list is not None:
+
                 # Process the product data
                 for product in products_list:
                     if every_product:
+
                         all_products.append(product)
+
                     else:
+
                         product_id = product.get("id")
                         product_code = product.get("productSellerCode")
-                        if "stockItems" in product and isinstance(product['stockItems']['stockItem'], list):
+
+                        if "stockItems" in product and isinstance(product['stockItems']['stockItem'],
+                                                                  list):
+
                             for stock_item in product['stockItems']['stockItem']:
                                 if stock_item['sellerStockCode'] == product_code:
+
                                     product_qty = int(stock_item["quantity"])
                                     break
+
                         elif "stockItems" in product:
+
                             product_qty = int(
                                 product['stockItems']['stockItem']['quantity'])
+
                         else:
+
                             product_qty = None
+
                         raw_elements.append({
                             "id": product_id,
                             "sku": product_code,
                             "qty": product_qty,
                         })
+
             else:
+
                 printr("No products found in the response.")
 
             current_page += 1
@@ -158,11 +175,15 @@ def get_n11_stock_data(every_product: bool = False):
                 "<currentPage>0</currentPage>",
                 f"<currentPage>{str(current_page)}</currentPage>",
             )
+
             api_call_loop = requests.post(
                 URL, headers=headers, data=payload_dump, timeout=30)
+
             products_list, _ = assign_vars(
                 api_call_loop, "GetProductListResponse", "products")
+
     else:
+
         printr("Error:", api_call.text)
 
     printr('N11 products data request is successful. Response: ', api_call.reason)
@@ -229,7 +250,7 @@ def get_n11_detailed_order_list(link):
         orders_url, headers=headers, data=payload, timeout=30)
     current_page = 0
 
-    # Status code of 200 means that the request was successful and the 
+    # Status code of 200 means that the request was successful and the
     # server returned the expected response.
     if api_call.status_code == 200:
         orders_list, orders_total_pages = assign_vars(
@@ -258,7 +279,8 @@ def get_n11_detailed_order_list(link):
         printr("Error:", api_call.text)
 
     if raw_elements:
-        printr("[purple4]N11[/purple4] detailed orders list extraction is Successful. || Response:", api_call.reason)
+        printr("[purple4]N11[/purple4] detailed orders list extraction is Successful. || Response:",
+               api_call.reason)
     else:
         pass
     return raw_elements
@@ -286,35 +308,54 @@ def flatten_dict(data, prefix=""):
     item = {}
 
     for item_key, item_value in data.items():
+
         if isinstance(item_value, dict):
             for sub_key, sub_value in item_value.items():
+
                 if isinstance(sub_value, dict):
+
                     data_val = flatten_dict(
                         sub_value, f"{prefix}_{sub_key}" if prefix else sub_key)
                     item.update(data_val)
+
                 elif isinstance(sub_value, list):
+
                     count = 1
+
                     while count < len(sub_value):
+
                         for data_item in sub_value:
                             if isinstance(data_item, dict):
+
                                 data_val = flatten_dict(
-                                    data_item, f"{prefix}_{sub_key}{count}" if prefix else f"{sub_key}{count}")
+                                    data_item, f"{prefix}_{sub_key}{count}"
+                                    if prefix else f"{sub_key}{count}")
                                 item.update(data_val)
+
                             else:
+
                                 if prefix:
-                                    item[f"{prefix}_{sub_key}{
-                                        count}"] = data_item
+                                    item[f"""{prefix}_{sub_key}{
+                                        count}"""] = data_item
+
                                 else:
                                     item[f"{sub_key}{count}"] = data_item
+
                             count += 1
+
                 else:
+
                     if prefix:
                         item[f"{prefix}_{sub_key}"] = sub_value
+
                     else:
                         item[f"{sub_key}"] = sub_value
+
         else:
+
             if prefix:
                 item[f"{prefix}_{item_key}"] = item_value
+
             else:
                 item[f"{item_key}"] = item_value
     return item

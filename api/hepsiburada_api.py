@@ -52,7 +52,8 @@ def request_data(subdomain, url_addons, request_type, payload_content):
         elif api_request.status_code == 400:
 
             printr(
-                f'[orange_red1]HepsiBurada[/orange_red1] product request has [red]failed[/red] || Reason: {inspect(api_request)}')
+                f"""[orange_red1]HepsiBurada[/orange_red1] product request has [red]failed[/red] || 
+                Reason: {inspect(api_request)}""")
 
             return None
 
@@ -91,13 +92,16 @@ def hbapi_stock_data(every_product: bool = False):
         if not every_product:
 
             listings_list.append(
-                {'id': data['hepsiburadaSku'], 'sku': data['merchantSku'], 'qty': data['availableStock']})
+                {'id': data['hepsiburadaSku'],
+                 'sku': data['merchantSku'],
+                 'qty': data['availableStock']})
 
         else:
 
             listings_list.append(data)
 
-    printr('[orange_red1]HepsiBurada[/orange_red1] products data request is successful. Response: OK')
+    printr("""[orange_red1]HepsiBurada[/orange_red1] products data request is successful.
+           Response: OK""")
 
     return listings_list
 
@@ -119,7 +123,8 @@ def hbapi_update_listing(product):
     }], ensure_ascii=False)
 
     stock_update_request_raw = request_data(
-        'listing-external', f"/Listings/merchantid/{store_id}/stock-uploads", 'POST', stock_update_payload)
+        'listing-external', f"""/Listings/merchantid/{
+            store_id}/stock-uploads""", 'POST', stock_update_payload)
 
     if stock_update_request_raw:
 
@@ -128,7 +133,8 @@ def hbapi_update_listing(product):
         while True:
 
             check_status_request = request_data(
-                'listing-external', f"/Listings/merchantid/{store_id}/stock-uploads/id/{update_state_id}", 'GET', [])
+                'listing-external', f"""/Listings/merchantid/{
+                    store_id}/stock-uploads/id/{update_state_id}""", 'GET', [])
 
             if check_status_request:
 
@@ -143,8 +149,9 @@ def hbapi_update_listing(product):
 
                 if check_status['errors']:
 
-                    printr(f'[orange_red1]HepsiBurada[/orange_red1] product with code: {
-                           product["sku"]} [red]failed[/red] to update || Reason: [indian_red1]{check_status["errors"]}[/indian_red1]')
+                    printr(f"""[orange_red1]HepsiBurada[/orange_red1] product with code: {
+                           product["sku"]} [red]failed[/red] to update || Reason: [indian_red1]{
+                            check_status["errors"]}[/indian_red1]""")
 
                     break
 

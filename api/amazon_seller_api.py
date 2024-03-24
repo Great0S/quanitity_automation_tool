@@ -3,7 +3,6 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from rich import print as printr
 from urllib import parse
 import csv
 import gzip
@@ -13,6 +12,8 @@ import re
 import shutil
 import time
 import requests
+from rich import print as printr
+
 
 
 client_id = os.environ.get('LWA_APP_ID')
@@ -52,15 +53,15 @@ def get_access_token():
 
     response_content = json.loads(token_response.text)
 
-    access_token = response_content['access_token']
+    access_token_data = response_content['access_token']
 
-    return access_token
+    return access_token_data
 
 
 access_token = get_access_token()
 
 
-def request_data(session=None, operation_uri='', params: dict = None, payload=None, method='GET'):
+def request_data(session_data=None, operation_uri='', params: dict = None, payload=None, method='GET'):
     """
     The function `request_data` sends a request to a specified API endpoint with optional parameters and
     handles various response scenarios.
@@ -111,11 +112,11 @@ def request_data(session=None, operation_uri='', params: dict = None, payload=No
     }
     while True:
 
-        if session:
+        if session_data:
 
-            session.headers = headers
+            session_data.headers = headers
 
-            init_request = session.get(f"{endpoint_url}{uri}",
+            init_request = session_data.get(f"{endpoint_url}{uri}",
                                        data=payload)
 
         else:
@@ -134,7 +135,7 @@ def request_data(session=None, operation_uri='', params: dict = None, payload=No
 
         if init_request.status_code == 403:
 
-            session.headers['x-amz-access-token'] = access_token
+            session_data.headers['x-amz-access-token'] = access_token
 
         elif init_request.status_code == 429:
 
@@ -213,7 +214,8 @@ def spapi_get_orders():
                 if 'ASIN' not in order:
 
                     futures.append(executor.submit(
-                        request_data, f"/orders/v0/orders/{order['AmazonOrderId']}/orderItems", params))
+                        request_data, f"""/orders/v0/orders/{
+                            order['AmazonOrderId']}/orderItems""", params))
 
                     item_request_count += 1
 
@@ -361,8 +363,6 @@ def spapi_get_orders():
             spapi_getorderitems(30, orders_dict)
 
             break
-        else:
-            continue
 
     return orders_dict
 
@@ -388,8 +388,8 @@ def spapi_getlistings(every_product: bool = False):
     report_id = report_id_request['reports'][0]['reportId']
 
     verify_report_status_request = request_data(session,
-                                                f'/reports/2021-06-30/reports/{
-                                                    report_id}',
+                                                f"""/reports/2021-06-30/reports/{
+                                                    report_id}""",
                                                 [])
 
     processing_status = verify_report_status_request['processingStatus']
@@ -401,8 +401,8 @@ def spapi_getlistings(every_product: bool = False):
             report_document_id = verify_report_status_request['reportDocumentId']
 
             report_data = request_data(session,
-                                       f'/reports/2021-06-30/documents/{
-                                           report_document_id}',
+                                       f"""/reports/2021-06-30/documents/{
+                                           report_document_id}""",
                                        [])
 
             compression = report_data['compressionAlgorithm']
@@ -410,21 +410,21 @@ def spapi_getlistings(every_product: bool = False):
             report_link = report_data['url']
 
             break
-        else:
-            pass
 
     def download_and_save_file(url, save_path):
         """
-        The function `download_and_save_file` downloads a file from a given URL and saves it to a
+        The function `download_and_save_file` downloads a file 
+        from a given URL and saves it to a
         specified path on the local system.
 
-        :param url: The `url` parameter in the `download_and_save_file` function is the URL from which
-        you want to download a file. This URL will be used to send a GET request to retrieve the file
+        :param url: The `url` parameter in the `download_and_save_file` 
+        function is the URL from which you want to download a file. This 
+        URL will be used to send a GET request to retrieve the file
         content
-        :param save_path: The `save_path` parameter in the `download_and_save_file` function is the path
-        where you want to save the downloaded file. It should be a string representing the file path
-        including the file name and extension where you want to save the downloaded content. For
-        example, if you want to save the
+        :param save_path: The `save_path` parameter in the `download_and_save_file` 
+        function is the path where you want to save the downloaded file. It should 
+        be a string representing the file path including the file name and extension 
+        where you want to save the downloaded content. 
         """
         # Send a GET request to the URL
         response = requests.get(url, stream=True, timeout=30)
@@ -443,13 +443,14 @@ def spapi_getlistings(every_product: bool = False):
         """
         The function decompresses a gzip file to a specified decompressed file path.
 
-        :param gzip_file_path: The `gzip_file_path` parameter is the file path to the gzip-compressed
-        file that you want to decompress. This file should be in gzip format for the `gzip.open()`
+        :param gzip_file_path: The `gzip_file_path` parameter is the file path to the 
+        gzip-compressed file that you want to decompress. This file should be in gzip 
+        format for the `gzip.open()`
         function to be able to decompress it
-        :param decompressed_file_path: The `decompressed_file_path` parameter is the path where you want
-        to save the decompressed file after decompressing the gzip file located at `gzip_file_path`.
-        This parameter should be a string representing the file path where you want to store the
-        decompressed content
+        :param decompressed_file_path: The `decompressed_file_path` parameter is the 
+        path where you want to save the decompressed file after decompressing the gzip 
+        file located at `gzip_file_path`. This parameter should be a string representing 
+        the file path where you want to store the decompressed content
         """
         with gzip.open(gzip_file_path, 'rb') as f_in:
 
@@ -470,29 +471,12 @@ def spapi_getlistings(every_product: bool = False):
         """
         The `csv_to_json` function reads a CSV file, removes the Byte Order Mark (BOM) character if
         present, and converts the data into a list of dictionaries.
-
-        :param filename: The `csv_to_json` function you provided is designed to read a CSV file with
-        tab-delimited values, remove the Byte Order Mark (BOM) character if present, and convert the
-        data into a list of dictionaries where each dictionary represents a row in the CSV file
-        :return: The `csv_to_json` function is returning a list of dictionaries where each dictionary
-        represents a row of data from the CSV file specified by the `filename` parameter. The function
-        reads the CSV file, removes the Byte Order Mark (BOM) character if present, and converts each
-        row into a dictionary where the keys are the column headers and the values are the corresponding
-        values in the row.
         """
 
         def remove_bom(text):
             """
-            The function `remove_bom` removes the Byte Order Mark (BOM) character from the beginning of
-            a text if present.
-
-            :param text: The `remove_bom` function is designed to remove the Byte Order Mark (BOM)
-            character from the beginning of a text if it is present. The BOM character is a special
-            Unicode character (U+FEFF) that is sometimes added at the beginning of a text file to
-            indicate the
-            :return: The function `remove_bom` is returning the input text with the Byte Order Mark
-            (BOM) character removed if it is present at the beginning of the text. If the BOM character
-            is not present, the function returns the original text unchanged.
+            The function `remove_bom` removes the Byte Order Mark (BOM) character from the beginning 
+            of a text if present.
             """
 
             # Remove the BOM character if present
@@ -519,7 +503,7 @@ def spapi_getlistings(every_product: bool = False):
 
     inv_items = csv_to_json(file_saved)
 
-    def get_item_details(session, included_data, every_product: bool = False):
+    def get_item_details(session_data, included_data, every_product: bool = False):
 
         request_count = 0
 
@@ -544,7 +528,8 @@ def spapi_getlistings(every_product: bool = False):
                     continue
 
                 futures.append(executor.submit(
-                    request_data, session, f'/listings/2021-08-01/items/{AmazonSA_ID}/{sku}', params))
+                    request_data, session_data, f"""/listings/2021-08-01/items/{AmazonSA_ID}/{
+                        sku}""", params))
 
                 request_count += 1
 
@@ -586,7 +571,8 @@ def spapi_getlistings(every_product: bool = False):
         return amazon_products
 
     products = get_item_details(
-        session, included_data='summaries,attributes,fulfillmentAvailability', every_product=every_product)
+        session, included_data='summaries,attributes,fulfillmentAvailability',
+        every_product=every_product)
 
     printr('[white]Amazon[/white] products data request is successful. Response: OK')
 

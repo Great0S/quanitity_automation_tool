@@ -10,7 +10,7 @@ password = os.environ.get('PTTAVMPASSWORD')
 TedarikciId = os.environ.get('PTTAVMTEDARIKCIID')
 
 
-def requestData(method: str = 'POST', uri: str = '', params: dict = {}, data: list = ''):
+def requestData(method: str = 'POST', uri: str = '', params: dict = None, data: list = ''):
 
     url = "https://ws.pttavm.com:93/service.svc"
 
