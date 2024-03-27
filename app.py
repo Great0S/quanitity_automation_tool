@@ -5,13 +5,14 @@
  operations related to each platform."""
 
 import re
+from rich import print as printr
 from api.amazon_seller_api import spapi_getlistings, spapi_update_listing
 from api.hepsiburada_api import hbapi_stock_data, hbapi_update_listing
 from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
 from api.pttavm_api import getPTTAVM_procuctskData, pttavm_updateData
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
 from api.n11_api import get_n11_stock_data, post_n11_data
-from rich import print as printr
+
 
 
 def get_data(every_product: bool = False, source: str = None, targets: list = None):

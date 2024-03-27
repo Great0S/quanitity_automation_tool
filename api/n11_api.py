@@ -45,8 +45,7 @@ def assign_vars(response, response_namespace, list_name, error_message=False):
     # XML raw data trimming
     revised_response = (
         raw_xml.replace(
-            """<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
-            <SOAP-ENV:Header/><SOAP-ENV:Body>""",
+            """<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body>""",
             "")).replace("""</SOAP-ENV:Body></SOAP-ENV:Envelope>""", "")
 
     # Parse the XML response into a dictionary using xmltodict library.
