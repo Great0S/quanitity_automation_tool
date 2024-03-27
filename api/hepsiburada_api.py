@@ -52,7 +52,7 @@ def request_data(subdomain, url_addons, request_type, payload_content):
         elif api_request.status_code == 400:
 
             printr(
-                f"""[orange_red1]HepsiBurada[/orange_red1] product request has [red]failed[/red] || 
+                f"""[orange_red1]HepsiBurada[/orange_red1] product request has [red]failed[/red] ||
                 Reason: {inspect(api_request)}""")
 
             return None

@@ -1,5 +1,6 @@
+""" The lines `import csv`, `import os`, `import requests`, and `import xmltodict` are importing
+ necessary Python libraries/modules for the script to use."""
 import csv
-import json
 import os
 import requests
 import xmltodict
@@ -36,7 +37,7 @@ def requestData(method: str = 'POST', uri: str = '', params: dict = None, data: 
     }
 
     response = requests.request(
-        method, url, headers=headers, params=params, data=payload)
+        method, url, headers=headers, params=params, data=payload, timeout=3000)
 
     if response.status_code == 200:
 
@@ -52,6 +53,15 @@ def requestData(method: str = 'POST', uri: str = '', params: dict = None, data: 
 
 
 def formatData(response):
+    """
+    The `formatData` function parses an XML response into a dictionary and returns the body content.
+
+    :param response: It looks like the code snippet you provided is a function named `formatData` that
+    takes a `response` parameter. The function is designed to parse an XML response into a dictionary
+    using the `xmltodict` library and then access specific elements within the response
+    :return: The function `formatData(response)` returns the body content of the XML response parsed
+    into a dictionary using the xmltodict library.
+    """
 
     # Access the response elements
     raw_xml = response.text
@@ -66,6 +76,19 @@ def formatData(response):
 
 
 def getPTTAVM_procuctskData(everyProduct: bool = False):
+    """
+    The function `getPTTAVM_procuctskData` retrieves product data from an API and returns a list of
+    products with specific details.
+
+    :param everyProduct: The `everyProduct` parameter in the `getPTTAVM_procuctskData` function is a
+    boolean parameter with a default value of `False`. This parameter is used to determine whether to
+    return data for every product or just a summary of products, defaults to False
+    :type everyProduct: bool (optional)
+    :return: If the `everyProduct` parameter is `False`, the function will return a list of dictionaries
+    containing product information (id, sku, qty, price) extracted from the API response. If the
+    `everyProduct` parameter is `True`, the function will return the entire list of products as received
+    from the API without any further processing.
+    """
 
     api_call = requestData(uri='StokKontrolListesi')
     products = []
@@ -118,13 +141,14 @@ def pttavm_updateData(product):
 
     response_feedback = formatData(update_request)
 
-    if update_request.status_code == 200:        
+    if update_request.status_code == 200:
 
         print(f'PTTAVM product with sku: {sku}, New value: {qty}')
 
     else:
 
-        print(f"Request failure for PTTAVM product {sku} | Response: {response_feedback['StokFiyatGuncelle3Response']['StokFiyatGuncelle3Result']}")
+        print(f"Request failure for PTTAVM product {sku} | Response: {
+              response_feedback['StokFiyatGuncelle3Response']['StokFiyatGuncelle3Result']}")
 
 
 def save_to_csv(data, filename=""):

@@ -1,15 +1,15 @@
 import csv
+import os
 import re
 import time
 import requests
-from simple_dotenv import GetEnv
 import xmltodict
 from rich import print as printr
 
 
 # Setting api value
-API_KEY = str(GetEnv('N11_KEY'))
-API_SECRET = str(GetEnv('N11_SECRET'))
+API_KEY = os.getenv('N11_KEY')
+API_SECRET = os.getenv('N11_SECRET')
 URL = "https://api.n11.com/ws"
 
 # Authenticate with your appKey and appSecret

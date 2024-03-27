@@ -151,8 +151,8 @@ def process_update_data(source=None, targets=None):
     platform_updates, matching_values = get_platform_updates(
         data_lists, all_codes, source)
 
-    print(f'\nLength of the two lists:- \nPlatform updates is {
-          len(platform_updates)}\nMatching codes is {len(matching_values)}\n')
+    printr(f"""\nLength of the two lists:- \nPlatform updates is {
+          len(platform_updates)}\nMatching codes is {len(matching_values)}\n""")
 
     return platform_updates
 
