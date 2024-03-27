@@ -241,7 +241,7 @@ def get_platform_updates(data, all_codes, source):
 
                 for product in products:
 
-                    if source_val['qty'] == product['qty']:
+                    if source_val['qty'] == product['qty'] and source_val['price'] == product['price']:
 
                         continue
 
@@ -253,7 +253,7 @@ def get_platform_updates(data, all_codes, source):
                     changed_values.append(
                         {'id': product['id'],
                          'sku': item_key,
-                         'price': product.get('price', None),
+                         'price': source_val.get('price', None),
                          'qty': str(source_val['qty']),
                          'platform': product['platform']})
             else:
