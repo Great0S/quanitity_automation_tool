@@ -9,32 +9,42 @@ from rich import print as printr
 from api.amazon_seller_api import spapi_getlistings, spapi_update_listing
 from api.hepsiburada_api import hbapi_stock_data, hbapi_update_listing
 from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
-from api.pttavm_api import getPTTAVM_procuctskData, pttavm_updateData
+from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
 from api.n11_api import get_n11_stock_data, post_n11_data
 
 
-
 def get_data(every_product: bool = False, source: str = None, targets: list = None):
     """
-    The `get_data()` function retrieves stock data from various platforms and returns specific data and
+    The `get_data()` function retrieves stock data 
+    from various platforms and returns specific data and
     lists related to the retrieved information.
 
-    :param every_product: The `every_product` parameter in the `get_data()` function is a boolean
-    parameter that specifies whether to retrieve data for every product or not. If set to `True`, data
-    for every product will be retrieved. If set to `False`, data for specific products will be retrieved
+    :param every_product: The `every_product` parameter 
+    in the `get_data()` function is a boolean
+    parameter that specifies whether to retrieve data 
+    for every product or not. If set to `True`, data
+    for every product will be retrieved. If set to `False`, 
+    data for specific products will be retrieved
     based on the other, defaults to False
     :type every_product: bool (optional)
-    :param source: The `source` parameter in the `get_data()` function is used to specify the source
-    platform from which you want to retrieve data. It can be a string indicating the source platform
-    such as "N11" or "Trendyol". If you provide a value for the `source` parameter
+    :param source: The `source` parameter in the `get_data()` 
+    function is used to specify the source
+    platform from which you want to retrieve data. It can be 
+    a string indicating the source platform
+    such as "N11" or "Trendyol". If you provide a value for 
+    the `source` parameter
     :type source: str
-    :param targets: The `targets` parameter in the `get_data()` function is a list that specifies the
-    platforms from which you want to retrieve data. You can pass a list of platform names as targets to
+    :param targets: The `targets` parameter in the `get_data()` 
+    function is a list that specifies the
+    platforms from which you want to retrieve data. You can 
+    pass a list of platform names as targets to
     filter the data accordingly
     :type targets: list
-    :return: The function `get_data()` returns either `target_platforms` and `all_codes` if `targets`
-    are provided, or `data_content` and `all_codes` if `every_product` is False.
+    :return: The function `get_data()` returns either `target_platforms` 
+    and `all_codes` if `targets`
+    are provided, or `data_content` and `all_codes` if `every_product` 
+    is False.
     """
 
     # Retrieve stock data from APIs
@@ -58,7 +68,7 @@ def get_data(every_product: bool = False, source: str = None, targets: list = No
 
     pazarama_data = getPazarama_productsList(every_product)
 
-    pttavm_data = getPTTAVM_procuctskData(every_product)
+    pttavm_data = getpttavm_procuctskdata(every_product)
 
     data_content = {"trendyol_data": trendyol_data,
                     "n11_data": n11_data,
@@ -85,20 +95,30 @@ def get_data(every_product: bool = False, source: str = None, targets: list = No
 
 def filter_data(every_product, targets):
     """
-    The function `filter_data` filters and retrieves stock data for different platforms based on
+    The function `filter_data` filters and retrieves 
+    stock data for different platforms based on
     specified targets.
 
-    :param every_product: It seems like the description of the `every_product` parameter is missing.
-    Could you please provide more details or an example of what the `every_product` parameter contains
-    or represents? This will help in understanding the context better and providing a more accurate
+    :param every_product: It seems like the description 
+    of the `every_product` parameter is missing.
+    Could you please provide more details or an example 
+    of what the `every_product` parameter contains
+    or represents? This will help in understanding the 
+    context better and providing a more accurate
     response
-    :param targets: It seems like the `targets` parameter is a list of platform names such as 'n11',
-    'hepsiburada', 'amazon', 'pttavm', 'pazarama', 'trendyol'. These platform names are used to filter
+    :param targets: It seems like the `targets` parameter 
+    is a list of platform names such as 'n11',
+    'hepsiburada', 'amazon', 'pttavm', 'pazarama', 'trendyol'. 
+    These platform names are used to filter
     and retrieve specific data related to
-    :return: The function `filter_data` is returning the `target_platform` variable, which is being
-    updated based on the conditions inside the for loop for each target platform specified in the
-    `targets` list. The function is filtering and retrieving stock data for different platforms such as
-    n11, hepsiburada, amazon, pttavm, pazarama, and trendyol, and the final `target
+    :return: The function `filter_data` is returning the 
+    `target_platform` variable, which is being
+    updated based on the conditions inside the for loop for 
+    each target platform specified in the
+    `targets` list. The function is filtering and retrieving 
+    stock data for different platforms such as
+    n11, hepsiburada, amazon, pttavm, pazarama, and trendyol,
+    and the final `target
     """
 
     data_content = {}
@@ -115,7 +135,7 @@ def filter_data(every_product, targets):
             data_content[f"{name}_data"] = spapi_getlistings(every_product)
 
         elif re.search('pttavm', name):
-            data_content[f"{name}_data"] = getPTTAVM_procuctskData(
+            data_content[f"{name}_data"] = getpttavm_procuctskdata(
                 every_product)
 
         elif re.search('pazarama', name):
@@ -152,7 +172,7 @@ def process_update_data(source=None, targets=None):
         data_lists, all_codes, source)
 
     printr(f"""\nLength of the two lists:- \nPlatform updates is {
-          len(platform_updates)}\nMatching codes is {len(matching_values)}\n""")
+        len(platform_updates)}\nMatching codes is {len(matching_values)}\n""")
 
     return platform_updates
 
@@ -210,7 +230,7 @@ def get_platform_updates(data, all_codes, source):
                             matching_ids[code].append(
                                 {'platform': platform,
                                  'id': item_id,
-                                 'price': item.get('price', None),
+                                 'price': item.get('price', 0),
                                  'qty': quantity})
 
                         else:
@@ -218,7 +238,7 @@ def get_platform_updates(data, all_codes, source):
                             matching_ids[code] = [
                                 {'platform': platform,
                                  'id': item_id,
-                                 'price': item.get('price', None),
+                                 'price': item.get('price', 0),
                                  'qty': quantity}]
 
                         break
@@ -241,7 +261,17 @@ def get_platform_updates(data, all_codes, source):
 
                 for product in products:
 
+                    if product == source_val:
+
+                        continue
+
                     if source_val['qty'] == product['qty'] and source_val['price'] == product['price']:
+
+                        continue
+
+                    product_price = product['price'] + product['price'] * 0.1
+
+                    if source_val['price'] - product_price <= 1:
 
                         continue
 
@@ -253,7 +283,7 @@ def get_platform_updates(data, all_codes, source):
                     changed_values.append(
                         {'id': product['id'],
                          'sku': item_key,
-                         'price': source_val.get('price', None),
+                         'price': source_val.get('price', 0),
                          'qty': str(source_val['qty']),
                          'platform': product['platform']})
             else:
@@ -300,7 +330,7 @@ def execute_updates(source=None, targets=None):
 
                 elif post['platform'] == 'pttavm':
 
-                    pttavm_updateData(post)
+                    pttavm_updatedata(post)
 
 
 printr('Do you want to update specific platforms ?\n')

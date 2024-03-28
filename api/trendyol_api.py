@@ -119,10 +119,10 @@ def get_trendyol_stock_data(every_product: bool = False):
 
                     pass
 
-                item = data['productMainId']
+                item = data['stockCode']
 
                 quantity = data['quantity']
-                
+
                 price = data['salePrice']
 
                 products.append({
