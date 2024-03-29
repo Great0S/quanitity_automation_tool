@@ -1,4 +1,4 @@
-""" The above code snippet is a Python script that imports 
+""" The code snippet imports 
   various modules such as `ThreadPoolExecutor`,
  `csv`, `partial`, `re`, `sys`, `time`, `json`, `os`, 
  `generate_nonce` from `oauthlib.common`,
@@ -28,33 +28,6 @@ def get_oauth_token(consumer_key: str, consumer_secret: str, url: str, callback:
     The function `get_oauth_token` retrieves an OAuth token 
     using the provided consumer key, consumer
     secret, URL, callback, and method.
-
-    :param consumer_key: The consumer key is a unique identifier 
-    for the application or client making
-    the OAuth request. It is obtained when registering the 
-    application with the OAuth provider
-    :type consumer_key: str
-    :param consumer_secret: The `consumer_secret` parameter is a 
-    string that represents the secret key
-    for the OAuth consumer. It is used to authenticate the consumer 
-    when making requests to the OAuth
-    server
-    :type consumer_secret: str
-    :param url: The `url` parameter is the base URL of the OAuth 
-    provider's API. It is used to construct
-    the full URL for the OAuth initiation endpoint
-    :type url: str
-    :param callback: The `callback` parameter is the URL where the 
-    OAuth provider will redirect the user
-    after they have authorized the application. This URL should be 
-    provided by your application and
-    should handle the authorization callback
-    :type callback: str
-    :param method: The `method` parameter is the HTTP method to be 
-    used for the request. It can be one
-    of the following: "GET", "POST", "PUT", "DELETE", etc
-    :type method: str
-    :return: a dictionary containing the parsed data from the response.
     """
     try:
         client = create_headers(
@@ -92,8 +65,11 @@ def get_oauth_token(consumer_key: str, consumer_secret: str, url: str, callback:
 
         return parsed_data
 
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"Failed to get access token: {e}") from e
+    except (requests.exceptions.Timeout,
+            requests.exceptions.TooManyRedirects,
+            requests.exceptions.HTTPError,
+            requests.exceptions.RequestException) as e:
+        raise Exception("Failed to get access token due to: %s" % e) from e
 
 
 def get_verifier_token(data_content: dict, url: str, username: str, password: str):
@@ -241,52 +217,6 @@ def get_token(consumer_key, consumer_secret, base_url, callback, method, usernam
     """
     The function `get_token` retrieves a verifier token and an 
     access token using OAuth authentication.
-
-    :param consumer_key: The `consumer_key` is a unique identifier 
-    for the application making the API
-    request. It is typically provided by the API provider when you 
-    register your application to use
-    their services
-    :param consumer_secret: The `consumer_secret` parameter is a 
-    secret key that is used in OAuth
-    authentication to verify the identity of the client making the 
-    request. It is typically provided by
-    the service provider when you register your application to access 
-    their API. It should be kept
-    confidential and not shared publicly
-    :param base_url: The `base_url` parameter typically refers to the 
-    base URL of the API or service you
-    are interacting with. It is the common part of the URL that is the 
-    same for all API endpoints. For
-    example, if you are working with a Twitter API, the `base_url` 
-    could be something like
-    :param callback: The `callback` parameter in the `get_token` function 
-    is typically a URL to which
-    the user will be redirected after they have authorized the application 
-    to access their data. It is
-    used in the OAuth flow to redirect the user back to the application with 
-    the necessary tokens for
-    authentication
-    :param method: The `method` parameter in the `get_token` function likely 
-    refers to the HTTP method
-    being used for the API requests, such as 'GET', 'POST', 'PUT', 'DELETE', 
-    etc. It is used to specify
-    the type of request being made to the API endpoint
-    :param username: The `username` parameter is typically the username or 
-    identifier used to
-    authenticate a user when accessing a service or application. It is often 
-    paired with a password for
-    authentication purposes
-    :param password: The `password` parameter in the `get_token` function is 
-    likely used to authenticate
-    the user when making requests to the API. It is typically the user's 
-    password associated with the
-    provided `username`. This password is used along with the `username` to 
-    verify the user's identity
-    and grant access to
-    :return: a dictionary with keys 'verifier_token' and 'access_token', 
-    each containing their
-    respective values.
     """
 
     oauth_token = get_oauth_token(
@@ -389,9 +319,11 @@ def fetch_products(base_url, callback, consumer_key, consumer_secret, username, 
                                          base_url}/api/rest/products?limit=100&page={page}',
                                      http_method='GET')[1]
 
-        products = json.loads(requests.get(
+        loop_request = requests.get(
             f'{base_url}/api/rest/products?limit=100&page={page}',
-            headers=looping_header, data={}, timeout=3000).text)
+            headers=looping_header, data={}, timeout=3000)
+
+        products = json.loads(loop_request.text)
 
     return product
 
@@ -454,7 +386,10 @@ def assign_vars(url):
     return consumer_key, consumer_secret, username, password, base_url, callback_address
 
 
-def process_updates(source_url: str, target_url: str):
+def process_updates(source_url: str,
+                    target_url: str,
+                    offline_data: list = None,
+                    offline_check: bool = False):
     """
     The function `process_updates` takes in two URLs, extracts 
     data from the source URL and compares it
@@ -476,7 +411,7 @@ def process_updates(source_url: str, target_url: str):
     # target_env = re.sub(r'\.com$', '', target_url).upper()
 
     found, not_found = extract_data(
-        source_url, target_url, [])
+        source_url, target_url, offline_data, offline_check)
 
     while len(found) != 0 or len(not_found) != 0:
 
@@ -560,7 +495,7 @@ def update_product(found):
     """
 
     consumer_key, consumer_secret, username, password, base_url, callback_address = assign_vars(
-        target_website)
+        TARGET_WEBSITE)
 
     tokens = get_token(consumer_key, consumer_secret, base_url,
                        callback_address, 'PUT', username, password)
@@ -600,7 +535,7 @@ def update_request(tokens, item: dict):
     successful = []
 
     consumer_key, consumer_secret, _, _, base_url, callback_address = assign_vars(
-        target_website)
+        TARGET_WEBSITE)
 
     while True:
 
@@ -609,12 +544,14 @@ def update_request(tokens, item: dict):
 
         header = Client.sign(client, uri=f"{base_url}/api/rest/products/{item['entity_id']}",
                              headers={"Content-Type": "application/json"},
-                             http_method='PUT', body=json.dumps(item))[1]
+                             http_method='PUT',
+                             body=json.dumps(item))[1]
 
         update_response = requests.request("PUT",
                                            f"{base_url}/api/rest/products/{
                                                item['entity_id']}",
-                                           headers=header, data=json.dumps(item), timeout=3000)
+                                           headers=header,
+                                           data=json.dumps(item), timeout=3000)
 
         if update_response.status_code == 200:
 
@@ -642,7 +579,7 @@ def update_request(tokens, item: dict):
     return successful
 
 
-def extract_data(source_url: str, target_url: str, data_exist: list):
+def extract_data(source_url: str, target_url: str, data_exist: list, offline: bool = False):
     """
     The function `extract_data` extracts and filters data 
     from a source URL and a target URL, handling
@@ -676,6 +613,19 @@ def extract_data(source_url: str, target_url: str, data_exist: list):
     """
 
     if data_exist:
+
+        if offline:
+
+            updates_data = []
+
+            for website_item in data_exist:
+
+                updates_data.append({'id': website_item['id'],
+                                     'sku': website_item['sku'],
+                                     'degisken_fiyatlar': website_item['degisken_fiyatlar']
+                                     })
+
+            return updates_data, None
 
         found_items, non_founds = filter_data(source_url, data_exist)
 
@@ -771,10 +721,51 @@ def filter_data(source_url, data_exist):
     return found, non_found
 
 
+def read_csv(file):
+    """
+    The function `local_data` reads 
+    data from a CSV file and returns a 
+    list of items after converting
+    them from JSON strings.    
+    """
+
+    item_list = []
+
+    with open(f'{file}.csv', 'r', newline='', encoding='utf-8-sig') as csvfile:
+
+        reader = csv.DictReader(csvfile)
+
+        for item_id in reader:
+            item_list.append(item_id)
+
+    return item_list
+
+
+print("How do you want to update?\n")
+print("1. Online\n")
+print("2. Offline\n")
+option_value = input(
+    'Please choose an option from above: ')
+
+if option_value == '2':
+
+    file_value = input(
+        'Please enter the file name without space: ')
+
+    TARGET_WEBSITE = input(
+        'Please enter the target website: Ex. website.com ')
+
+    local = read_csv(file_value)
+
+    process_updates(source_url=None, target_url=TARGET_WEBSITE,
+                    offline_data=local, offline_check=True)
+
+    print('Done')
+
 source_website = input(
     'Please enter the source website domain: Ex. website.com\n')
 # source_platform = input('Please enter the source website platform: Ex. Magento\n')
-target_website = input(
+TARGET_WEBSITE = input(
     '\nPlease enter the target website domain: Ex. website.com\n')
 # target_platform = input('\nPlease enter the target website platform: Ex. Magento\n')
-process_updates(source_url=source_website, target_url=target_website)
+process_updates(source_url=source_website, target_url=TARGET_WEBSITE)
