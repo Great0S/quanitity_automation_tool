@@ -1,12 +1,8 @@
-import csv
-import json
+
+from api.amazon_seller_api import spapi_getlistings
+from api.n11_api import get_n11_stock_data
 
 
-lis = []
-
-with open('kapionupaspasi.com_non_found.csv', 'r', newline='', encoding='utf-8') as csvfile:
-
-    reader = csv.reader(csvfile)
-
-    for item_id in reader:
-        lis.append(json.loads(item_id[0].replace("'", "\"")))
+pro = spapi_getlistings(True)
+print(pro[1])
+pass

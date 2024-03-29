@@ -98,53 +98,23 @@ def filter_data(every_product, targets):
     The function `filter_data` filters and retrieves 
     stock data for different platforms based on
     specified targets.
-
-    :param every_product: It seems like the description 
-    of the `every_product` parameter is missing.
-    Could you please provide more details or an example 
-    of what the `every_product` parameter contains
-    or represents? This will help in understanding the 
-    context better and providing a more accurate
-    response
-    :param targets: It seems like the `targets` parameter 
-    is a list of platform names such as 'n11',
-    'hepsiburada', 'amazon', 'pttavm', 'pazarama', 'trendyol'. 
-    These platform names are used to filter
-    and retrieve specific data related to
-    :return: The function `filter_data` is returning the 
-    `target_platform` variable, which is being
-    updated based on the conditions inside the for loop for 
-    each target platform specified in the
-    `targets` list. The function is filtering and retrieving 
-    stock data for different platforms such as
-    n11, hepsiburada, amazon, pttavm, pazarama, and trendyol,
-    and the final `target
     """
 
     data_content = {}
     codes = []
+    platform_to_function = {
+    'n11': get_n11_stock_data,
+    'hepsiburada': hbapi_stock_data,
+    'amazon': spapi_getlistings,
+    'pttavm': getpttavm_procuctskdata,
+    'pazarama': getPazarama_productsList,
+    'trendyol': get_trendyol_stock_data
+}
 
     for name in targets:
-        if re.search('n11', name):
-            data_content[f"{name}_data"] = get_n11_stock_data(every_product)
-
-        elif re.search('hepsiburada', name):
-            data_content[f"{name}_data"] = hbapi_stock_data(every_product)
-
-        elif re.search('amazon', name):
-            data_content[f"{name}_data"] = spapi_getlistings(every_product)
-
-        elif re.search('pttavm', name):
-            data_content[f"{name}_data"] = getpttavm_procuctskdata(
-                every_product)
-
-        elif re.search('pazarama', name):
-            data_content[f"{name}_data"] = getPazarama_productsList(
-                every_product)
-
-        elif re.search('trendyol', name):
-            data_content[f"{name}_data"] = get_trendyol_stock_data(
-                every_product)
+        for platform, function in platform_to_function.items():
+            if re.search(platform, name):
+                data_content[f"{name}_data"] = function(every_product)
 
     for _, item in data_content.items():
         for item_data in item:

@@ -99,8 +99,7 @@ def hbapi_stock_data(every_product: bool = False):
 
             listings_list.append(data)
 
-    printr("""[orange_red1]HepsiBurada[/orange_red1] products data request is successful.
-           Response: OK""")
+    printr("""[orange_red1]HepsiBurada[/orange_red1] products request is successful. Reason: OK""")
 
     return listings_list
 
