@@ -16,7 +16,7 @@ auth_hash = os.environ.get('HEPSIBURADAAUTHHASH')
 store_id = os.environ.get('HEPSIBURADAMERCHENETID')
 
 headers = {
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/x-www-form-urlencoded',
     'Authorization': f'Basic {auth_hash}'
 }
 
@@ -49,7 +49,7 @@ def request_data(subdomain, url_addons, request_type, payload_content):
 
             return api_request
 
-        elif api_request.status_code == 400:
+        if api_request.status_code == 400:
 
             printr(
                 f"""[orange_red1]HepsiBurada[/orange_red1] product request has [red]failed[/red] ||
@@ -57,10 +57,9 @@ def request_data(subdomain, url_addons, request_type, payload_content):
 
             return None
 
-        else:
+        time.sleep(1)
 
-            time.sleep(1)
-            continue
+        continue
 
 
 def hbapi_stock_data(every_product: bool = False):
@@ -151,7 +150,7 @@ def hbapi_update_listing(product):
 
                     printr(f"""[orange_red1]HepsiBurada[/orange_red1] product with code: {
                            product["sku"]} [red]failed[/red] to update || Reason: [indian_red1]{
-                            check_status["errors"]}[/indian_red1]""")
+                        check_status["errors"]}[/indian_red1]""")
 
                     break
 

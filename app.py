@@ -265,7 +265,11 @@ def get_platform_updates(data, all_codes, source):
 
                         continue
 
-                    if source_val['qty'] == product['qty'] and source_val['price'] == product['price']:
+                    if source_val['qty'] == product['qty']:
+
+                        if source_val['price'] == product['price']:
+
+                            continue
 
                         continue
 
