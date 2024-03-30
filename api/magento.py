@@ -426,9 +426,7 @@ def process_updates(source_url: str,
                 successful = update_product(found)
                 found = []
 
-                if len(successful) == len(found):
-
-                    print(f'{len(successful)} products were updated successfully.')
+                print(f'{len(successful)} products were updated successfully.')
 
         elif len(found) == 0 and not_found:
 
@@ -500,11 +498,11 @@ def update_product(found):
     tokens = get_token(consumer_key, consumer_secret, base_url,
                        callback_address, 'PUT', username, password)
 
-    print('\nUpdating please wait ...')
+    print(f'\nUpdating {len(found)} products, please wait ...')
 
     partial_func = partial(update_request, tokens)
 
-    with ThreadPoolExecutor(max_workers=27) as executor:
+    with ThreadPoolExecutor(max_workers=50) as executor:
 
         successful = list(executor.map(partial_func, found))
 
@@ -551,16 +549,23 @@ def update_request(tokens, item: dict):
                                            f"{base_url}/api/rest/products/{
                                                item['entity_id']}",
                                            headers=header,
-                                           data=json.dumps(item), timeout=3000)
+                                           data=json.dumps(item), timeout=300000)
 
         if update_response.status_code == 200:
 
             successful = item['entity_id']
+            print(f"Product with id {item['entity_id']} has been updated\n")
             break
 
         if update_response.status_code == 500:
 
             print(f"Timeout error for {item['entity_id']} | Retrying...")
+
+        if update_response.status_code == 503:
+
+            print(f"The server is temporarily busy error for {
+                  item['entity_id']} | Retrying...")
+            time.sleep(3)
 
         error = json.loads(update_response.text)[
             'messages']['error'][0]['message']
@@ -618,12 +623,22 @@ def extract_data(source_url: str, target_url: str, data_exist: list, offline: bo
 
             updates_data = []
 
+            found_items, non_founds = filter_data(target_url, [], True)
+
             for website_item in data_exist:
 
-                updates_data.append({'id': website_item['id'],
-                                     'sku': website_item['sku'],
-                                     'degisken_fiyatlar': website_item['degisken_fiyatlar']
-                                     })
+                for data_item in found_items:
+
+                    if website_item['sku'] == data_item['sku']:
+
+                        if website_item['degisken_fiyatlar'] != data_item['degisken_fiyatlar']:
+
+                            updates_data.append({'entity_id': data_item['entity_id'],
+                                                 'degisken_fiyatlar': website_item['degisken_fiyatlar']
+                                                 })
+                            break
+
+                        break
 
             return updates_data, None
 
@@ -660,7 +675,7 @@ def extract_data(source_url: str, target_url: str, data_exist: list, offline: bo
     return found_items, non_founds
 
 
-def filter_data(source_url, data_exist):
+def filter_data(source_url, data_exist, offline_data=False):
     """
     The function `filter_data` compares data from 
     two sources based on SKU and price, updating prices if
@@ -686,7 +701,12 @@ def filter_data(source_url, data_exist):
     updates_source = get_products_list(source_url)
     updates_source_sku = [item['sku']for item in updates_source]
 
+    if offline_data:
+
+        return updates_source, None
+
     for website_item in data_exist:
+
         first_updates_target_data = {'price': int(float(website_item['price'])),
                                      'id': website_item['id'],
                                      'sku': website_item['sku']}
@@ -753,7 +773,7 @@ if option_value == '2':
         'Please enter the file name without space: ')
 
     TARGET_WEBSITE = input(
-        'Please enter the target website: Ex. website.com ')
+        'Please enter the target website, Ex. website.com: ')
 
     local = read_csv(file_value)
 
@@ -763,9 +783,9 @@ if option_value == '2':
     print('Done')
 
 source_website = input(
-    'Please enter the source website domain: Ex. website.com\n')
+    'Please enter the source website domain, Ex. website.com:\n')
 # source_platform = input('Please enter the source website platform: Ex. Magento\n')
 TARGET_WEBSITE = input(
-    '\nPlease enter the target website domain: Ex. website.com\n')
+    '\nPlease enter the target website domain, Ex. website.com:\n')
 # target_platform = input('\nPlease enter the target website platform: Ex. Magento\n')
 process_updates(source_url=source_website, target_url=TARGET_WEBSITE)
