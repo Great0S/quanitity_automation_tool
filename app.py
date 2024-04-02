@@ -324,4 +324,4 @@ else:
 
 execute_updates(SOURCE_PLATFORM, TARGET_PLATFORM)
 
-print('All updates has finished. The program will exit now!')
+print('\nAll updates has finished. The program will exit now!')
