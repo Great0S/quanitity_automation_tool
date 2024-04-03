@@ -273,39 +273,44 @@ def execute_updates(source=None, targets=None):
     for different platforms and calls corresponding
     update functions based on the platform.
     """
+    platform_to_function = {
+    'n11': post_n11_data,
+    'hepsiburada': hbapi_update_listing,
+    'amazon': spapi_update_listing,
+    'pttavm': pttavm_updatedata,
+    'pazarama': pazarama_updateRequest,
+    'trendyol': post_trendyol_data
+}
 
     post_data = process_update_data(source, targets)
 
     if post_data:
 
-        for post in post_data:
+        while True:
 
-            if post['platform'] != source:
+            user_input = input("Do you want to continue? (y/n): ")
 
-                if post['platform'] == 'trendyol':
+            if user_input.lower() == 'n':
 
-                    post_trendyol_data(post)
+                printr("Exiting the program.")
 
-                elif post['platform'] == 'n11':
+                break
+            elif user_input.lower() == 'y':
 
-                    post_n11_data(post)
+                printr("Update in progress...")
 
-                elif post['platform'] == 'amazon':
+                for post in post_data:
 
-                    spapi_update_listing(post)
+                    for platform, func in platform_to_function:
 
-                elif post['platform'] == 'hepsiburada':
+                        if platform == post['platform']:
 
-                    hbapi_update_listing(post)
+                            func(post)
 
-                elif post['platform'] == 'pazarama':
+                break
 
-                    pazarama_updateRequest(post)
-
-                elif post['platform'] == 'pttavm':
-
-                    pttavm_updatedata(post)
-
+            else:
+                printr("Invalid input. Please enter 'y' for yes or 'n' for no.")
 
 printr('Do you want to update specific platforms ?\n')
 printr('1. Yes\n2. No\n')
