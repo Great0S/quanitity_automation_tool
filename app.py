@@ -297,11 +297,11 @@ def execute_updates(source=None, targets=None):
                 break
             elif user_input.lower() == 'y':
 
-                printr("Update in progress...")
+                printr("Update in progress...\n")
 
                 for post in post_data:
 
-                    for platform, func in platform_to_function:
+                    for platform, func in platform_to_function.items():
 
                         if platform == post['platform']:
 
