@@ -12,6 +12,7 @@ from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
 from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
 from api.n11_api import get_n11_stock_data, post_n11_data
+from api.wordpress_api import get_wordpress_products, update_wordpress_products
 
 
 def get_data(every_product: bool = False, source: str = None, targets: list = None):
@@ -68,6 +69,8 @@ def get_data(every_product: bool = False, source: str = None, targets: list = No
 
     pazarama_data = getPazarama_productsList(every_product)
 
+    wordpress_data = get_wordpress_products(every_product)
+
     pttavm_data = getpttavm_procuctskdata(every_product)
 
     data_content = {"trendyol_data": trendyol_data,
@@ -75,6 +78,7 @@ def get_data(every_product: bool = False, source: str = None, targets: list = No
                     "amazon_data": amazon_data,
                     "hepsiburada_data": hepsiburada_data,
                     "pazarama_data": pazarama_data,
+                    "wordpress_data": wordpress_data,
                     "pttavm_data": pttavm_data}
 
     if every_product:
@@ -108,16 +112,21 @@ def filter_data(every_product, targets):
     'amazon': spapi_getlistings,
     'pttavm': getpttavm_procuctskdata,
     'pazarama': getPazarama_productsList,
+    'wordpress': get_wordpress_products,
     'trendyol': get_trendyol_stock_data
 }
 
     for name in targets:
+
         for platform, function in platform_to_function.items():
+
             if re.search(platform, name):
                 data_content[f"{name}_data"] = function(every_product)
 
     for _, item in data_content.items():
+
         for item_data in item:
+
             codes.append(item_data['sku'])
 
     return data_content, codes
@@ -173,6 +182,7 @@ def get_platform_updates(data, all_codes, source):
                  'amazon',
                  'hepsiburada',
                  'pazarama',
+                 'wordpress',
                  'pttavm']
 
     matching_values = []
@@ -274,38 +284,46 @@ def execute_updates(source=None, targets=None):
     update functions based on the platform.
     """
 
+    platform_to_function = {
+    'n11': post_n11_data,
+    'hepsiburada': hbapi_update_listing,
+    'amazon': spapi_update_listing,
+    'pttavm': pttavm_updatedata,
+    'pazarama': pazarama_updateRequest,
+    'trendyol': post_trendyol_data,
+    'wordpress': update_wordpress_products
+}
+
     post_data = process_update_data(source, targets)
 
     if post_data:
 
-        for post in post_data:
+        while True:
 
-            if post['platform'] != source:
+            user_input = input("Do you want to continue? (y/n): ")
 
-                if post['platform'] == 'trendyol':
+            if user_input.lower() == 'n':
 
-                    post_trendyol_data(post)
+                printr("Exiting the program.")
 
-                elif post['platform'] == 'n11':
+                break
 
-                    post_n11_data(post)
+            elif user_input.lower() == 'y':
 
-                elif post['platform'] == 'amazon':
+                printr("Update in progress...\n")
 
-                    spapi_update_listing(post)
+                for post in post_data:
 
-                elif post['platform'] == 'hepsiburada':
+                    for platform, func in platform_to_function.items():
 
-                    hbapi_update_listing(post)
+                        if platform == post['platform']:
 
-                elif post['platform'] == 'pazarama':
+                            func(post)
 
-                    pazarama_updateRequest(post)
+                break
 
-                elif post['platform'] == 'pttavm':
-
-                    pttavm_updatedata(post)
-
+            else:
+                printr("Invalid input. Please enter 'y' for yes or 'n' for no.")
 
 printr('Do you want to update specific platforms ?\n')
 printr('1. Yes\n2. No\n')
@@ -324,4 +342,4 @@ else:
 
 execute_updates(SOURCE_PLATFORM, TARGET_PLATFORM)
 
-print('All updates has finished. The program will exit now!')
+print('\nAll updates has finished. The program will exit now!')

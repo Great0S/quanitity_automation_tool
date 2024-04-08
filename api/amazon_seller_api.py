@@ -58,7 +58,7 @@ def get_access_token():
     return access_token_data
 
 
-access_token = get_access_token()
+# access_token = get_access_token()
 
 
 def request_data(session_data=None, operation_uri='', params: dict = None, payload=None, method='GET'):
@@ -103,6 +103,8 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
 
     # Format the time in the desired format
     formatted_time = current_time.strftime('%Y%m%dT%H%M%SZ')
+
+    access_token = get_access_token()
 
     headers = {
         'Accept-Encoding': 'gzip',
