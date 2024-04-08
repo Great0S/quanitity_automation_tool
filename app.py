@@ -12,6 +12,7 @@ from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
 from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
 from api.n11_api import get_n11_stock_data, post_n11_data
+from api.wordpress_api import get_wordpress_products, update_wordpress_products
 
 
 def get_data(every_product: bool = False, source: str = None, targets: list = None):
@@ -68,6 +69,8 @@ def get_data(every_product: bool = False, source: str = None, targets: list = No
 
     pazarama_data = getPazarama_productsList(every_product)
 
+    wordpress_data = get_wordpress_products(every_product)
+
     pttavm_data = getpttavm_procuctskdata(every_product)
 
     data_content = {"trendyol_data": trendyol_data,
@@ -75,6 +78,7 @@ def get_data(every_product: bool = False, source: str = None, targets: list = No
                     "amazon_data": amazon_data,
                     "hepsiburada_data": hepsiburada_data,
                     "pazarama_data": pazarama_data,
+                    "wordpress_data": wordpress_data,
                     "pttavm_data": pttavm_data}
 
     if every_product:
@@ -108,16 +112,21 @@ def filter_data(every_product, targets):
     'amazon': spapi_getlistings,
     'pttavm': getpttavm_procuctskdata,
     'pazarama': getPazarama_productsList,
+    'wordpress': get_wordpress_products,
     'trendyol': get_trendyol_stock_data
 }
 
     for name in targets:
+
         for platform, function in platform_to_function.items():
+
             if re.search(platform, name):
                 data_content[f"{name}_data"] = function(every_product)
 
     for _, item in data_content.items():
+
         for item_data in item:
+
             codes.append(item_data['sku'])
 
     return data_content, codes
@@ -173,6 +182,7 @@ def get_platform_updates(data, all_codes, source):
                  'amazon',
                  'hepsiburada',
                  'pazarama',
+                 'wordpress',
                  'pttavm']
 
     matching_values = []
@@ -273,13 +283,15 @@ def execute_updates(source=None, targets=None):
     for different platforms and calls corresponding
     update functions based on the platform.
     """
+
     platform_to_function = {
     'n11': post_n11_data,
     'hepsiburada': hbapi_update_listing,
     'amazon': spapi_update_listing,
     'pttavm': pttavm_updatedata,
     'pazarama': pazarama_updateRequest,
-    'trendyol': post_trendyol_data
+    'trendyol': post_trendyol_data,
+    'wordpress': update_wordpress_products
 }
 
     post_data = process_update_data(source, targets)
@@ -295,6 +307,7 @@ def execute_updates(source=None, targets=None):
                 printr("Exiting the program.")
 
                 break
+
             elif user_input.lower() == 'y':
 
                 printr("Update in progress...\n")
