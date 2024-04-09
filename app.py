@@ -253,11 +253,11 @@ def get_platform_updates(data, all_codes, source):
 
                         continue
 
-                    product_price = product['price'] + product['price'] * 0.1
+                    # product_price = product['price'] + product['price'] * 0.1
 
-                    if source_val['price'] - product_price <= 1:
+                    # if product_price - source_val['price'] <= 1:
 
-                        continue
+                    #     continue
 
                     matching_values.append(
                         {'sku': product['id'],

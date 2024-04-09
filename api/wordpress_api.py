@@ -60,6 +60,8 @@ def get_wordpress_products(everyproduct: bool = False):
                                   'price': int(item['price']),
                                   'qty': item['stock_quantity'],
                                   "stock_check": item['stock_status']})
+        
+    print("Wordpress products data request is successful. Response: OK")
 
     return filtered_products
 
@@ -78,24 +80,18 @@ def update_wordpress_products(data):
 
             stock_status = 'outofstock'
 
-        update_request = wcapi.put(f"products/{data['id']}", 
+        update_request = wcapi.put(f"products/{data['id']}",
                                    {'stock_quantity': data['qty'],
-                                    'stock_status': stock_status})
+                                    'stock_status': stock_status}).json()
 
-        if update_request.status_code == 200:
+        if update_request['stock_quantity'] == int(data['qty']):
 
-            print(f""" Wordpress product success: {
-                update_request.text}, sku: {
+            print(f"""Wordpress product success, sku: {
                 data['sku']}, New stock: {
-                    data['qty']}""")
-            
+                data['qty']}""")
 
         else:
 
-            print(f""" Wordpress product update failed: {
-                update_request.text}, sku: {
+            print(f""" Wordpress product update failed, sku: {
                 data['sku']}, New stock: {
                     data['qty']}""")
-
-
-
