@@ -1,8 +1,11 @@
 import base64
 import zlib
 
-data = 'H4sIAAAAAAAAA8soKSkottLXz8nMy9ZLTUksKNBLzs/FV93Yq8crwtMgLLkkCACzAJmAiAAAA='
-decoded_data = base64.b64decode(data)
-decompressed_data = zlib.decompress(decoded_data, 16+zlib.MAX_WBITS)
+from api.amazon_seller_api import spapi_getlistings
+from api.n11_api import get_n11_stock_data
 
 print(decompressed_data.decode())
+
+pro = getPazarama_productsList(True)
+print(pro[1])
+pass
