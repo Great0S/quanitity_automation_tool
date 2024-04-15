@@ -85,14 +85,6 @@ def get_trendyol_stock_data(every_product: bool = False):
     """
     page = 0
 
-    # if startDate and endDate is not None:
-    #     stDate = datetime.strptime(startDate, "%d/%m/%Y").date()
-    #     enDate = datetime.strptime(endDate, "%d/%m/%Y").date()
-    #     startDate = int(datetime.fromordinal(stDate.toordinal()).timestamp())
-    #     endDate = int(datetime.fromordinal(enDate.toordinal()).timestamp())
-    #     url_addon = f"?page={page}&size=100&startDate={startDate}&endDate={endDate}"
-    # else:
-
     all_products = []
 
     products = []
@@ -138,7 +130,7 @@ def get_trendyol_stock_data(every_product: bool = False):
 
         decoded_data = prepare_data(request_data(url_addon, "GET", {}))
 
-    printr('Trendyol products data request is successful. Response: OK')
+    printr('[orange3]Trendyol[/orange3] products data request is successful. Response: [/orange3]OK[orange3]')
 
     if every_product:
 
@@ -200,8 +192,9 @@ def post_trendyol_data(product):
 
                     elif request_status == 'FAILED':
 
-                        printr(f'Trendyol product with code: {product["sku"]} failed to update || Reason: {
-                               batchid_request["items"]["failureReasons"]}')
+                        printr(f"""Trendyol product with code: {
+                            product["sku"]} failed to update || Reason: {
+                            batchid_request["items"]["failureReasons"]}""")
 
                         break
                 else:
@@ -216,5 +209,6 @@ def post_trendyol_data(product):
 
         post_response.raise_for_status()
 
-        printr(f"Request for trendyol product {
-               product['sku']} is unsuccessful | Response: {post_response.text}")
+        printr(f"""Request for trendyol product {
+               product['sku']} is unsuccessful | Response: {
+                   post_response.text}""")

@@ -65,30 +65,6 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
     """
     The function `request_data` sends a request to a specified API endpoint with optional parameters and
     handles various response scenarios.
-
-    :param session: The `session` parameter is used to pass an existing session object for making HTTP
-    requests. This can be helpful for maintaining the state of the session across multiple requests,
-    such as handling cookies or other session-related data. If `session` is provided, the function will
-    use it to make the request;
-    :param operation_uri: The `operation_uri` parameter in the `request_data` function is used to specify
-    the URI path for the API operation you want to call. It is a string that represents the specific
-    endpoint or resource you are targeting within the Selling Partner API. This parameter is appended to
-    the base endpoint URL to construct the
-    :param params: The `params` parameter in the `request_data` function is a dictionary that contains
-    key-value pairs of parameters that will be included in the API request URL as query parameters.
-    These parameters are used to specify additional information or filters for the API request
-    :type params: dict
-    :param payload: The `payload` parameter in the `request_data` function is used to pass data that
-    needs to be sent with the request. It can be a dictionary, list, or any other data structure that
-    you want to include in the request body. This data will be sent along with the request to the
-    specified
-    :param method: The `method` parameter in the `request_data` function specifies the HTTP method to be
-    used for the request. It has a default value of 'GET', but you can also specify other HTTP methods
-    like 'POST', 'PUT', 'DELETE', etc, defaults to GET (optional)
-    :return: The function `request_data` returns a JSON object if the initial request status code is
-    either 200 or 400. If the status code is 403, it updates the session header with the access token
-    and retries the request. If the status code is 429, it sleeps for 65 seconds and then retries the
-    request. If the status code indicates an error other than 403 or 429,
     """
 
     endpoint_url = f'https://sellingpartnerapi-eu.amazon.com{operation_uri}?'
@@ -418,15 +394,6 @@ def spapi_getlistings(every_product: bool = False):
         The function `download_and_save_file` downloads a file 
         from a given URL and saves it to a
         specified path on the local system.
-
-        :param url: The `url` parameter in the `download_and_save_file` 
-        function is the URL from which you want to download a file. This 
-        URL will be used to send a GET request to retrieve the file
-        content
-        :param save_path: The `save_path` parameter in the `download_and_save_file` 
-        function is the path where you want to save the downloaded file. It should 
-        be a string representing the file path including the file name and extension 
-        where you want to save the downloaded content. 
         """
         # Send a GET request to the URL
         response = requests.get(url, stream=True, timeout=30)
@@ -444,15 +411,6 @@ def spapi_getlistings(every_product: bool = False):
     def decompress_gzip_file(gzip_file_path, decompressed_file_path):
         """
         The function decompresses a gzip file to a specified decompressed file path.
-
-        :param gzip_file_path: The `gzip_file_path` parameter is the file path to the 
-        gzip-compressed file that you want to decompress. This file should be in gzip 
-        format for the `gzip.open()`
-        function to be able to decompress it
-        :param decompressed_file_path: The `decompressed_file_path` parameter is the 
-        path where you want to save the decompressed file after decompressing the gzip 
-        file located at `gzip_file_path`. This parameter should be a string representing 
-        the file path where you want to store the decompressed content
         """
         with gzip.open(gzip_file_path, 'rb') as f_in:
 
@@ -576,7 +534,7 @@ def spapi_getlistings(every_product: bool = False):
         session, included_data='summaries,attributes,fulfillmentAvailability',
         every_product=every_product)
 
-    printr('[white]Amazon[/white] products data request is successful. Response: OK')
+    printr('[white]Amazon[/white] products data request is successful. Response: [orange3]OK[/orange3]')
 
     return products
 
@@ -585,24 +543,6 @@ def filter_order_data(orders_list, order, result, items):
     """
     The function `filter_orderData` updates order data in a list based on specified items and order
     information.
-
-    :param orders_list: The `orders_list` parameter in the `filter_orderData` function seems to be a
-    list of orders. The function appears to iterate over each item in the `items` parameter, extract
-    specific data from each item, and then update the corresponding order in the `orders_list` with this
-    extracted data
-    :param order: The `order` parameter seems to be missing in the provided code snippet. Could you
-    please provide the definition or explanation of the `order` parameter so that I can assist you
-    further with the `filter_orderData` function?
-    :param result: The `result` parameter in the `filter_orderData` function seems to be a dictionary
-    containing order data. The function iterates over a list of items and updates the order data in the
-    `orders_list` based on certain conditions. The `result` dictionary is used to retrieve the
-    'AmazonOrderId
-    :param items: The `items` parameter in the `filter_orderData` function seems to be a list of items
-    that contain information about an order, such as ASIN, QuantityShipped, Amount, SellerSKU, and
-    Title. The function iterates over these items and updates the corresponding order information in the
-    `
-    :return: The function `filter_orderData` is returning the updated `orders_list` after filtering and
-    updating the order data based on the provided items.
     """
 
     for item in items:

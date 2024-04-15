@@ -25,22 +25,6 @@ def request_data(subdomain, url_addons: str, request_type: str, payload_content:
     The function `request_data` sends a request to a specified URL with 
     specified headers, request type,
     and payload content.
-
-    :param url_addons: The `url_addons` parameter is a string that 
-    represents any additional path or
-    query parameters that need to be added to the base URL. It is 
-    appended to the base URL to form the
-    complete URL for the API request
-    :param request_type: The `request_type` parameter is the type of 
-    HTTP request to be made. It can be
-    one of the following: "GET", "POST", "PUT", "DELETE", etc
-    :param payload_content: The payload_content parameter is the data 
-    that you want to send in the
-    request. It can be in various formats such as JSON, XML, or form 
-    data. The content of the payload
-    will depend on the specific API you are working with and the data 
-    it expects
-    :return: the response object from the API request.
     """
     payload = payload_content
 
@@ -101,14 +85,16 @@ def hbapi_stock_data(everyproduct: bool = False):
             listings_list.append(
                 {'id': data['hepsiburadaSku'],
                  'sku': data['merchantSku'],
-                 'qty': data['availableStock']})
+                 'qty': data['availableStock'],
+                 'price': data['price']
+                 })
 
         else:
 
             listings_list.append(data)
 
     printr(
-        """[orange_red1]HepsiBurada[/orange_red1] products request is successful. Reason: OK""")
+        """[orange_red1]HepsiBurada[/orange_red1] products request is successful. Reason: [orange3]OK[/orange3]""")
 
     return listings_list
 

@@ -161,18 +161,6 @@ def get_platform_updates(data, all_codes, source):
     The function `get_platform_updates` compares quantity values
     for items across different platforms and returns a list of
     changed values and matching values.
-
-    :param data: The function `get_platform_updates` takes two
-    parameters: `data` and `all_codes`. The `data` parameter
-    seems to be a dictionary containing platform data for different
-    platforms like Trendyol, N11, Amazon, HepsiBurada, Pazarama, and PTTAVM
-    :param all_codes: All_codes is a list of SKU codes that you want to check
-    for updates on different platforms. The function `get_platform_updates`
-    takes this list along with some data containing platform information
-    and compares the quantities of products with the same SKU on different
-    platforms. It then identifies any discrepancies in quantities and returns a
-    :return: The function `get_platform_updates` returns two lists: `changed_values` and
-    `matching_values`.
     """
 
     changed_values = []

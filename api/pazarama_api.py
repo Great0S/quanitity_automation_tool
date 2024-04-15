@@ -26,14 +26,15 @@ def get_access_token():
 
     else:
 
-        printr(f'Pazarama access token request has failed || Reason: {response.text}')
+        printr(f'[magenta]Pazarama[/magenta] access token request has failed || Reason: {
+               response.text}')
 
 
 def request_data(method='GET', uri='', params=None, payload=None):
     """
     This Python function sends a request to the Pazarama API with specified method, URI, parameters, and
     payload, handling authentication and returning the response data if successful.
-    
+
     :param method: The `method` parameter in the `request_data` function specifies the HTTP method to be
     used for the request. By default, it is set to 'GET', but it can be overridden by providing a
     different HTTP method such as 'POST', 'PUT', 'DELETE', etc, defaults to GET (optional)
@@ -80,7 +81,7 @@ def getPazarama_productsList(everyProduct: bool = False):
     """
     This Python function retrieves a list of products from Pazarama API and returns a subset of product
     data based on a specified condition.
-    
+
     :param everyProduct: The `everyProduct` parameter is a boolean parameter that determines whether to
     return a list of all products or a simplified list with specific product details. When
     `everyProduct` is set to `False`, the function will iterate over the products list and extract the
@@ -108,10 +109,15 @@ def getPazarama_productsList(everyProduct: bool = False):
             for product in products_list:
 
                 products.append(
-                    {'id': product['code'], 'sku': product['stockCode'], 'qty': product['stockCount']})
+                    {'id': product['code'],
+                     'sku': product['stockCode'],
+                     'qty': product['stockCount'],
+                     'price': product['salePrice']
+                     })
 
-            printr('[bright_magenta]Pazarama[/bright_magenta] products data request is successful. Response: OK')
-            
+            printr(
+                '[magenta]Pazarama[/magenta] products data request is successful. Response: [orange3]OK[/orange3]')
+
             return products
 
         return products_list
@@ -121,7 +127,7 @@ def pazarama_updateRequest(product):
     """
     The function `pazarama_updateRequest` updates the stock count of a product on Pazarama platform
     based on the provided product information.
-    
+
     :param product: The `pazarama_updateRequest` function takes a `product` parameter, which is expected
     to be a dictionary containing the following keys:
     """
@@ -148,9 +154,10 @@ def pazarama_updateRequest(product):
 
         if update_request['success'] == True:
 
-            printr(f"""[bright_magenta]Pazarama[/bright_magenta] product with code: {
-                           product["sku"]}, New value: [green]{product["qty"]}[/green]""")
+            printr(f"""[magenta]Pazarama[/magenta] product with code: {
+                product["sku"]}, New value: [green]{product["qty"]}[/green]""")
 
         else:
 
-            printr(f'[bright_magenta]Pazarama[/bright_magenta] product with code: {sku} failed to update || Reason: {update_request['data'][0]['error']}')
+            printr(f'[magenta]Pazarama[/magenta] product with code: {
+                   sku} failed to update || Reason: {update_request['data'][0]['error']}')

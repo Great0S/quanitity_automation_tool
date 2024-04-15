@@ -140,6 +140,7 @@ def get_n11_stock_data(every_product: bool = False):
 
                         product_id = product.get("id")
                         product_code = product.get("productSellerCode")
+                        product_price = product.get("price")
 
                         if "stockItems" in product and isinstance(product['stockItems']['stockItem'],
                                                                   list):
@@ -163,6 +164,7 @@ def get_n11_stock_data(every_product: bool = False):
                             "id": product_id,
                             "sku": product_code,
                             "qty": product_qty,
+                            "price": product_price,
                         })
 
             else:
@@ -183,9 +185,9 @@ def get_n11_stock_data(every_product: bool = False):
 
     else:
 
-        printr("Error:", api_call.text)
+        printr("Error: ", api_call.text)
 
-    printr('N11 products data request is successful. Response: ', api_call.reason)
+    printr(f"""[purple4]N11[/purple4] products data request is successful. Response: [orange3]{api_call.reason}[/orange3]""")
 
     if every_product:
         raw_elements = all_products
@@ -364,22 +366,6 @@ def looper(link, payload_dump, namespace, list_name):
     """
     The function `looper` continuously makes API calls until a successful response is received, then
     assigns variables based on the response.
-
-    :param link: The `link` parameter is the URL endpoint where the API call is being made. It is the
-    target URL to which the POST request is sent in the `looper` function
-    :param payload_dump: The `payload_dump` parameter in the `looper` function is typically a dictionary
-    or string containing the data that will be sent in the POST request to the specified `link`. It
-    usually includes the necessary information for the API call to be successful, such as authentication
-    tokens, parameters, and any other
-    :param namespace: The `namespace` parameter in the `looper` function is typically used to specify a
-    specific context or scope within which variables, functions, or objects exist. It helps in
-    organizing and managing the elements within a program by providing a unique identifier or name for a
-    particular set of elements
-    :param list_name: The `list_name` parameter in the `looper` function is used to specify the name of
-    the list where the orders will be stored. It is passed as an argument to the `assign_vars` function
-    along with other parameters
-    :return: The `looper` function is returning `orders_list` and `orders_total` variables when the API
-    call response contains the word "success".
     """
     while True:
         api_call_loop = requests.post(

@@ -163,8 +163,7 @@ def getpttavm_procuctskdata(everyproduct: bool = False):
                                  'qty': int(product['a:Miktar']),
                                  'price': float(product['a:KDVsiz'])})
 
-            printr('PTTAVM products data request is successful. Response: ',
-                   api_call.reason)
+            printr(f"""PTTAVM products data request is successful. Response: [orange3]{api_call.reason}[/orange3]""")
 
             return products
 
@@ -190,7 +189,7 @@ def pttavm_updatedata(product):
     item_id = product['id']
     qty = product['qty']
     price = product['price']
-    price_kdvsiz = product['price'] - product['price'] * (10/100)
+    # price_kdvsiz = product['price'] - product['price'] * 0.1
 
     update_payload = f"""
     <tem:StokFiyatGuncelle3>
@@ -199,7 +198,7 @@ def pttavm_updatedata(product):
             <ept:Barkod>{item_id}</ept:Barkod>
             <ept:KDVOran>10</ept:KDVOran>
             <ept:KDVli>{price}</ept:KDVli>
-            <ept:KDVsiz>{price_kdvsiz}</ept:KDVsiz>
+            <ept:KDVsiz>0</ept:KDVsiz>
             <ept:Miktar>{qty}</ept:Miktar>
             <ept:ShopId>{TedarikciId}</ept:ShopId>
         </tem:item>
@@ -212,12 +211,12 @@ def pttavm_updatedata(product):
         responses_msg = formatdata(update_request)[
             'StokFiyatGuncelle3Response']['StokFiyatGuncelle3Result']
 
-        printr(f"""PTTAVM product success: {
-            responses_msg['a:Success']}, sku: {sku}, New stock: {qty}, New price: {price}""")
+        printr(f"""[bright_cyan]PTTAVM[/bright_cyan] product success: {
+            responses_msg['a:Success']}, sku: {sku}, New stock: {qty}, New price: [green]{price}[/green]""")
 
     else:
 
-        printr(f"""Request failure for PTTAVM product {sku} | Response: {
+        printr(f"""Request failure for [bright_cyan]PTTAVM[/bright_cyan] product {sku} | Response: {
             update_request}""")
 
 
