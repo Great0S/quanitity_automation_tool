@@ -520,7 +520,7 @@ def spapi_getlistings(every_product: bool = False):
 
                         elif every_product and result:
 
-                            amazon_products.append(result)
+                            amazon_products.append({'sku': result['sku'], 'data':result})
 
                     time.sleep(5)
 

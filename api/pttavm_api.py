@@ -154,20 +154,24 @@ def getpttavm_procuctskdata(everyproduct: bool = False):
         products_list = formatdata(api_call)[
             'StokKontrolListesiResponse']['StokKontrolListesiResult']['a:StokKontrolDetay']
 
-        if not everyproduct:
+        for product in products_list:
 
-            for product in products_list:
+            if not everyproduct:
 
                 products.append({'id': product['a:Barkod'],
                                  'sku': product['a:UrunKodu'],
                                  'qty': int(product['a:Miktar']),
                                  'price': float(product['a:KDVsiz'])})
 
-            printr(f"""PTTAVM products data request is successful. Response: [orange3]{api_call.reason}[/orange3]""")
+            else:
 
-            return products
+                products.append({'id': product['a:UrunKodu'],
+                                 'data': product})
 
-        return products_list
+        printr(f"""PTTAVM products data request is successful. Response: [orange3]{
+               api_call.reason}[/orange3]""")
+
+        return products
 
     return None
 

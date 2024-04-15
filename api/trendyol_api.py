@@ -99,9 +99,19 @@ def get_trendyol_stock_data(every_product: bool = False):
 
             data = decoded_data['content'][element]
 
+            item = data['stockCode']
+
+            if item:
+
+                pass
+
+            else:
+
+                item = data['productMainId']
+
             if every_product:
 
-                all_products.append(data)
+                all_products.append({'sku': item, 'data': data})
 
             else:
 
@@ -110,8 +120,6 @@ def get_trendyol_stock_data(every_product: bool = False):
                 if item_id is None:
 
                     pass
-
-                item = data['stockCode']
 
                 quantity = data['quantity']
 
@@ -130,7 +138,7 @@ def get_trendyol_stock_data(every_product: bool = False):
 
         decoded_data = prepare_data(request_data(url_addon, "GET", {}))
 
-    printr('[orange3]Trendyol[/orange3] products data request is successful. Response: [/orange3]OK[orange3]')
+    printr('[orange3]Trendyol[/orange3] products data request is successful. Response: [orange3]OK[/orange3]')
 
     if every_product:
 

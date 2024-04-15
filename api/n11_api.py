@@ -132,15 +132,16 @@ def get_n11_stock_data(every_product: bool = False):
 
                 # Process the product data
                 for product in products_list:
+
+                    product_id = product.get("id")
+                    product_code = product.get("productSellerCode")
+                    product_price = product.get("displayPrice")
+
                     if every_product:
 
-                        all_products.append(product)
+                        all_products.append({'sku': product_code,'data': product})
 
-                    else:
-
-                        product_id = product.get("id")
-                        product_code = product.get("productSellerCode")
-                        product_price = product.get("price")
+                    else:                        
 
                         if "stockItems" in product and isinstance(product['stockItems']['stockItem'],
                                                                   list):

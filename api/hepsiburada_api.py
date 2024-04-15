@@ -61,14 +61,6 @@ def hbapi_stock_data(everyproduct: bool = False):
     """
     This Python function retrieves stock data for products from HepsiBurada, 
     with an option to include all product details.
-
-    :param every_product: The `everyproduct` parameter in the `hbapi_stock_data` 
-    function is a boolean parameter that determines whether to retrieve data for 
-    every product or just specific product information. 
-    :return: The function `hbapi_stock_data` returns a list of product data from 
-    HepsiBurada. The data includes the product ID, SKU, and quantity available in 
-    stock. If the `every_product` parameter is set to True, the function returns 
-    all product data without filtering.
     """
 
     listings_list = []
@@ -91,7 +83,8 @@ def hbapi_stock_data(everyproduct: bool = False):
 
         else:
 
-            listings_list.append(data)
+            listings_list.append({'sku': data['merchantSku'],
+                                  'data': data})
 
     printr(
         """[orange_red1]HepsiBurada[/orange_red1] products request is successful. Reason: [orange3]OK[/orange3]""")

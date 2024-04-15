@@ -47,20 +47,21 @@ def get_wordpress_products(everyproduct: bool = False):
 
     products = products_request()
 
-    if everyproduct:
-
-        return products
-
     filtered_products = []
 
     for item in products:
+
+        if everyproduct:
+
+            filtered_products.append({'sku': item['sku'],
+                                      'data': item})
 
         filtered_products.append({'id': item['id'],
                                   'sku': item['sku'],
                                   'price': int(item['price']),
                                   'qty': item['stock_quantity'],
                                   "stock_check": item['stock_status']})
-        
+
     print("Wordpress products data request is successful. Response: OK")
 
     return filtered_products

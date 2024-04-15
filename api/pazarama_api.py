@@ -82,15 +82,6 @@ def getPazarama_productsList(everyProduct: bool = False):
     This Python function retrieves a list of products from Pazarama API and returns a subset of product
     data based on a specified condition.
 
-    :param everyProduct: The `everyProduct` parameter is a boolean parameter that determines whether to
-    return a list of all products or a simplified list with specific product details. When
-    `everyProduct` is set to `False`, the function will iterate over the products list and extract the
-    product ID, SKU, and quantity information for, defaults to False
-    :type everyProduct: bool (optional)
-    :return: If the `everyProduct` parameter is set to `False`, the function will return a list of
-    dictionaries containing product information with keys 'id', 'sku', and 'qty'. If the `everyProduct`
-    parameter is set to `True`, the function will return the entire `products_list` obtained from the
-    API request.
     """
 
     products = []
@@ -104,9 +95,9 @@ def getPazarama_productsList(everyProduct: bool = False):
 
     if products_list:
 
-        if not everyProduct:
+        for product in products_list:
 
-            for product in products_list:
+            if not everyProduct:
 
                 products.append(
                     {'id': product['code'],
@@ -114,13 +105,16 @@ def getPazarama_productsList(everyProduct: bool = False):
                      'qty': product['stockCount'],
                      'price': product['salePrice']
                      })
+            else:
 
-            printr(
-                '[magenta]Pazarama[/magenta] products data request is successful. Response: [orange3]OK[/orange3]')
+                products.append(
+                    {'sku': product['stockCode'],
+                     'data': product
+                     })
 
-            return products
+        printr('[magenta]Pazarama[/magenta] products data request is successful. Response: [orange3]OK[/orange3]')
 
-        return products_list
+        return products
 
 
 def pazarama_updateRequest(product):

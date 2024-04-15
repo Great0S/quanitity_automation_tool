@@ -20,32 +20,6 @@ def get_data(every_product: bool = False, source: str = None, targets: list = No
     The `get_data()` function retrieves stock data 
     from various platforms and returns specific data and
     lists related to the retrieved information.
-
-    :param every_product: The `every_product` parameter 
-    in the `get_data()` function is a boolean
-    parameter that specifies whether to retrieve data 
-    for every product or not. If set to `True`, data
-    for every product will be retrieved. If set to `False`, 
-    data for specific products will be retrieved
-    based on the other, defaults to False
-    :type every_product: bool (optional)
-    :param source: The `source` parameter in the `get_data()` 
-    function is used to specify the source
-    platform from which you want to retrieve data. It can be 
-    a string indicating the source platform
-    such as "N11" or "Trendyol". If you provide a value for 
-    the `source` parameter
-    :type source: str
-    :param targets: The `targets` parameter in the `get_data()` 
-    function is a list that specifies the
-    platforms from which you want to retrieve data. You can 
-    pass a list of platform names as targets to
-    filter the data accordingly
-    :type targets: list
-    :return: The function `get_data()` returns either `target_platforms` 
-    and `all_codes` if `targets`
-    are provided, or `data_content` and `all_codes` if `every_product` 
-    is False.
     """
 
     # Retrieve stock data from APIs
@@ -107,14 +81,14 @@ def filter_data(every_product, targets):
     data_content = {}
     codes = []
     platform_to_function = {
-    'n11': get_n11_stock_data,
-    'hepsiburada': hbapi_stock_data,
-    'amazon': spapi_getlistings,
-    'pttavm': getpttavm_procuctskdata,
-    'pazarama': getPazarama_productsList,
-    'wordpress': get_wordpress_products,
-    'trendyol': get_trendyol_stock_data
-}
+        'n11': get_n11_stock_data,
+        'hepsiburada': hbapi_stock_data,
+        'amazon': spapi_getlistings,
+        'pttavm': getpttavm_procuctskdata,
+        'pazarama': getPazarama_productsList,
+        'wordpress': get_wordpress_products,
+        'trendyol': get_trendyol_stock_data
+    }
 
     for name in targets:
 
@@ -132,7 +106,7 @@ def filter_data(every_product, targets):
     return data_content, codes
 
 
-def process_update_data(source=None, targets=None):
+def process_update_data(source=None, targets=None, options=None):
     """
     The function `process_update_data` retrieves data, processes 
     stock updates from different platforms, and returns the 
@@ -141,22 +115,34 @@ def process_update_data(source=None, targets=None):
     list `platform_updates`.
     """
 
-    #  This allows us to access and use these variables
-    data_lists, all_codes = get_data(source=source, targets=targets)
+    all = False
+
+    if options:
+
+        if options == 'full':
+
+            data_lists, all_codes = get_data(
+                every_product=True, source=source, targets=targets)
+            
+            all = True
+
+        else:
+
+            data_lists, all_codes = get_data(source=source, targets=targets)
 
     # Initializing empty lists. These lists will be used
     # to store data during the processing of stock
     # data from N11 and Trendyol APIs.
-    platform_updates, matching_values = get_platform_updates(
-        data_lists, all_codes, source)
+    platform_updates = get_platform_updates(
+        data_lists, all_codes, source, every_product=all)
 
     printr(f"""\nLength of the two lists:- \nPlatform updates is {
-        len(platform_updates)}\nMatching codes is {len(matching_values)}\n""")
+        len(platform_updates)}\n""")
 
     return platform_updates
 
 
-def get_platform_updates(data, all_codes, source):
+def get_platform_updates(data, all_codes, source, every_product: bool = False):
     """
     The function `get_platform_updates` compares quantity values
     for items across different platforms and returns a list of
@@ -173,8 +159,6 @@ def get_platform_updates(data, all_codes, source):
                  'wordpress',
                  'pttavm']
 
-    matching_values = []
-
     matching_ids = {}
 
     item_id = 0
@@ -189,83 +173,93 @@ def get_platform_updates(data, all_codes, source):
 
                     if item['sku'] == code:
 
-                        quantity = item['qty']
-
-                        item_id = item['id']
-
                         if code in matching_ids:
 
-                            matching_ids[code].append(
+                            if every_product:
+
+                                matching_ids[code].append({'platform': platform,
+                                                           'data': item['data']})
+                            else:
+
+                                matching_ids[code].append(
                                 {'platform': platform,
-                                 'id': item_id,
+                                 'id': item['id'],
                                  'price': item.get('price', 0),
-                                 'qty': quantity})
+                                 'qty': item['qty']})
 
                         else:
 
-                            matching_ids[code] = [
-                                {'platform': platform,
-                                 'id': item_id,
-                                 'price': item.get('price', 0),
-                                 'qty': quantity}]
+                            if every_product:
+
+                                matching_ids[code] = [{'platform': platform,
+                                                      'data': item['data']}]
+
+                            else:
+
+                                matching_ids[code] = [
+                                    {'platform': platform,
+                                     'id': item['id'],
+                                     'price': item.get('price', 0),
+                                     'qty': item['qty']}]
 
                         break
 
     if matching_ids:
 
-        for item_key, item_val in matching_ids.items():
+        if not every_product:
 
-            products = item_val
+            for item_key, item_val in matching_ids.items():
 
-            if len(products) > 1:
+                products = item_val
 
-                if source:
+                if len(products) > 1:
 
-                    source_val = item_val[0]
+                    if source:
 
-                else:
+                        source_val = item_val[0]
 
-                    source_val = min(products, key=lambda x: x['qty'])
+                    else:
 
-                for product in products:
+                        source_val = min(products, key=lambda x: x['qty'])
 
-                    if product == source_val:
+                    for product in products:
 
-                        continue
-
-                    if source_val['qty'] == product['qty']:
-
-                        if source_val['price'] == product['price']:
+                        if product == source_val:
 
                             continue
 
-                        continue
+                        if source_val['qty'] == product['qty']:
 
-                    # product_price = product['price'] + product['price'] * 0.1
+                            if source_val['price'] == product['price']:
 
-                    # if product_price - source_val['price'] <= 1:
+                                continue
 
-                    #     continue
+                            continue
 
-                    matching_values.append(
-                        {'sku': product['id'],
-                         'qty1': product['qty'],
-                         'qty2': source_val['qty']})
+                        # product_price = product['price'] + product['price'] * 0.1
 
-                    changed_values.append(
-                        {'id': product['id'],
-                         'sku': item_key,
-                         'price': source_val.get('price', 0),
-                         'qty': str(source_val['qty']),
-                         'platform': product['platform']})
-            else:
+                        # if product_price - source_val['price'] <= 1:
 
-                continue
+                        #     continue
 
-    return changed_values, matching_values
+                        changed_values.append(
+                            {'id': product['id'],
+                             'sku': item_key,
+                             'price': source_val.get('price', 0),
+                             'qty': str(source_val['qty']),
+                             'platform': product['platform']})
+                else:
+
+                    continue
+
+        else:
+
+            changed_values = matching_ids
+
+    return changed_values
 
 
-def execute_updates(source=None, targets=None):
+def execute_updates(source=None, targets=None, options=None):
     """
     The function `execute_updates` processes update data
     for different platforms and calls corresponding
@@ -273,16 +267,16 @@ def execute_updates(source=None, targets=None):
     """
 
     platform_to_function = {
-    'n11': post_n11_data,
-    'hepsiburada': hbapi_update_listing,
-    'amazon': spapi_update_listing,
-    'pttavm': pttavm_updatedata,
-    'pazarama': pazarama_updateRequest,
-    'trendyol': post_trendyol_data,
-    'wordpress': update_wordpress_products
-}
+        'n11': post_n11_data,
+        'hepsiburada': hbapi_update_listing,
+        'amazon': spapi_update_listing,
+        'pttavm': pttavm_updatedata,
+        'pazarama': pazarama_updateRequest,
+        'trendyol': post_trendyol_data,
+        'wordpress': update_wordpress_products
+    }
 
-    post_data = process_update_data(source, targets)
+    post_data = process_update_data(source, targets, options)
 
     if post_data:
 
@@ -306,12 +300,13 @@ def execute_updates(source=None, targets=None):
 
                         if platform == post['platform']:
 
-                            func(post)
+                            func(post, options)
 
                 break
 
             else:
                 printr("Invalid input. Please enter 'y' for yes or 'n' for no.")
+
 
 printr('Do you want to update specific platforms ?\n')
 printr('1. Yes\n2. No\n')
@@ -323,11 +318,43 @@ if options == '1':
         'Please enter the source website platform: Ex. Trendyol\n')
     TARGET_PLATFORM = input(
         '\nPlease enter the target website platform: Ex. Magento\n').split(' ')
+
+    printr('Available operations:\n')
+    printr('1. Full update\n')
+    printr('2. Partial update\n')
+    select_op = input("\nWhich operation will you be doing today ? ")
+
+    if select_op == '1':
+
+        TARGET_OPTIONS = 'full'
+
+    elif select_op == '2':
+
+        printr('Available partial operations: \n')
+        printr('1. Quantity\n')
+        printr('2. Price\n')
+        printr('3. Information (Images, Properties, descriptons)\n')
+        select_partial_op = input(
+            "\nWhich partial operation will you choose ? ")
+
+        if select_partial_op == '1':
+
+            TARGET_OPTIONS = 'qty'
+
+        elif select_partial_op == '2':
+
+            TARGET_OPTIONS = 'price'
+
+        if select_partial_op == '3':
+
+            TARGET_OPTIONS = 'info'
+
 else:
 
     SOURCE_PLATFORM = None
     TARGET_PLATFORM = None
+    TARGET_OPTIONS = None
 
-execute_updates(SOURCE_PLATFORM, TARGET_PLATFORM)
+execute_updates(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS)
 
 print('\nAll updates has finished. The program will exit now!')
