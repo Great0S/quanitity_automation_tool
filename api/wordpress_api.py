@@ -1,6 +1,7 @@
 import json
 import os
 from woocommerce import API
+from rich import print as printr
 
 wcapi = API(
     url="https://www.emanzemin.com",
@@ -62,7 +63,7 @@ def get_wordpress_products(everyproduct: bool = False):
                                   'qty': item['stock_quantity'],
                                   "stock_check": item['stock_status']})
 
-    print("Wordpress products data request is successful. Response: OK")
+    printr("[grey66]Wordpress[/grey66] products data request is successful. Response: [orange3]OK[/orange3]")
 
     return filtered_products
 
@@ -87,12 +88,12 @@ def update_wordpress_products(data):
 
         if update_request['stock_quantity'] == int(data['qty']):
 
-            print(f"""Wordpress product success, sku: {
+            printr(f"""[grey66]Wordpress[/grey66] product success, sku: {
                 data['sku']}, New stock: {
                 data['qty']}""")
 
         else:
 
-            print(f""" Wordpress product update failed, sku: {
+            printr(f"""[grey66]Wordpress[/grey66] product update failed, sku: {
                 data['sku']}, New stock: {
                     data['qty']}""")

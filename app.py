@@ -123,12 +123,12 @@ def process_update_data(source=None, targets=None, options=None):
 
             data_lists, all_codes = get_data(
                 every_product=True, source=source, targets=targets)
-            
+
             all = True
 
-        else:
+    else:
 
-            data_lists, all_codes = get_data(source=source, targets=targets)
+        data_lists, all_codes = get_data(source=source, targets=targets)
 
     # Initializing empty lists. These lists will be used
     # to store data during the processing of stock
@@ -182,10 +182,10 @@ def get_platform_updates(data, all_codes, source, every_product: bool = False):
                             else:
 
                                 matching_ids[code].append(
-                                {'platform': platform,
-                                 'id': item['id'],
-                                 'price': item.get('price', 0),
-                                 'qty': item['qty']})
+                                    {'platform': platform,
+                                     'id': item['id'],
+                                     'price': item.get('price', 0),
+                                     'qty': item['qty']})
 
                         else:
 
@@ -300,7 +300,7 @@ def execute_updates(source=None, targets=None, options=None):
 
                         if platform == post['platform']:
 
-                            func(post, options)
+                            func(post)
 
                 break
 

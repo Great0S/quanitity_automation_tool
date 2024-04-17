@@ -168,7 +168,7 @@ def getpttavm_procuctskdata(everyproduct: bool = False):
                 products.append({'id': product['a:UrunKodu'],
                                  'data': product})
 
-        printr(f"""PTTAVM products data request is successful. Response: [orange3]{
+        printr(f"""[cyan]PTTAVM[/cyan] products data request is successful. Response: [orange3]{
                api_call.reason}[/orange3]""")
 
         return products
