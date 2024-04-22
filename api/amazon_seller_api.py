@@ -497,11 +497,15 @@ def spapi_getlistings(every_product: bool = False):
 
                     for future in futures:
 
+                        price = 0
+
                         result = future.result()
 
                         if not every_product and result:
 
-                            # price = item_request['attributes']['purchasable_offer'][0]['our_price'][0]['schedule'][0]['value_with_tax']
+                            if 'value_with_tax' in result['attributes']['purchasable_offer'][0]['our_price'][0]['schedule'][0]:
+
+                                price = result['attributes']['purchasable_offer'][0]['our_price'][0]['schedule'][0]['value_with_tax']
 
                             if 'quantity' in result['fulfillmentAvailability'][0]:
 
@@ -516,7 +520,7 @@ def spapi_getlistings(every_product: bool = False):
                                 continue
 
                             amazon_products.append(
-                                {'sku': result['sku'], 'id': asin, 'qty': quanitity})
+                                {'sku': result['sku'], 'id': asin, 'qty': quanitity, price: price})
 
                         elif every_product and result:
 
