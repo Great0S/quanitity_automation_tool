@@ -280,19 +280,27 @@ def execute_updates(source=None, targets=None, options=None):
 
     if post_data:
 
+        count = 1
+
+        for update in post_data:
+
+            printr(f"""{count}. Product with sku {update['sku']} from {update['platform']} has a new stock! || New stock: {update['qty']}""")
+
+            count += 1
+
         while True:
 
-            user_input = input("Do you want to continue? (y/n): ")
+            user_input = input("\nDo you want to continue? (y/n): ")
 
             if user_input.lower() == 'n':
 
-                printr("Exiting the program.")
+                printr("\nExiting the program.")
 
                 break
 
             elif user_input.lower() == 'y':
 
-                printr("Update in progress...\n")
+                printr("\nUpdate in progress...\n")
 
                 for post in post_data:
 
