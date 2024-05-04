@@ -1,5 +1,6 @@
 """ importing required libs for the script """
 import os
+import re
 import time
 import json
 import requests
@@ -90,6 +91,74 @@ def hbapi_stock_data(everyproduct: bool = False):
         """[orange_red1]HepsiBurada[/orange_red1] products request is successful. Reason: [orange3]OK[/orange3]""")
 
     return listings_list
+
+
+def hpapi_add_listing(items):
+
+    url = "https://mpop.hepsiburada.com/product/api/products/import?version=1"
+
+    ready_data = []
+    size = ''
+    color = ''
+
+    for data in items:
+
+        images = data['images']
+
+        if len(images) < 5:
+
+            images.append({'url': 'None'})
+            images.append({'url': 'None'})
+
+        printr(f"Creating new hepsiburada product with sku: {
+               data['productMainId']}")
+        
+        for atrr in data['attributes']:
+
+            if re.search('Boyut/Ebat', atrr['attributeName']):
+
+                size = atrr['attributeValue']
+
+            if re.search('Renk', atrr['attributeName']):
+                
+                color = atrr['attributeValue']
+
+        listing_details = {
+            "categoryId": 60001364,
+            "merchant": store_id,
+            "attributes": {
+                "merchantSku": data.get('productMainId', None),
+                "VaryantGroupID": "",
+                "Barcode": data.get('barcode', None),
+                "UrunAdi": data.get('title', None),
+                "UrunAciklamasi": data.get('description', None),
+                "Marka": data.get('brand', "Myfloor"),
+                "GarantiSuresi": 0,
+                "kg": "1",
+                "tax_vat_rate": "8",
+                "price": data.get('salePrice', 0),
+                "stock": data.get('quantity', 0),
+                "Image1": images[0]['url'],
+                "Image2": images[1]['url'],
+                "Image3": images[2]['url'],
+                "Image4": images[3]['url'],
+                "Image5": images[4]['url'],
+                "Video1": "",
+                "renk_variant_property": color,
+                "ebatlar_variant_property": size
+            }
+        }
+
+        ready_data.append(listing_details)
+
+        # Write to JSON file
+    with open('integrator.json', 'w') as json_file:
+
+        json.dump(ready_data, json_file)
+
+    response = requests.post(url, headers=headers)
+
+    print(response.text)
 
 
 def hbapi_update_listing(product):

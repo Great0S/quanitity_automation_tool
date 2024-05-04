@@ -7,7 +7,7 @@
 import re
 from rich import print as printr
 from api.amazon_seller_api import spapi_getlistings, spapi_update_listing
-from api.hepsiburada_api import hbapi_stock_data, hbapi_update_listing
+from api.hepsiburada_api import hbapi_stock_data, hbapi_update_listing, hpapi_add_listing
 from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
 from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
@@ -133,7 +133,7 @@ def process_update_data(source=None, targets=None, options=None):
     # Initializing empty lists. These lists will be used
     # to store data during the processing of stock
     # data from N11 and Trendyol APIs.
-    platform_updates = get_platform_updates(
+    platform_updates = filter_data_list(
         data_lists, all_codes, source, every_product=all)
 
     printr(f"""\nLength of the two lists:- \nPlatform updates is {
@@ -142,9 +142,9 @@ def process_update_data(source=None, targets=None, options=None):
     return platform_updates
 
 
-def get_platform_updates(data, all_codes, source, every_product: bool = False):
+def filter_data_list(data, all_codes, source, every_product: bool = False, match: bool = True):
     """
-    The function `get_platform_updates` compares quantity values
+    The function `filter_data_list` compares quantity values
     for items across different platforms and returns a list of
     changed values and matching values.
     """
@@ -160,6 +160,7 @@ def get_platform_updates(data, all_codes, source, every_product: bool = False):
                  'pttavm']
 
     matching_ids = {}
+    non_matching_ids = {}
 
     item_id = 0
 
@@ -254,7 +255,23 @@ def get_platform_updates(data, all_codes, source, every_product: bool = False):
 
         else:
 
-            changed_values = matching_ids
+            if matching_ids:
+
+                for item_key, item_val in matching_ids.items():
+
+                    products = item_val
+
+                    if len(products) > 1:
+
+                        if products[0]['platform'] == TARGET_PLATFORM:
+
+                            continue
+
+                        changed_values.append(products[0]['data'])
+            
+            else:
+
+                changed_values = matching_ids
 
     return changed_values
 
@@ -284,7 +301,8 @@ def execute_updates(source=None, targets=None, options=None):
 
         for update in post_data:
 
-            printr(f"""{count}. Product with sku {update['sku']} from {update['platform']} has a new stock! || New stock: {update['qty']}""")
+            printr(f"""{count}. Product with sku {update['sku']} from {
+                   update['platform']} has a new stock! || New stock: {update['qty']}""")
 
             count += 1
 
@@ -316,53 +334,75 @@ def execute_updates(source=None, targets=None, options=None):
                 printr("Invalid input. Please enter 'y' for yes or 'n' for no.")
 
 
-printr('Do you want to update specific platforms ?\n')
-printr('1. Yes\n2. No\n')
-options = input('Choose an option from above: ')
+def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS):
 
-if options == '1':
+    data_lists, all_codes = get_data(every_product=True,
+        source=SOURCE_PLATFORM, targets=[TARGET_PLATFORM])
 
-    SOURCE_PLATFORM = input(
-        'Please enter the source website platform: Ex. Trendyol\n')
-    TARGET_PLATFORM = input(
-        '\nPlease enter the target website platform: Ex. Magento\n').split(' ')
+    filtered_data = filter_data_list(data=data_lists, all_codes=all_codes, every_product=True, match=False, source=None)
 
-    printr('Available operations:\n')
-    printr('1. Full update\n')
-    printr('2. Partial update\n')
-    select_op = input("\nWhich operation will you be doing today ? ")
+    if filtered_data:
 
-    if select_op == '1':
+        hpapi_add_listing(filtered_data)
 
-        TARGET_OPTIONS = 'full'
+    print('Done')
 
-    elif select_op == '2':
 
-        printr('Available partial operations: \n')
-        printr('1. Quantity\n')
-        printr('2. Price\n')
-        printr('3. Information (Images, Properties, descriptons)\n')
-        select_partial_op = input(
-            "\nWhich partial operation will you choose ? ")
+printr('What operation would you like to perform?\n')
+printr('1. Create new product\n2. Update existing product\n')
+operation = input('Choose an operation from above: ')
 
-        if select_partial_op == '1':
+if operation == '1':
 
-            TARGET_OPTIONS = 'qty'
+    printr('How would you like to create a new product?\n')
+    printr('1. Copy from another platform\n2. Enter details manually\n')
+    create_option = input('Choose an option from above: ')
 
-        elif select_partial_op == '2':
+    if create_option == '1':
 
-            TARGET_OPTIONS = 'price'
+        SOURCE_PLATFORM = input(
+            'Please enter the source platform to copy from: Ex. Trendyol\n')
+        TARGET_PLATFORM = input(
+            '\nPlease enter the target platform to copy to: Ex. PTTAVM\n')
+        TARGET_OPTIONS = 'copy'
 
-        if select_partial_op == '3':
+    elif create_option == '2':
+        TARGET_OPTIONS = 'manual'
 
-            TARGET_OPTIONS = 'info'
+elif operation == '2':
+    printr('Do you want to update specific platforms ?\n')
+    printr('1. Yes\n2. No\n')
+    options = input('Choose an option from above: ')
 
-else:
+    if options == '1':
+        SOURCE_PLATFORM = input(
+            'Please enter the source website platform: Ex. Trendyol\n')
+        TARGET_PLATFORM = input(
+            '\nPlease enter the target website platform: Ex. Magento\n').split(' ')
 
-    SOURCE_PLATFORM = None
-    TARGET_PLATFORM = None
-    TARGET_OPTIONS = None
+        printr('Available operations:\n1. Full update\n2. Partial update\n')
+        select_op = input("\nWhich operation will you be doing today ? ")
 
-execute_updates(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS)
+        if select_op == '1':
+            TARGET_OPTIONS = 'full'
+        elif select_op == '2':
+            printr('Available partial operations: \n1. Quantity\n2. Price\n3. Information (Images, Properties, descriptons)\n')
+            select_partial_op = input(
+                "\nWhich partial operation will you choose ? ")
+
+            if select_partial_op == '1':
+                TARGET_OPTIONS = 'qty'
+            elif select_partial_op == '2':
+                TARGET_OPTIONS = 'price'
+            elif select_partial_op == '3':
+                TARGET_OPTIONS = 'info'
+    else:
+        SOURCE_PLATFORM = None
+        TARGET_PLATFORM = None
+        TARGET_OPTIONS = None
+
+# execute_updates(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS)
+
+create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS)
 
 print('\nAll updates has finished. The program will exit now!')
