@@ -401,8 +401,8 @@ elif operation == '2':
         TARGET_PLATFORM = None
         TARGET_OPTIONS = None
 
-execute_updates(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS)
+# execute_updates(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS)
 
-# create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS)
+create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS)
 
 print('\nAll updates has finished. The program will exit now!')

@@ -95,6 +95,11 @@ def hbapi_stock_data(everyproduct: bool = False):
 
 def hpapi_add_listing(items):
 
+    header = {
+        "accept": "application/json",
+        'Authorization': f'Basic {auth_hash}',
+    }
+
     url = "https://mpop.hepsiburada.com/product/api/products/import?version=1"
 
     ready_data = []
@@ -106,13 +111,9 @@ def hpapi_add_listing(items):
         images = data['images']
 
         if len(images) < 5:
+            for i in range(5 - len(images)):
+                images.append({'url': 'None'})
 
-            images.append({'url': 'None'})
-            images.append({'url': 'None'})
-
-        printr(f"Creating new hepsiburada product with sku: {
-               data['productMainId']}")
-        
         for atrr in data['attributes']:
 
             if re.search('Boyut/Ebat', atrr['attributeName']):
@@ -120,7 +121,7 @@ def hpapi_add_listing(items):
                 size = atrr['attributeValue']
 
             if re.search('Renk', atrr['attributeName']):
-                
+
                 color = atrr['attributeValue']
 
         listing_details = {
@@ -154,9 +155,15 @@ def hpapi_add_listing(items):
         # Write to JSON file
     with open('integrator.json', 'w') as json_file:
 
-        json.dump(ready_data, json_file)
+        json.dump(ready_data[0], json_file)
 
-    response = requests.post(url, headers=headers)
+    # printr(f"Creating new hepsiburada product with sku: {
+            #    data['productMainId']}")
+
+    files = { "file": ("integrator.json", open("integrator.json", "rb"), "application/json") }
+
+
+    response = requests.post(url, files=files,headers=header)
 
     print(response.text)
 
