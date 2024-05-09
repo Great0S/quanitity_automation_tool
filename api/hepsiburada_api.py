@@ -108,6 +108,8 @@ def hpapi_add_listing(items):
 
     for data in items:
 
+        data = items[data][0]['data']
+
         images = data['images']
 
         if len(images) < 5:

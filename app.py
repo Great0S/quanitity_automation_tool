@@ -15,7 +15,7 @@ from api.n11_api import get_n11_stock_data, post_n11_data
 from api.wordpress_api import get_wordpress_products, update_wordpress_products
 
 
-def get_data(every_product: bool = False, source: str = None, targets: list = None):
+def get_data(every_product: bool = False, source: str = None, targets: list = None, match: bool = False):
     """
     The `get_data()` function retrieves stock data 
     from various platforms and returns specific data and
@@ -58,6 +58,11 @@ def get_data(every_product: bool = False, source: str = None, targets: list = No
     if every_product:
 
         pass
+
+    elif match:
+
+        all_codes = {SOURCE_PLATFORM: source_codes,
+                     TARGET_PLATFORM: target_codes}
 
     else:
 
@@ -142,7 +147,7 @@ def process_update_data(source=None, targets=None, options=None):
     return platform_updates
 
 
-def filter_data_list(data, all_codes, source, every_product: bool = False, match: bool = True):
+def filter_data_list(data, all_codes, source, every_product: bool = False, match=False):
     """
     The function `filter_data_list` compares quantity values
     for items across different platforms and returns a list of
@@ -161,28 +166,35 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, match
 
     matching_ids = {}
     non_matching_ids = {}
+    # Initialize a set to store all SKUs from the source platform
+    
+    for platform in platforms:
 
-    item_id = 0
 
-    for code in all_codes:
+        if f'{platform}_data' in data and platform != SOURCE_PLATFORM:
 
-        for platform in platforms:
+            target_skus = set(item['sku'] for item in data[f'{platform}_data'])
 
-            if f'{platform}_data' in data:
+            for product in data[f'{platform}_data']:
 
-                for item in data[f'{platform}_data']:
+                sku = product['sku']
 
-                    if item['sku'] == code:
+                for item in data[f'{SOURCE_PLATFORM}_data']:
 
-                        if code in matching_ids:
+                    if item['sku'] == product['sku']:
+                        if match:
+
+                            break
+
+                        elif item['sku'] in matching_ids:
 
                             if every_product:
 
-                                matching_ids[code].append({'platform': platform,
+                                matching_ids[item['sku']].append({'platform': platform,
                                                            'data': item['data']})
                             else:
 
-                                matching_ids[code].append(
+                                matching_ids[item['sku']].append(
                                     {'platform': platform,
                                      'id': item['id'],
                                      'price': item.get('price', 0),
@@ -192,18 +204,29 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, match
 
                             if every_product:
 
-                                matching_ids[code] = [{'platform': platform,
+                                matching_ids[item['sku']] = [{'platform': platform,
                                                       'data': item['data']}]
 
                             else:
 
-                                matching_ids[code] = [
+                                matching_ids[item['sku']] = [
                                     {'platform': platform,
                                      'id': item['id'],
                                      'price': item.get('price', 0),
                                      'qty': item['qty']}]
 
                         break
+
+                    elif item['sku'] not in target_skus:
+                        if item['sku'] not in non_matching_ids:
+
+                            non_matching_ids[item['sku']] = [{'platform': platform,
+                                                      'data': item['data']}]
+                        
+    if non_matching_ids:
+
+        matching_ids = non_matching_ids
+
 
     if matching_ids:
 
@@ -263,15 +286,13 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, match
 
                     if len(products) > 1:
 
-                        if products[0]['platform'] == TARGET_PLATFORM:
-
-                            continue
-
                         changed_values.append(products[0]['data'])
-            
-            else:
 
-                changed_values = matching_ids
+                    else:
+                    
+                        changed_values = matching_ids
+                        
+                        break
 
     return changed_values
 
@@ -337,9 +358,10 @@ def execute_updates(source=None, targets=None, options=None):
 def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS):
 
     data_lists, all_codes = get_data(every_product=True,
-        source=SOURCE_PLATFORM, targets=[TARGET_PLATFORM])
+                                     source=SOURCE_PLATFORM, targets=[TARGET_PLATFORM], match=True)
 
-    filtered_data = filter_data_list(data=data_lists, all_codes=all_codes, every_product=True, match=False, source=None)
+    filtered_data = filter_data_list(
+        data=data_lists, all_codes=all_codes, every_product=True, match=True, source=None)
 
     if filtered_data:
 
@@ -368,6 +390,8 @@ if operation == '1':
 
     elif create_option == '2':
         TARGET_OPTIONS = 'manual'
+
+    create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS)
 
 elif operation == '2':
     printr('Do you want to update specific platforms ?\n')
@@ -401,8 +425,7 @@ elif operation == '2':
         TARGET_PLATFORM = None
         TARGET_OPTIONS = None
 
-# execute_updates(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS)
+    execute_updates(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS)
 
-create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS)
 
 print('\nAll updates has finished. The program will exit now!')
