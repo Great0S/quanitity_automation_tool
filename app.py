@@ -11,7 +11,7 @@ from api.hepsiburada_api import hbapi_stock_data, hbapi_update_listing, hpapi_ad
 from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
 from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
-from api.n11_api import get_n11_stock_data, post_n11_data
+from api.n11_api import create_n11_data, get_n11_stock_data, post_n11_data
 from api.wordpress_api import get_wordpress_products, update_wordpress_products
 
 
@@ -147,7 +147,7 @@ def process_update_data(source=None, targets=None, options=None):
     return platform_updates
 
 
-def filter_data_list(data, all_codes, source, every_product: bool = False, match=False):
+def filter_data_list(data, all_codes, source, every_product: bool = False, no_match=False):
     """
     The function `filter_data_list` compares quantity values
     for items across different platforms and returns a list of
@@ -167,22 +167,24 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, match
     matching_ids = {}
     non_matching_ids = {}
     # Initialize a set to store all SKUs from the source platform
-    
+
     for platform in platforms:
 
-
         if f'{platform}_data' in data and platform != SOURCE_PLATFORM:
-
-            target_skus = set(item['sku'] for item in data[f'{platform}_data'])
 
             for product in data[f'{platform}_data']:
 
                 sku = product['sku']
+                if no_match:
 
-                for item in data[f'{SOURCE_PLATFORM}_data']:
+                    target_skus = set(item['sku']
+                                      for item in data[f'{platform}_data'])
+                    platform = SOURCE_PLATFORM
+
+                for item in data[f'{platform}_data']:
 
                     if item['sku'] == product['sku']:
-                        if match:
+                        if no_match:
 
                             break
 
@@ -191,7 +193,7 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, match
                             if every_product:
 
                                 matching_ids[item['sku']].append({'platform': platform,
-                                                           'data': item['data']})
+                                                                  'data': item['data']})
                             else:
 
                                 matching_ids[item['sku']].append(
@@ -205,7 +207,7 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, match
                             if every_product:
 
                                 matching_ids[item['sku']] = [{'platform': platform,
-                                                      'data': item['data']}]
+                                                              'data': item['data']}]
 
                             else:
 
@@ -217,16 +219,15 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, match
 
                         break
 
-                    elif item['sku'] not in target_skus:
+                    elif no_match and item['sku'] not in target_skus:
                         if item['sku'] not in non_matching_ids:
 
                             non_matching_ids[item['sku']] = [{'platform': platform,
-                                                      'data': item['data']}]
-                        
+                                                              'data': item['data']}]
+
     if non_matching_ids:
 
         matching_ids = non_matching_ids
-
 
     if matching_ids:
 
@@ -260,12 +261,6 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, match
 
                             continue
 
-                        # product_price = product['price'] + product['price'] * 0.1
-
-                        # if product_price - source_val['price'] <= 1:
-
-                        #     continue
-
                         changed_values.append(
                             {'id': product['id'],
                              'sku': item_key,
@@ -278,21 +273,19 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, match
 
         else:
 
-            if matching_ids:
+            for item_key, item_val in matching_ids.items():
 
-                for item_key, item_val in matching_ids.items():
+                products = item_val
 
-                    products = item_val
+                if len(products) > 1:
 
-                    if len(products) > 1:
+                    changed_values.append(products[0]['data'])
 
-                        changed_values.append(products[0]['data'])
+                else:
 
-                    else:
-                    
-                        changed_values = matching_ids
-                        
-                        break
+                    changed_values = matching_ids
+
+                    break
 
     return changed_values
 
@@ -361,11 +354,17 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS):
                                      source=SOURCE_PLATFORM, targets=[TARGET_PLATFORM], match=True)
 
     filtered_data = filter_data_list(
-        data=data_lists, all_codes=all_codes, every_product=True, match=True, source=None)
+        data=data_lists, all_codes=all_codes, every_product=True, no_match=True, source=None)
 
     if filtered_data:
 
-        hpapi_add_listing(filtered_data)
+        if TARGET_PLATFORM == 'n11':
+
+            create_n11_data(filtered_data)
+
+        elif TARGET_PLATFORM == 'hepsiburada':
+
+            hpapi_add_listing(filtered_data)
 
     print('Done')
 

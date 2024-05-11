@@ -15,28 +15,12 @@ URL = "https://api.n11.com/ws"
 # Authenticate with your appKey and appSecret
 headers = {"Content-Type": "text/xml; charset=utf-8"}
 
-# Function for parsing the XML response received from the N11 API
-
 
 def assign_vars(response, response_namespace, list_name, error_message=False):
     """
     The function `assign_vars` parses XML response data, extracts specific elements 
     based on provided namespace and list name, and returns a list of items and total
     pages if the list exists, otherwise returns None.
-
-    :param response: The `response` parameter is the HTTP response object received 
-    from a request to a web service. It contains the data that needs to be processed
-    :param response_namespace: The `response_namespace` parameter in the `assign_vars`
-    function is used to specify the namespace of the response elements that need to be
-    accessed from the XML response data. It is used to navigate through the XML structure
-    and extract the relevant data based on the provided namespace
-    :param list_name: The `list_name` parameter in the `assign_vars` function refers to
-    the name of the list within the XML response data that you want to access. It is used
-    to check if this list exists in the response data and has at least one element. 
-    If the list exists and has elements, the :return: The function `assign_vars` returns
-    either a list of items and the total number of pages if the `list_name` exists in
-    the response data and has at least one element, or it returns `None, None`
-    if the `list_name` does not exist in the response data or if it is empty.
     """
 
     # Access the response elements
@@ -74,22 +58,11 @@ def assign_vars(response, response_namespace, list_name, error_message=False):
 
     return None, None
 
-# Function for retrieving stock data from the N11 API.
-
 
 def get_n11_stock_data(every_product: bool = False):
     """
     The function `get_n11_stock_data` sends a SOAP request to the N11 API 
     to retrieve a list of products and their stock information.
-
-    :param url: The `get_n11_stock_data` function you provided seems to 
-    be making a SOAP request to the N11 API to retrieve stock data for 
-    products. However, there are a few things missing in the code
-    snippet you shared
-    :return: The function `get_n11_stock_data` is returning a list of 
-    dictionaries containing information about products retrieved from 
-    the N11 API. Each dictionary in the list includes keys for
-    "id" (product ID), "code" (product seller code), and "stok" (product quantity in stock).
     """
 
     payload = f"""
@@ -139,9 +112,10 @@ def get_n11_stock_data(every_product: bool = False):
 
                     if every_product:
 
-                        all_products.append({'sku': product_code,'data': product})
+                        all_products.append(
+                            {'sku': product_code, 'data': product})
 
-                    else:                        
+                    else:
 
                         if "stockItems" in product and isinstance(product['stockItems']['stockItem'],
                                                                   list):
@@ -188,14 +162,13 @@ def get_n11_stock_data(every_product: bool = False):
 
         printr("Error: ", api_call.text)
 
-    printr(f"""[purple4]N11[/purple4] products data request is successful. Response: [orange3]{api_call.reason}[/orange3]""")
+    printr(f"""[purple4]N11[/purple4] products data request is successful. Response: [orange3]{
+           api_call.reason}[/orange3]""")
 
     if every_product:
         raw_elements = all_products
 
     return raw_elements
-
-# Function for retrieving order data from the N11 API.
 
 
 def get_n11_detailed_order_list(link):
@@ -203,15 +176,6 @@ def get_n11_detailed_order_list(link):
     The function `get_n11_detailed_order_list` sends a SOAP request to the 
     N11 API to retrieve a list of detailed orders and processes the response
     to extract relevant information.
-
-    :param url: It looks like the code snippet you provided is a function
-    that sends a SOAP request to the N11 API to retrieve a detailed list 
-    of orders. The function takes a URL as a parameter where the API is located
-    :return: The function `get_n11_detailed_order_list` is returning a list of 
-    detailed order information extracted from the N11 API. The function sends a 
-    SOAP request to the N11 API to retrieve a list of orders, processes the response, 
-    flattens the order data, and stores it in a list called `raw_elements`. This list 
-    is then returned by the function.
     """
 
     payload = f"""
@@ -292,19 +256,6 @@ def flatten_dict(data, prefix=""):
     """
     The `flatten_dict` function recursively flattens a nested dictionary 
     into a single-level dictionary with keys concatenated based on the original structure.
-
-    :param data: The `data` parameter in the `flatten_dict` function is a dictionary that 
-    you want to flatten. This function takes a nested dictionary as input and flattens it 
-    into a single-level dictionary where the keys are concatenated with underscores to 
-    represent the nested structure 
-    :param prefix: The `prefix` parameter in the `flatten_dict` function is used to 
-    specify a prefix string that will be added to the keys of the flattened dictionary. 
-    This prefix is helpful when you want to differentiate keys that are derived from 
-    nested structures or to avoid key conflicts when flattening nested dictionaries
-    :return: The `flatten_dict` function takes a nested dictionary `data` as input 
-    and flattens it into a single-level dictionary where the keys are concatenated 
-    with underscores to represent the nested structure. 
-    The function returns the flattened dictionary `item`.
     """
 
     item = {}
@@ -378,20 +329,11 @@ def looper(link, payload_dump, namespace, list_name):
             return orders_list, orders_total
         time.sleep(1)
 
-# Function for saving data to a CSV file.
-
 
 def save_to_csv(data, filename=""):
     """
     The function `save_to_csv` takes a list of dictionaries and saves it to a CSV file with the
     specified filename.
-
-    :param data: The `data` parameter in the `save_to_csv` function is expected to be a list of
-    dictionaries. Each dictionary in the list represents a row of data to be written to the CSV file.
-    The keys of the dictionaries will be used as the column headers in the CSV file
-    :param filename: The `filename` parameter in the `save_to_csv` function is a string that represents
-    the name of the CSV file where the data will be saved. If no filename is provided, the default value
-    is an empty string
     """
     if data:
         keys = set()
@@ -404,21 +346,12 @@ def save_to_csv(data, filename=""):
             for d in data:
                 file_writer.writerow(d)
 
-# Function for updating product data on N11
-
 
 def post_n11_data(data):
     """
     The `post_n11_data` function sends a SOAP request to 
     update the stock quantity of a product on the
     N11 platform and handles the response accordingly.
-
-    :param data: It looks like the code snippet you provided
-    is a function `post_n11_data` that is responsible for 
-    updating the stock quantity of a product on the N11 platform 
-    using a SOAP request.
-    The function takes a `data` parameter which seems to be a dictionary 
-    containing information about the product to be updated
     """
 
     # The `post_payload` variable is a string that contains an XML request payload for updating the
@@ -474,4 +407,136 @@ def post_n11_data(data):
                 data['sku']} is unsuccessful | Response: [red]{post_response.text}[/red]""")
 
 
-# save_to_csv(get_n11_detailed_order_list(url), 'orders')
+def create_n11_data(data):
+    """
+    The `create_n11_data` function sends a SOAP request to 
+    create a product on the
+    N11 platform and handles the response accordingly.
+    """
+
+    for item in data:
+
+        item_data = data[item][0]['data']
+        images = []
+
+        for image in item_data['images']:
+
+            images.append(f"""<image>
+                        <url>{image['url']}</url>
+                        <order>{item_data['images'].index(image)}</order>
+                        </image>
+                     """)
+
+        post_payload = f"""
+                        <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
+                          <soapenv:Header/>
+                          <soapenv:Body>
+                            <sch:SaveProductRequest>
+                              <auth>
+                                <appKey>{API_KEY}</appKey>
+                                <appSecret>{API_SECRET}</appSecret>
+                              </auth>
+                              <product>
+                                <productSellerCode>{item_data['productMainId']}</productSellerCode>
+                                <title>{item_data['title']}</title>
+                                <description>{item_data['description']}</description>
+                                <category>
+                                    <fullName>Ev Tekstili &gt; Halı &amp; Kilim &gt; Paspas</fullName>
+                                    <id>1000722</id>
+                                    <name>Paspas</name>
+                                </category>
+                                <specialProductInfoList/>
+                                <price>{item_data['listPrice']}</price>
+                                 <domestic>true</domestic>
+                                <currencyType>1</currencyType>
+                                <images>
+                                   {images}
+                                </images>
+                                <approvalStatus>1</approvalStatus>
+                                <attributes>
+                                    <attribute>
+                                        <id>354080325</id>
+                                        <name>Renk</name>
+                                        <value>{item_data['attributes'].get('Renk', None)}</value>
+                                    </attribute>
+                                    <attribute>
+                                        <id>354285900</id>
+                                        <name>Marka</name>
+                                        <value>{item_data['brand']}</value>
+                                    </attribute>
+                                    <attribute>
+                                        <id>354853703</id>
+                                        <name>Şekil</name>
+                                        <value>{item_data['attributes'].get('Şekil', None)}</value>
+                                    </attribute>
+                                    <attribute>
+                                        <id>354235901</id>
+                                        <name>Ölçüler</name>
+                                        <value>{item_data['attributes'].get('Boyut/Ebat', None)}</value>
+                                    </attribute>
+                                    <attribute>
+                                        <id>354282390</id>
+                                        <name>Taban Özelliği</name>
+                                        <value>{item_data['attributes'].get('Taban', None)}</value>
+                                    </attribute>
+                                </attributes>
+                                <productionDate>01/03/2024</productionDate>
+                                <productCondition>1</productCondition>
+                                <preparingDay>3</preparingDay>
+                                <discount>
+                                    <type>1</type>
+                                    <value>413.0</value>
+                                </discount>
+                                <shipmentTemplate>Kargo</shipmentTemplate>
+                                <stockItems>
+                                    <stockItem>
+                                        <bundle>false</bundle>
+                                        <currencyAmount>{item_data['listPrice']}</currencyAmount>
+                                        <displayPrice>{item_data['salePrice']}</displayPrice>
+                                        <optionPrice>{item_data['listPrice']}</optionPrice>
+                                        <n11CatalogId>150024204</n11CatalogId>
+                                        <sellerStockCode>{item_data['productMainId']}</sellerStockCode>
+                                        <attributes/>
+                                        <id>127240326224</id>
+                                        <images/>
+                                        <quantity>{item_data['quantity']}</quantity>
+                                        <version>1</version>
+                                    </stockItem>
+                                </stockItems>
+                                <groupAttribute>Renk</groupAttribute>
+                                <groupItemCode>{item_data['productMainId']}</groupItemCode>
+                            </product>
+                            </sch:SaveProductRequest>
+                          </soapenv:Body>
+                        </soapenv:Envelope>
+                        """
+
+    post_response = requests.request(
+        "POST", URL, headers=headers, data=post_payload, timeout=30)
+
+    if post_response.status_code == 200:
+
+        if re.search('errorMessage',
+                     post_response.text) or re.search('failure',
+                                                      post_response.text):
+
+            error_message = assign_vars(
+                post_response, 'SaveProductResponse', '', True)
+
+            printr(f"""Request failure for [purple4]N11[/purple4] product {
+                data['sku']} | Response: {error_message['result']['errorMessage']}""")
+
+        else:
+
+            printr(f"""[purple4]N11[/purple4] new product with code: {
+                data["sku"]}""")
+    elif post_response.status_code == 429:
+
+        time.sleep(15)
+
+    else:
+
+        post_response.raise_for_status()
+        printr(
+            f"""Request for [purple4]N11[/purple4] product {
+                data['sku']} is unsuccessful | Response: [red]{post_response.text}[/red]""")
