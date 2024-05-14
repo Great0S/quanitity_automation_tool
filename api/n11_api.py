@@ -418,14 +418,23 @@ def create_n11_data(data):
 
         item_data = data[item][0]['data']
         images = []
+        attrs = {}
 
         for image in item_data['images']:
 
             images.append(f"""<image>
                         <url>{image['url']}</url>
-                        <order>{item_data['images'].index(image)}</order>
+                        <order>{item_data['images'].index(image)+1}</order>
                         </image>
                      """)
+        for attr in item_data['attributes']:
+            attr_name = ['Renk', 'Şekil','Ölçüler', 'Taban']
+
+            for item in attr_name:
+                if re.search(attr['attributeName'], item):
+
+                    attrs[attr['attributeName']] = attr['attributeValue']
+        
 
         post_payload = f"""
                         <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
@@ -457,7 +466,7 @@ def create_n11_data(data):
                                     <attribute>
                                         <id>354080325</id>
                                         <name>Renk</name>
-                                        <value>{item_data['attributes'].get('Renk', None)}</value>
+                                        <value>{attrs.get('Renk', None)}</value>
                                     </attribute>
                                     <attribute>
                                         <id>354285900</id>
@@ -467,17 +476,17 @@ def create_n11_data(data):
                                     <attribute>
                                         <id>354853703</id>
                                         <name>Şekil</name>
-                                        <value>{item_data['attributes'].get('Şekil', None)}</value>
+                                        <value>{attrs.get('Şekil', None)}</value>
                                     </attribute>
                                     <attribute>
                                         <id>354235901</id>
                                         <name>Ölçüler</name>
-                                        <value>{item_data['attributes'].get('Boyut/Ebat', None)}</value>
+                                        <value>{attrs.get('Ölçüler', None)}</value>
                                     </attribute>
                                     <attribute>
                                         <id>354282390</id>
                                         <name>Taban Özelliği</name>
-                                        <value>{item_data['attributes'].get('Taban', None)}</value>
+                                        <value>{attrs.get('Taban', None)}</value>
                                     </attribute>
                                 </attributes>
                                 <productionDate>01/03/2024</productionDate>
@@ -485,7 +494,7 @@ def create_n11_data(data):
                                 <preparingDay>3</preparingDay>
                                 <discount>
                                     <type>1</type>
-                                    <value>413.0</value>
+                                    <value>{int(item_data['listPrice']) - int(item_data['salePrice'])}</value>
                                 </discount>
                                 <shipmentTemplate>Kargo</shipmentTemplate>
                                 <stockItems>
