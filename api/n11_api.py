@@ -1,10 +1,14 @@
 import csv
+from datetime import date
 import os
 import re
 import time
 import requests
 import xmltodict
 from rich import print as printr
+from zeep import Client, Settings, xsd
+
+
 
 
 # Setting api value
@@ -12,19 +16,21 @@ API_KEY = os.getenv('N11_KEY')
 API_SECRET = os.getenv('N11_SECRET')
 URL = "https://api.n11.com/ws"
 
-# Authenticate with your appKey and appSecret
-headers = {"Content-Type": "text/xml; charset=utf-8"}
+def get_client(Service: str = 'ProductService'):
 
+    wsdl_url = f"{URL}/{Service}.wsdl"
+    settings = Settings(strict=False, xml_huge_tree=True, xsd_ignore_sequence_order=True)
+    client = Client(wsdl=wsdl_url, settings=settings)
+    
 
-def assign_vars(response, response_namespace, list_name, error_message=False):
+    return client
+
+def assign_vars(raw_xml, response_namespace, list_name, error_message=False, namespace_id='ns3'):
     """
     The function `assign_vars` parses XML response data, extracts specific elements 
     based on provided namespace and list name, and returns a list of items and total
     pages if the list exists, otherwise returns None.
     """
-
-    # Access the response elements
-    raw_xml = response.text
 
     # XML raw data trimming
     revised_response = (
@@ -36,7 +42,11 @@ def assign_vars(response, response_namespace, list_name, error_message=False):
     response_json = xmltodict.parse(revised_response)
 
     # Access the response elements using the response_namespace and list_name variables.
-    response_data = response_json[f"ns3:{response_namespace}"]
+    if f"{namespace_id}:{response_namespace}" in response_json:
+        response_data = response_json[f"{namespace_id}:{response_namespace}"]
+    else:
+        response_data = response_json['SOAP-ENV:Envelope']['SOAP-ENV:Body'][f"{
+            namespace_id}:{response_namespace}"]
 
     # Check if the list_name exists in the response data and has at least one element.
     # If so, return the list of items and the total number of pages.
@@ -82,8 +92,8 @@ def get_n11_stock_data(every_product: bool = False):
     </soapenv:Body>
 </soapenv:Envelope>
 """
-    link_base = "https://api.n11.com/ws"
-    link = link_base+"/ProductService/"
+
+    link = URL + "/ProductService/"
 
     # This is used to send a SOAP request to the N11 API to retrieve a list of products.
     api_call = requests.post(link, headers=headers, data=payload, timeout=30)
@@ -95,7 +105,7 @@ def get_n11_stock_data(every_product: bool = False):
     if api_call.status_code == 200:
 
         products_list, products_total_pages = assign_vars(
-            api_call, "GetProductListResponse", "products")
+            api_call.text, "GetProductListResponse", "products")
         raw_elements = []
 
         # Process all pages found
@@ -156,7 +166,7 @@ def get_n11_stock_data(every_product: bool = False):
                 URL, headers=headers, data=payload_dump, timeout=30)
 
             products_list, _ = assign_vars(
-                api_call_loop, "GetProductListResponse", "products")
+                api_call_loop.text, "GetProductListResponse", "products")
 
     else:
 
@@ -324,7 +334,7 @@ def looper(link, payload_dump, namespace, list_name):
             link, headers=headers, data=payload_dump, timeout=30)
         if re.search("success", api_call_loop.text):
             orders_list, orders_total = assign_vars(
-                api_call_loop, namespace, list_name)
+                api_call_loop.text, namespace, list_name)
 
             return orders_list, orders_total
         time.sleep(1)
@@ -386,7 +396,7 @@ def post_n11_data(data):
                                                       post_response.text):
 
             error_message = assign_vars(
-                post_response, 'UpdateStockByStockSellerCodeResponse', '', True)
+                post_response.text, 'UpdateStockByStockSellerCodeResponse', '', True)
 
             printr(f"""Request failure for [purple4]N11[/purple4] product {
                 data['sku']} | Response: {error_message['result']['errorMessage']}""")
@@ -406,6 +416,8 @@ def post_n11_data(data):
             f"""Request for [purple4]N11[/purple4] product {
                 data['sku']} is unsuccessful | Response: [red]{post_response.text}[/red]""")
 
+# post_n11_data({'sku':'ghggjg', 'qty': 765})
+
 
 def create_n11_data(data):
     """
@@ -414,138 +426,161 @@ def create_n11_data(data):
     N11 platform and handles the response accordingly.
     """
 
+    current_date = date.today()
+    formatted_date = current_date.strftime("%d/%m/%Y")
+
     for item in data:
 
         item_data = data[item][0]['data']
-        images = []
+        groupCode = re.sub(r'\d+', '', item_data['productMainId'])
         attrs = {}
 
-        for image in item_data['images']:
-
-            images.append(f"""<image>
-                        <url>{image['url']}</url>
-                        <order>{item_data['images'].index(image)+1}</order>
-                        </image>
-                     """)
         for attr in item_data['attributes']:
-            attr_name = ['Renk', 'Şekil','Ölçüler', 'Taban']
+            attr_name = ['Renk', 'Şekil', 'Boyut/Ebat',
+                         'Taban', 'Hav Yüksekliği']
 
             for item in attr_name:
                 if re.search(attr['attributeName'], item):
 
                     attrs[attr['attributeName']] = attr['attributeValue']
-        
 
-        post_payload = f"""
-                        <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
-                          <soapenv:Header/>
-                          <soapenv:Body>
-                            <sch:SaveProductRequest>
-                              <auth>
-                                <appKey>{API_KEY}</appKey>
-                                <appSecret>{API_SECRET}</appSecret>
-                              </auth>
-                              <product>
-                                <productSellerCode>{item_data['productMainId']}</productSellerCode>
-                                <title>{item_data['title']}</title>
-                                <description>{item_data['description']}</description>
-                                <category>
-                                    <fullName>Ev Tekstili &gt; Halı &amp; Kilim &gt; Paspas</fullName>
-                                    <id>1000722</id>
-                                    <name>Paspas</name>
-                                </category>
-                                <specialProductInfoList/>
-                                <price>{item_data['listPrice']}</price>
-                                 <domestic>true</domestic>
-                                <currencyType>1</currencyType>
-                                <images>
-                                   {images}
-                                </images>
-                                <approvalStatus>1</approvalStatus>
-                                <attributes>
-                                    <attribute>
-                                        <id>354080325</id>
-                                        <name>Renk</name>
-                                        <value>{attrs.get('Renk', None)}</value>
-                                    </attribute>
-                                    <attribute>
-                                        <id>354285900</id>
-                                        <name>Marka</name>
-                                        <value>{item_data['brand']}</value>
-                                    </attribute>
-                                    <attribute>
-                                        <id>354853703</id>
-                                        <name>Şekil</name>
-                                        <value>{attrs.get('Şekil', None)}</value>
-                                    </attribute>
-                                    <attribute>
-                                        <id>354235901</id>
-                                        <name>Ölçüler</name>
-                                        <value>{attrs.get('Ölçüler', None)}</value>
-                                    </attribute>
-                                    <attribute>
-                                        <id>354282390</id>
-                                        <name>Taban Özelliği</name>
-                                        <value>{attrs.get('Taban', None)}</value>
-                                    </attribute>
-                                </attributes>
-                                <productionDate>01/03/2024</productionDate>
-                                <productCondition>1</productCondition>
-                                <preparingDay>3</preparingDay>
-                                <discount>
-                                    <type>1</type>
-                                    <value>{int(item_data['listPrice']) - int(item_data['salePrice'])}</value>
-                                </discount>
-                                <shipmentTemplate>Kargo</shipmentTemplate>
-                                <stockItems>
-                                    <stockItem>
-                                        <bundle>false</bundle>
-                                        <currencyAmount>{item_data['listPrice']}</currencyAmount>
-                                        <displayPrice>{item_data['salePrice']}</displayPrice>
-                                        <optionPrice>{item_data['listPrice']}</optionPrice>
-                                        <n11CatalogId>150024204</n11CatalogId>
-                                        <sellerStockCode>{item_data['productMainId']}</sellerStockCode>
-                                        <attributes/>
-                                        <id>127240326224</id>
-                                        <images/>
-                                        <quantity>{item_data['quantity']}</quantity>
-                                        <version>1</version>
-                                    </stockItem>
-                                </stockItems>
-                                <groupAttribute>Renk</groupAttribute>
-                                <groupItemCode>{item_data['productMainId']}</groupItemCode>
-                            </product>
-                            </sch:SaveProductRequest>
-                          </soapenv:Body>
-                        </soapenv:Envelope>
-                        """
+        image_elements = []
+        for i, image_url in enumerate(item_data['images'], start=1):
+            image_elements.append(f"""<image>
+                    <url>{image_url['url']}</url>
+                    <order>{i}</order>
+                </image>""")
 
-    post_response = requests.request(
-        "POST", URL, headers=headers, data=post_payload, timeout=30)
+        # Join all <image> elements into a single string
+        images_string = "".join(image_elements)
 
-    if post_response.status_code == 200:
+        request_data = {
+            "auth": {
+                "appKey": API_KEY,
+                "appSecret": API_SECRET,
+            },
+            "product": {
+                "productSellerCode": item_data['productMainId'],
+                "maxPurchaseQuantity": 5000,
+                "title": item_data['title'],
+                "description": re.sub(r'[\?]', '', item_data['description']),
+                "category": {"id": 1001621},
+                "price": item_data['listPrice'],
+                "domestic": True,
+                "currencyType": 1,
+                "images": [],
+                "approvalStatus": 1,
+                "attributes": {
+                    "attribute": [
+                        {"name": "Renk", "value": attrs.get('Renk', '')},
+                        {"name": "Marka", "value": item_data['brand']},
+                        #  {"name": "Şekil", "value": ""},
+                        #  {"name": "Ölçüler", "value": ""},
+                        #  {"name": "Taban Özelliği", "value": ""},
+                        #  {"name": "Hav Yüksekliği", "value": ""}
+                    ]
+                },
+                "productionDate": formatted_date,
+                "expirationDate": "",
+                "productCondition": 1,
+                "preparingDay": 3,
+                "discount": {"startDate": "", "endDate": "", "type": 1, "value": int(item_data['listPrice']) - int(item_data['salePrice'])},
+                "shipmentTemplate": "Kargo",
+                "stockItems": {
+                    "stockItem": [
+                        {
+                            "gtin": item_data['barcode'],
+                            "quantity": item_data['quantity'],
+                            "sellerStockCode": item_data['productMainId'],
+                            "optionPrice": item_data['listPrice'],
+                            "n11CatalogId": "",
+                            "attributes": [],
+                            "images":
+                                image_elements,
+                        }
+                    ]
+                },
+                "groupAttribute": "Adet",
+                "groupItemCode": groupCode,
+                "itemName": "",
+                "sellerNote": "",
+                "unitInfo": {
+                    "unitWeight": 0,
+                    "unitType": 0,
+                },
+            },
+        }
 
-        if re.search('errorMessage',
-                     post_response.text) or re.search('failure',
-                                                      post_response.text):
+        client = get_client()
+        response = client.service.SaveProduct(**request_data)
 
-            error_message = assign_vars(
-                post_response, 'SaveProductResponse', '', True)
+        if response.status_code == 200:
 
-            printr(f"""Request failure for [purple4]N11[/purple4] product {
-                data['sku']} | Response: {error_message['result']['errorMessage']}""")
+            if re.search('errorMessage',
+                         response.text) or re.search('failure',
+                                                          response.text):
+
+                # error_message = assign_vars(
+                #     post_response, 'SaveProductResponse', '', True)
+
+                printr(f"""Request failure for [purple4]N11[/purple4] product {
+                    data['sku']} | Response: {response['result']['errorMessage']}""")
+
+            else:
+
+                printr(f"""[purple4]N11[/purple4] new product with code: {
+                    data["sku"]}""")
+        elif response.status_code == 429:
+
+            time.sleep(15)
 
         else:
 
-            printr(f"""[purple4]N11[/purple4] new product with code: {
-                data["sku"]}""")
-    elif post_response.status_code == 429:
+            response.raise_for_status()
+            printr(
+                f"""Request for [purple4]N11[/purple4] product {
+                    data['sku']} is unsuccessful | Response: [red]{response.text}[/red]""")
 
-        time.sleep(15)
 
-    else:
+def get_n11_categories(save: bool = False):
 
-        post_response.raise_for_status()
-        printr(
-            f"""Request for [purple4]N11[/purple4] product {
-                data['sku']} is unsuccessful | Response: [red]{post_response.text}[/red]""")
+    client = get_client('CategoryService')
+    complete_list = {}
+
+    auth = {
+                "appKey": API_KEY,
+                "appSecret": API_SECRET,
+            }
+    
+    TopLevelCategories = client.service.GetTopLevelCategories(auth=auth)
+    categories_list = [{'id': x['id'], 'name': x['name'], 'subs': []} for x in TopLevelCategories['categoryList']['category']]
+
+    for item in categories_list:
+
+        complete_list[item['name']] = item
+        categoryId = item['id']        
+
+        SubCategories = client.service.GetSubCategories(auth=auth, categoryId=categoryId, lastModifiedDate=xsd.SkipValue)
+
+        if SubCategories['category']:
+
+            sub_categories_list = [{'subCategory_id': x['id'], 'subCategory_name': x['name'], 'attrs': []} for x in SubCategories['category'][0]['subCategoryList']['subCategory']]
+
+            for sub_item in sub_categories_list:
+
+                complete_list[item['name']]['subs'].append(sub_item)
+                categoryId = sub_item['subCategory_id']
+
+                CategoryAttributes = client.service.GetCategoryAttributes(auth=auth, categoryId=categoryId, pagingData=1)
+
+                if CategoryAttributes['category']:
+
+                    sub_categories_attr_list = [{'attr_name': x['name']} for x in CategoryAttributes['category']['attributeList']['attribute']]
+
+                    for attr in sub_categories_attr_list:
+
+                        complete_list[item['name']]['subs'][0]['attrs'].append(attr['attr_name'])
+          
+
+cats = get_n11_categories()
+print('Done')

@@ -35,11 +35,11 @@ items = {}
 
 for product in file_data:
 
-    name = product['ÜRÜN ÝSMÝ']
+    name = product['ÜRÜN İSMİ']
     sku = product['SATICI STOK KODU']
     price = product['GÜNCEL TSF']
-    comissions = ['0', product['1.KOMÝSYON'], product['2.KOMÝSYON'],
-                  product['3.KOMÝSYON'], product['4.KOMÝSYON']]
+    comissions = ['0', product['1.KOMİSYON'], product['2.KOMİSYON'],
+                  product['3.KOMİSYON'], product['4.KOMİSYON']]
     price_limits = {
         '1': [price, product['1.Fiyat Alt Limit']],
         '2': [product['2.Fiyat Üst Limiti'], product['2.Fiyat Alt Limit']],
