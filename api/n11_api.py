@@ -15,6 +15,13 @@ from zeep import Client, Settings, xsd
 API_KEY = os.getenv('N11_KEY')
 API_SECRET = os.getenv('N11_SECRET')
 URL = "https://api.n11.com/ws"
+headers = {
+  'Content-Type': 'text/xml; charset=utf-8'
+}
+auth = {
+                "appKey": API_KEY,
+                "appSecret": API_SECRET,
+            }
 
 def get_client(Service: str = 'ProductService'):
 
@@ -547,10 +554,7 @@ def get_n11_categories(save: bool = False):
     client = get_client('CategoryService')
     complete_list = {}
 
-    auth = {
-                "appKey": API_KEY,
-                "appSecret": API_SECRET,
-            }
+    
     
     TopLevelCategories = client.service.GetTopLevelCategories(auth=auth)
     categories_list = [{'id': x['id'], 'name': x['name'], 'subs': []} for x in TopLevelCategories['categoryList']['category']]
@@ -564,23 +568,44 @@ def get_n11_categories(save: bool = False):
 
         if SubCategories['category']:
 
-            sub_categories_list = [{'subCategory_id': x['id'], 'subCategory_name': x['name'], 'attrs': []} for x in SubCategories['category'][0]['subCategoryList']['subCategory']]
+            SubCategories_list = [{'subCategory_id': x['id'], 'subCategory_name': x['name'], 'sub_sub_category': [], 'attrs': []} for x in SubCategories['category'][0]['subCategoryList']['subCategory']]
 
-            for sub_item in sub_categories_list:
+            for sub_item in SubCategories_list:
 
                 complete_list[item['name']]['subs'].append(sub_item)
                 categoryId = sub_item['subCategory_id']
 
-                CategoryAttributes = client.service.GetCategoryAttributes(auth=auth, categoryId=categoryId, pagingData=1)
+                SubSubCategories = client.service.GetSubCategories(auth=auth, categoryId=categoryId, lastModifiedDate=xsd.SkipValue)
 
-                if CategoryAttributes['category']:
+                if SubSubCategories['category']:
 
-                    sub_categories_attr_list = [{'attr_name': x['name']} for x in CategoryAttributes['category']['attributeList']['attribute']]
+                    SubSubCategories_list = [{'SubsubCategory_id': x['id'], 'SubsubCategory_name': x['name'], 'attrs': []} for x in SubSubCategories['category'][0]['subCategoryList']['subCategory']]
 
-                    for attr in sub_categories_attr_list:
+                    for sub_sub_item in SubSubCategories_list:
 
-                        complete_list[item['name']]['subs'][0]['attrs'].append(attr['attr_name'])
+                        complete_list[item['name']]['subs'][SubCategories_list.index(sub_item)]['sub_sub_category'].append(sub_sub_item)
+                        categoryId = sub_sub_item['SubsubCategory_id']
+
+
+
+                        get_category_attrs(categoryId, complete_list, item, SubCategories_list.index(sub_item))
+
+
+
+
+                get_category_attrs(categoryId)
+
+def get_category_attrs(categoryId, item_list, item, index):
+
+    client = get_client('CategoryService')
+    CategoryAttributes = client.service.GetCategoryAttributes(auth=auth, categoryId=categoryId, pagingData=1)
+
+    if CategoryAttributes['category']:
+        sub_categories_attr_list = [{'attr_name': x['name']} for x in CategoryAttributes['category']['attributeList']['attribute']]
+
+        for attr in sub_categories_attr_list:
+            item_list[item['name']]['subs'][index]['attrs'].append(attr['attr_name'])
           
 
-cats = get_n11_categories()
-print('Done')
+# cats = get_n11_categories()
+# print('Done')

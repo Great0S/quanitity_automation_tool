@@ -51,16 +51,17 @@ for product in file_data:
 
     for _, price_limit in price_limits.items():
 
-        original_comission = (float(price_limits['1'][0]) * float(comissions[1])) / 100
-        orginial_price_after = float(price) - original_comission
+        original_price_plus_comission = (float(price_limits['1'][0]) * float(comissions[1])) / 100
+        orginial_price_minus_comissioned_price = float(price) - original_price_plus_comission
 
-        price_plus_comission = (float(price_limit[0]) * float(comissions[int(_)])) / 100
-        new_price_after = float(price_limit[0]) - price_plus_comission
+        price_plus_other_comission = (float(price_limit[0]) * float(comissions[int(_)])) / 100
+        new_price_minus_new_comissioned_price = float(price_limit[0]) - price_plus_other_comission
 
-        calculated_comissions[_] = {f'{price_limit[0]}TL': price_plus_comission,
-                                    'orginial_price_after': orginial_price_after,
-                                    'new_price_after': new_price_after,
-                                    'comparison with original price': orginial_price_after - new_price_after
+        calculated_comissions[_] = {f'{price_limit[0]}TL': price_plus_other_comission,
+                                    'orginial_price_minus_comissioned_price': orginial_price_minus_comissioned_price,
+                                    'other_price_upper_limit': price_limit[0],
+                                    'new_price_minus_new_comissioned_price': new_price_minus_new_comissioned_price,
+                                    'comparison of other price with original price': orginial_price_minus_comissioned_price - new_price_minus_new_comissioned_price
                                     }
 
     items[sku] = {'name': name,
@@ -72,6 +73,6 @@ for product in file_data:
     with open('calculated_comissions.json', 'w', encoding='utf-8') as jsonf:
         jsonf.write(json.dumps(items, indent=4))
 
-print(items)
+print(json.dumps(items, indent=4))
 
 print('Done')

@@ -107,7 +107,14 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
 
         if init_request.status_code in (200, 400):
 
-            jsonify = json.loads(init_request.text)
+            if init_request.text:
+
+                jsonify = json.loads(init_request.text)
+
+            else:
+
+                printr("SP-API Has encountred an error. Try again later!")
+                jsonify = None
 
             return jsonify
 
