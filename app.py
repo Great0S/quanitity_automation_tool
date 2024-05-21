@@ -12,7 +12,7 @@ from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
 from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
 from api.n11_api import create_n11_data, get_n11_stock_data, post_n11_data
-from api.wordpress_api import get_wordpress_products, update_wordpress_products
+from api.wordpress_api import create_wordpress_products, get_wordpress_products, update_wordpress_products
 
 
 def get_data(every_product: bool = False, source: str = None, targets: list = None, match: bool = False):
@@ -29,31 +29,19 @@ def get_data(every_product: bool = False, source: str = None, targets: list = No
         target_platforms, target_codes = filter_data(every_product, targets)
         all_codes = list(set(target_codes +
                              source_codes))
+        
+        # We add the source platform data to the target platforms so they stay on one list
         target_platforms[f"{source}_data"] = source_platform[f"{source}_data"]
 
         return target_platforms, all_codes
 
-    trendyol_data = get_trendyol_stock_data(every_product)
-
-    n11_data = get_n11_stock_data(every_product)
-
-    amazon_data = spapi_getlistings(every_product)
-
-    hepsiburada_data = hbapi_stock_data(every_product)
-
-    pazarama_data = getPazarama_productsList(every_product)
-
-    wordpress_data = get_wordpress_products(every_product)
-
-    pttavm_data = getpttavm_procuctskdata(every_product)
-
-    data_content = {"trendyol_data": trendyol_data,
-                    "n11_data": n11_data,
-                    "amazon_data": amazon_data,
-                    "hepsiburada_data": hepsiburada_data,
-                    "pazarama_data": pazarama_data,
-                    "wordpress_data": wordpress_data,
-                    "pttavm_data": pttavm_data}
+    data_content = {"trendyol_data": get_trendyol_stock_data(every_product),
+                    "n11_data": get_n11_stock_data(every_product),
+                    "amazon_data": spapi_getlistings(every_product),
+                    "hepsiburada_data": hbapi_stock_data(every_product),
+                    "pazarama_data": getPazarama_productsList(every_product),
+                    "wordpress_data": get_wordpress_products(every_product),
+                    "pttavm_data": getpttavm_procuctskdata(every_product)}
 
     if every_product:
 
@@ -66,12 +54,13 @@ def get_data(every_product: bool = False, source: str = None, targets: list = No
 
     else:
 
-        all_codes = list(set([item['sku'] for item in n11_data] +
-                             [item['sku'] for item in trendyol_data] +
-                             [item['sku'] for item in amazon_data] +
-                             [item['sku'] for item in hepsiburada_data] +
-                             [item['sku'] for item in pazarama_data] +
-                             [item['sku'] for item in pttavm_data]))
+        all_codes = list(set([item['sku'] for item in data_content['n11_data']] +
+                             [item['sku'] for item in data_content['trendyol_data']] +
+                             [item['sku'] for item in data_content['amazon_data']] +
+                             [item['sku'] for item in data_content['hepsiburada_data']] +
+                             [item['sku'] for item in data_content['pazarama_data']] +
+                             [item['sku'] for item in data_content['wordpress_data']] +
+                             [item['sku'] for item in data_content['pttavm_data']]))
 
     return data_content, all_codes
 
@@ -100,6 +89,7 @@ def filter_data(every_product, targets):
         for platform, function in platform_to_function.items():
 
             if re.search(platform, name):
+
                 data_content[f"{name}_data"] = function(every_product)
 
     for _, item in data_content.items():
@@ -170,60 +160,65 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, no_ma
 
     for platform in platforms:
 
-        if f'{platform}_data' in data and platform != SOURCE_PLATFORM:
+        if platform != TARGET_PLATFORM:
 
-            for product in data[f'{platform}_data']:
+            if f'{platform}_data' in data:
 
-                sku = product['sku']
-                if no_match:
+                for source_item in data[f'{platform}_data']:
 
-                    target_skus = set(item['sku']
-                                      for item in data[f'{TARGET_PLATFORM}_data'])
-                    platform = SOURCE_PLATFORM
+                    if no_match:
 
-                for item in data[f'{platform}_data']:
+                        target_skus = list(item['data']['sku']
+                                          for item in data[f'{TARGET_PLATFORM}_data'])
+                        platform = TARGET_PLATFORM
 
-                    if item['sku'] == product['sku']:
-                        if no_match:
+                    for target_item in data[f'{platform}_data']:
+
+                        if source_item['sku'] == 'PS503':
+
+                            pass
+
+                        if target_item['sku'] == source_item['sku']:
+                            if no_match:
+
+                                break
+
+                            elif target_item['sku'] in matching_ids:
+
+                                if every_product:
+
+                                    matching_ids[target_item['sku']].append({'platform': platform,
+                                                                      'data': source_item['data']})
+                                else:
+
+                                    matching_ids[target_item['sku']].append(
+                                        {'platform': platform,
+                                         'id': source_item['id'],
+                                         'price': source_item.get('price', 0),
+                                         'qty': source_item['qty']})
+
+                            else:
+
+                                if every_product:
+
+                                    matching_ids[target_item['sku']] = [{'platform': platform,
+                                                                  'data': source_item['data']}]
+
+                                else:
+
+                                    matching_ids[target_item['sku']] = [
+                                        {'platform': platform,
+                                         'id': source_item['id'],
+                                         'price': source_item.get('price', 0),
+                                         'qty': source_item['qty']}]
 
                             break
 
-                        elif item['sku'] in matching_ids:
+                        elif no_match and source_item['sku'] not in target_skus:
+                            if source_item['sku'] not in non_matching_ids:
 
-                            if every_product:
-
-                                matching_ids[item['sku']].append({'platform': platform,
-                                                                  'data': item['data']})
-                            else:
-
-                                matching_ids[item['sku']].append(
-                                    {'platform': platform,
-                                     'id': item['id'],
-                                     'price': item.get('price', 0),
-                                     'qty': item['qty']})
-
-                        else:
-
-                            if every_product:
-
-                                matching_ids[item['sku']] = [{'platform': platform,
-                                                              'data': item['data']}]
-
-                            else:
-
-                                matching_ids[item['sku']] = [
-                                    {'platform': platform,
-                                     'id': item['id'],
-                                     'price': item.get('price', 0),
-                                     'qty': item['qty']}]
-
-                        break
-
-                    elif no_match and item['sku'] not in target_skus:
-                        if item['sku'] not in non_matching_ids:
-
-                            non_matching_ids[item['sku']] = [{'platform': platform,
-                                                              'data': item['data']}]
+                                non_matching_ids[source_item['sku']] = [{'platform': platform,
+                                                                  'data': source_item['data']}]
 
     if non_matching_ids:
 
@@ -350,6 +345,16 @@ def execute_updates(source=None, targets=None, options=None):
 
 def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS):
 
+    platform_to_function = {
+        'n11': create_n11_data,
+        'hepsiburada': hpapi_add_listing,
+        'amazon': spapi_update_listing,
+        'pttavm': pttavm_updatedata,
+        'pazarama': pazarama_updateRequest,
+        'trendyol': post_trendyol_data,
+        'wordpress': create_wordpress_products
+    }
+
     data_lists, all_codes = get_data(every_product=True,
                                      source=SOURCE_PLATFORM, targets=[TARGET_PLATFORM], match=True)
 
@@ -358,13 +363,7 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS):
 
     if filtered_data:
 
-        if TARGET_PLATFORM == 'n11':
-
-            create_n11_data(filtered_data)
-
-        elif TARGET_PLATFORM == 'hepsiburada':
-
-            hpapi_add_listing(filtered_data)
+        platform_to_function[TARGET_PLATFORM](filtered_data)
 
     print('Done')
 
@@ -428,3 +427,5 @@ elif operation == '2':
 
 
 print('\nAll updates has finished. The program will exit now!')
+
+

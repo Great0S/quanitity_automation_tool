@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from woocommerce import API
 from rich import print as printr
 
@@ -7,7 +8,8 @@ wcapi = API(
     url="https://www.emanzemin.com",
     consumer_key=os.getenv('EMANZEMIN_KEY'),
     consumer_secret=os.getenv('EMANZEMIN_SECRET'),
-    version="wc/v3"
+    version="wc/v3",
+    timeout=3000
 )
 
 
@@ -56,12 +58,13 @@ def get_wordpress_products(everyproduct: bool = False):
 
             filtered_products.append({'sku': item['sku'],
                                       'data': item})
+        else:
 
-        filtered_products.append({'id': item['id'],
-                                  'sku': item['sku'],
-                                  'price': int(item['price']),
-                                  'qty': item['stock_quantity'],
-                                  "stock_check": item['stock_status']})
+            filtered_products.append({'id': item['id'],
+                                      'sku': item['sku'],
+                                      'price': int(item['price']),
+                                      'qty': item['stock_quantity'],
+                                      "stock_check": item['stock_status']})
 
     printr("[grey66]Wordpress[/grey66] products data request is successful. Response: [orange3]OK[/orange3]")
 
@@ -97,3 +100,104 @@ def update_wordpress_products(data):
             printr(f"""[grey66]Wordpress[/grey66] product update failed, sku: {
                 data['sku']}, New stock: {
                     data['qty']}""")
+
+
+def create_wordpress_products(data):
+
+    if isinstance(data, dict):
+
+        categories = get_products_categories()
+
+        for item in data:
+
+            item_data = data[item][0]['data']
+
+            category = ''
+
+            if re.search('Merdiven', item_data['title']):
+
+                category = [{'id': 24}, {'id': 17}]
+
+            elif re.search('Çim|çim', item_data['title']):
+
+                category = [{'id': 24}, {'id': 23}]
+
+            elif re.search('Renkli&Kapı', item_data['title']):
+
+                category = [{'id': 24}, {'id': 29}]
+
+            elif re.search('kapı|Kapı', item_data['title']):
+
+                category = [{'id': 24}, {'id': 29}]
+
+            elif re.search('Minder|Tatami', item_data['title']):
+
+                category = [{'id': 24}, {'id': 20}]
+
+            elif re.search('Bıçak|Yapıştır', item_data['title']):
+
+                category = [{'id': 18}]
+
+            else:
+
+                category = [{'id': 6}]
+
+            attrs = """\n\nÜrün özellikleri: \n"""
+
+            for attr in item_data['attributes']:
+
+                if re.search('NoColor', attr['attributeValue']):
+
+                    continue
+
+                attrs += f"{attr['attributeName']
+                            }: {attr['attributeValue'] + '\n'}"
+
+            images = [{'src': x['url'], 'name': item_data['title'],
+                       'alt': item_data['title']} for x in item_data['images']]
+
+            product_data = {
+                "name": item_data['title'],
+                "type": "simple",
+                "sku": item_data['stockCode'],
+                "stock_quantity": item_data['quantity'],
+                "tax_status	": "taxable",
+                "sale_price": str(item_data['salePrice']),
+                "regular_price": str(item_data['listPrice']),
+                "description": re.sub(r'[?]', item_data['description']) + attrs,
+                "short_description": item_data['title'],
+                "categories": category,
+                "images": images,
+            }
+
+            create_product_request = wcapi.post(f"products",
+                                                product_data)
+
+            if create_product_request.status_code == 201:
+
+                printr(f"""[grey66]Wordpress[/grey66] new product request is success, sku: {
+                    item_data['stockCode']}, Details: {create_product_request.ok, create_product_request.reason}""")
+
+            elif create_product_request.status_code == 400:
+
+                printr(f"""[grey66]Wordpress[/grey66] new product request failed!, sku: {
+                    create_product_request['data']['unique_sku']}, Details: {
+                        create_product_request['message']}""")
+
+            else:
+
+                printr(f"""[grey66]Wordpress[/grey66] product request failed, sku: {
+                    item_data['stockCode']}, Details: {create_product_request.text}""")
+
+
+def get_products_categories():
+
+    cats_list = []
+
+    request_json = wcapi.get("products/categories").json()
+
+    for item in request_json:
+
+        cats_list.append({'id': item['id'], 'name': item['name']})
+
+    return cats_list
