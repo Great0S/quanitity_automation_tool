@@ -62,8 +62,8 @@ def get_wordpress_products(everyproduct: bool = False):
 
             filtered_products.append({'id': item['id'],
                                       'sku': item['sku'],
-                                      'price': int(item['price']),
-                                      'qty': item['stock_quantity'],
+                                      'price': float(item['price']),
+                                      'qty': item.get('stock_quantity', 0),
                                       "stock_check": item['stock_status']})
 
     printr("[grey66]Wordpress[/grey66] products data request is successful. Response: [orange3]OK[/orange3]")
@@ -155,16 +155,26 @@ def create_wordpress_products(data):
 
             images = [{'src': x['url'], 'name': item_data['title'],
                        'alt': item_data['title']} for x in item_data['images']]
+            
+            manage_stock = True
+            stock_status = 'instock'
+            
+            if item_data['quantity'] == 0:
+
+                stock_status = 'outofstock'
+                manage_stock = False
 
             product_data = {
                 "name": item_data['title'],
                 "type": "simple",
                 "sku": item_data['stockCode'],
+                "manage_stock": manage_stock,
                 "stock_quantity": item_data['quantity'],
+                "stock_status": stock_status,
                 "tax_status	": "taxable",
                 "sale_price": str(item_data['salePrice']),
                 "regular_price": str(item_data['listPrice']),
-                "description": re.sub(r'[?]', item_data['description']) + attrs,
+                "description": re.sub(r"[?]", '', item_data['description']) + attrs,
                 "short_description": item_data['title'],
                 "categories": category,
                 "images": images,

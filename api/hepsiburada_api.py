@@ -40,9 +40,9 @@ def request_data(subdomain, url_addons: str, request_type: str, payload_content:
 
             return api_request
 
-        error_message = json.loads(api_request.text)
-
         if api_request.status_code == 400:
+
+            error_message = json.loads(api_request.text)
 
             printr(
                 f"""[orange_red1]HepsiBurada[/orange_red1] api [red]bad[/red] request || Payload: {
@@ -53,7 +53,7 @@ def request_data(subdomain, url_addons: str, request_type: str, payload_content:
         printr(f"""[orange_red1]HepsiBurada[/orange_red1] api request failure || Message: {
             error_message}""")
 
-        time.sleep(1)
+        time.sleep(3)
 
         continue
 
