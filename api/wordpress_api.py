@@ -190,9 +190,11 @@ def create_wordpress_products(data):
 
             elif create_product_request.status_code == 400:
 
-                printr(f"""[grey66]Wordpress[/grey66] new product request failed!, sku: {
-                    create_product_request['data']['unique_sku']}, Details: {
-                        create_product_request['message']}""")
+                error = json.loads(create_product_request.text)
+
+                printr(f"""[grey66]Wordpress[/grey66] new product request failed for {item_data['stockCode']}!, message: {
+                    error['code']}, Details: {
+                        error['message']}""")
 
             else:
 
