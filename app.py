@@ -174,7 +174,7 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, no_ma
 
                         if no_match:
 
-                            target_skus = list(item['data']['sku']
+                            target_skus = list(item['sku']
                                                for item in data[f'{TARGET_PLATFORM}_data'])
                             platform = TARGET_PLATFORM
 

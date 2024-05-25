@@ -105,12 +105,14 @@ def hpapi_add_listing(items):
     ready_data = []
     size = ''
     color = ''
+    shape = ''
 
     for data in items:
 
         data = items[data][0]['data']
 
         images = data['images']
+        category = data['categoryName']
 
         if len(images) < 5:
             for i in range(5 - len(images)):
@@ -126,12 +128,21 @@ def hpapi_add_listing(items):
 
                 color = atrr['attributeValue']
 
+            
+            if re.search('Şekil', atrr['attributeName']):
+
+                shape = atrr['attributeValue']
+
+            else:
+
+                shape = 'Dikdörtgen'
+
         listing_details = {
             "categoryId": 60001364,
             "merchant": store_id,
             "attributes": {
-                "merchantSku": data.get('productMainId', None),
-                "VaryantGroupID": "",
+                "merchantSku": data.get('stockCode', None),
+                "VaryantGroupID": data.get('productMainId', None),
                 "Barcode": data.get('barcode', None),
                 "UrunAdi": data.get('title', None),
                 "UrunAciklamasi": data.get('description', None),
@@ -148,6 +159,8 @@ def hpapi_add_listing(items):
                 "Image5": images[4]['url'],
                 "Video1": "",
                 "renk_variant_property": color,
+                "sekil_product_property": shape,
+                "00005JUG": "Var",  # Kaymaz Taban Var/Yok
                 "ebatlar_variant_property": size
             }
         }
