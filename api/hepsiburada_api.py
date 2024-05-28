@@ -95,11 +95,6 @@ def hbapi_stock_data(everyproduct: bool = False):
 
 def hpapi_add_listing(items):
 
-    header = {
-        "accept": "application/json",
-        'Authorization': f'Basic {auth_hash}',
-    }
-
     url = "https://mpop.hepsiburada.com/product/api/products/import?version=1"
 
     ready_data = []
@@ -178,7 +173,7 @@ def hpapi_add_listing(items):
     files = { "file": ("integrator.json", open("integrator.json", "rb"), "application/json") }
 
 
-    response = requests.post(url, files=files,headers=header)
+    response = requests.post(url, files=files,headers=headers)
 
     print(response.text)
 
@@ -238,3 +233,31 @@ def hbapi_update_listing(product):
             else:
 
                 continue
+
+
+def get_categories():
+
+    url = "https://mpop.hepsiburada.com/product/api/categories/get-all-categories?size=10000&page=6"
+
+    payload = {}
+    categories = {}
+
+    category_response = requests.request("GET", url, headers=headers, data=payload)
+
+    category_response_data = json.loads(category_response.text)
+    total_pages = category_response_data['totalPages']
+    page = 1
+
+    while page <= total_pages:
+
+        for category in category_response_data['data']:
+
+            categories[category['displayName']] = {'id': category['categoryId'], 'subs': category['paths'], 'productTypes': category['productTypes']}
+
+        page += 1
+
+
+
+    property_url = f'https://mpop.hepsiburada.com/product/api/categories/60001364/attributes'
+
+get_categories()
