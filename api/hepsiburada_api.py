@@ -101,13 +101,40 @@ def hpapi_add_listing(items):
     size = ''
     color = ''
     shape = ''
+    category_baseAttrs = ''
+    category_attrs = ''
+    category_varyantAttrs = ''
+    category_subs = ''
 
     for data in items:
 
         data = items[data][0]['data']
-
         images = data['images']
         category = data['categoryName']
+
+        categories = get_categories()
+
+        for cat_data in categories:
+            
+            item_data = categories[cat_data]
+            category_subs = item_data['paths']
+
+            if re.search(category, cat_data):
+                
+                category = item_data['parentCategoryId']                
+                category_baseAttrs = item_data['baseAttributes']
+                category_attrs = item_data['attributes']
+                category_varyantAttrs = item_data['variantAttributes']
+
+            else:
+
+                for category_sub in category_subs:
+
+                    if re.search(category, category_sub):
+
+                        pass
+
+
 
         if len(images) < 5:
             for i in range(5 - len(images)):
@@ -133,7 +160,7 @@ def hpapi_add_listing(items):
                 shape = 'Dikdörtgen'
 
         listing_details = {
-            "categoryId": 60001364,
+            "categoryId": category,
             "merchant": store_id,
             "attributes": {
                 "merchantSku": data.get('stockCode', None),
@@ -237,27 +264,59 @@ def hbapi_update_listing(product):
 
 def get_categories():
 
-    url = "https://mpop.hepsiburada.com/product/api/categories/get-all-categories?size=10000&page=6"
+    url = "https://mpop.hepsiburada.com/product/api/categories/get-all-categories?size=10000"
 
     payload = {}
     categories = {}
+    file_name = 'hp_categories.json'
 
     category_response = requests.request("GET", url, headers=headers, data=payload)
-
     category_response_data = json.loads(category_response.text)
     total_pages = category_response_data['totalPages']
     page = 1
+
+    if os.path.exists(file_name):
+
+        with open(file_name, 'r', encoding='utf-8') as json_file:
+
+            file_data = json.load(json_file)
+
+        return file_data
 
     while page <= total_pages:
 
         for category in category_response_data['data']:
 
-            categories[category['displayName']] = {'id': category['categoryId'], 'subs': category['paths'], 'productTypes': category['productTypes']}
+            baseAttrs = []
+            attrs = []
+            variyantAttrs = []
+            parentCategoryId = category['parentCategoryId']
+
+            if parentCategoryId:
+
+                property_url = f'https://mpop.hepsiburada.com/product/api/categories/{category['parentCategoryId']}/attributes'
+                property_response = requests.request("GET", property_url, headers=headers, data=payload)
+                property_data = json.loads(property_response.text)['data']
+
+                if property_data:
+
+                    baseAttrs = property_data['baseAttributes']
+                    attrs = property_data['attributes']
+                    variyantAttrs = property_data['variantAttributes']
+
+                categories[category['displayName']] = {'parentCategoryId': category['parentCategoryId'],
+                                                   'paths': category['paths'],
+                                                   'baseAttributes': baseAttrs,
+                                                   'attributes': attrs,
+                                                   'variantAttributes': variyantAttrs}
 
         page += 1
+        category_response = requests.request("GET", url+f'&page={page}', headers=headers, data=payload)
+        category_response_data = json.loads(category_response.text)
 
+    with open(file_name, 'w') as json_file:
 
+        json.dump(categories, json_file)
 
-    property_url = f'https://mpop.hepsiburada.com/product/api/categories/60001364/attributes'
+    return file_name
 
-get_categories()
