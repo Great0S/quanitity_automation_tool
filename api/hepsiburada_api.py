@@ -111,28 +111,31 @@ def hpapi_add_listing(items):
         data = items[data][0]['data']
         images = data['images']
         category = data['categoryName']
+        product = data['title']
 
         categories = get_categories()
 
         for cat_data in categories:
             
             item_data = categories[cat_data]
-            category_subs = item_data['paths']
 
-            if re.search(category, cat_data):
+            if re.search(product, cat_data):
                 
-                category = item_data['parentCategoryId']                
+                category = item_data['categoryId']                
                 category_baseAttrs = item_data['baseAttributes']
                 category_attrs = item_data['attributes']
                 category_varyantAttrs = item_data['variantAttributes']
 
-            else:
+                break
 
-                for category_sub in category_subs:
+            elif category == cat_data:
 
-                    if re.search(category, category_sub):
+                category = item_data['categoryId']                
+                category_baseAttrs = item_data['baseAttributes']
+                category_attrs = item_data['attributes']
+                category_varyantAttrs = item_data['variantAttributes']
 
-                        pass
+                break
 
 
 
@@ -270,53 +273,46 @@ def get_categories():
     categories = {}
     file_name = 'hp_categories.json'
 
-    category_response = requests.request("GET", url, headers=headers, data=payload)
-    category_response_data = json.loads(category_response.text)
-    total_pages = category_response_data['totalPages']
-    page = 1
-
     if os.path.exists(file_name):
 
         with open(file_name, 'r', encoding='utf-8') as json_file:
 
             file_data = json.load(json_file)
 
+            for category in file_data:
+
+                if file_data[category]['baseAttributes']:
+
+                    continue 
+
+                baseAttrs, attrs, variyantAttrs = get_category_attrs(payload, file_data[category])
+                file_data[category]['baseAttributes'] =  baseAttrs
+                file_data[category]['attributes'] =  attrs
+                file_data[category]['variantAttributes'] =  variyantAttrs
+
+                categories[category] = file_data[category]
+
+        if len(categories) == len(file_data):
+
+            with open(file_name, 'w', encoding='utf-8') as json_file:
+
+                json.dump(categories, json_file)
+
         return file_data
+    
+    return None
 
-    while page <= total_pages:
+def get_category_attrs(payload, category):
 
-        for category in category_response_data['data']:
+    property_url = f'https://mpop.hepsiburada.com/product/api/categories/{category['categoryId']}/attributes'
+    property_response = requests.request("GET", property_url, headers=headers, data=payload)
+    property_data = json.loads(property_response.text)['data']
 
-            baseAttrs = []
-            attrs = []
-            variyantAttrs = []
-            parentCategoryId = category['parentCategoryId']
+    if property_data:
 
-            if parentCategoryId:
+        baseAttrs = property_data['baseAttributes']
+        attrs = property_data['attributes']
+        variyantAttrs = property_data['variantAttributes']
 
-                property_url = f'https://mpop.hepsiburada.com/product/api/categories/{category['parentCategoryId']}/attributes'
-                property_response = requests.request("GET", property_url, headers=headers, data=payload)
-                property_data = json.loads(property_response.text)['data']
-
-                if property_data:
-
-                    baseAttrs = property_data['baseAttributes']
-                    attrs = property_data['attributes']
-                    variyantAttrs = property_data['variantAttributes']
-
-                categories[category['displayName']] = {'parentCategoryId': category['parentCategoryId'],
-                                                   'paths': category['paths'],
-                                                   'baseAttributes': baseAttrs,
-                                                   'attributes': attrs,
-                                                   'variantAttributes': variyantAttrs}
-
-        page += 1
-        category_response = requests.request("GET", url+f'&page={page}', headers=headers, data=payload)
-        category_response_data = json.loads(category_response.text)
-
-    with open(file_name, 'w') as json_file:
-
-        json.dump(categories, json_file)
-
-    return file_name
+    return baseAttrs,attrs,variyantAttrs
 

@@ -187,10 +187,6 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, no_ma
 
                                 elif target_item['sku'] in matching_ids:
 
-                                    if target_item['sku'] == 'ECZANE':
-
-                                        pass
-
                                     if every_product:
 
                                         matching_ids[target_item['sku']].append({'platform': platform,
@@ -204,10 +200,6 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, no_ma
                                              'qty': source_item['qty']})
 
                                 else:
-
-                                    if target_item['sku'] == 'ECZANE':
-
-                                        pass
 
                                     if every_product:
 
@@ -283,7 +275,7 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, no_ma
                     else:
 
                         filtered_products = [product for product in products if product['qty'] is not None]
-                        source_val = min(filtered_products, key=lambda x: x['qty'])
+                        source_val = max(filtered_products, key=lambda x: x['qty'])
 
                         if source_val['qty'] == 0:
 

@@ -202,7 +202,7 @@ def post_trendyol_data(product):
 
                         printr(f"""Trendyol product with code: {
                             product["sku"]} failed to update || Reason: {
-                            batchid_request["items"]["failureReasons"]}""")
+                            batchid_request["items"][0]["failureReasons"]}""")
 
                         break
                 else:
