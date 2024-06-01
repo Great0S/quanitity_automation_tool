@@ -101,10 +101,10 @@ def hpapi_add_listing(items):
     size = ''
     color = ''
     shape = ''
-    category_baseAttrs = ''
+    style = ''
     category_attrs = ''
-    category_varyantAttrs = ''
-    category_subs = ''
+
+    categories = get_categories()
 
     for data in items:
 
@@ -113,37 +113,41 @@ def hpapi_add_listing(items):
         category = data['categoryName']
         product = data['title']
 
-        categories = get_categories()
-
         for cat_data in categories:
-            
+
             item_data = categories[cat_data]
 
-            if re.search(product, cat_data):
-                
-                category = item_data['categoryId']                
-                category_baseAttrs = item_data['baseAttributes']
-                category_attrs = item_data['attributes']
-                category_varyantAttrs = item_data['variantAttributes']
+            if re.search(cat_data, product):
+
+                category = item_data['categoryId']
+                attrs = item_data['baseAttributes'] + item_data['attributes'] + item_data['variantAttributes']
+                category_attrs_list = [{x['id']: x['name']} for x in attrs]
+                category_attrs = {
+                    a: b for d in category_attrs_list for a, b in d.items()}
 
                 break
 
             elif category == cat_data:
 
-                category = item_data['categoryId']                
-                category_baseAttrs = item_data['baseAttributes']
-                category_attrs = item_data['attributes']
-                category_varyantAttrs = item_data['variantAttributes']
+                category = item_data['categoryId']
+                attrs = item_data['baseAttributes'] + item_data['attributes'] + item_data['variantAttributes']
+                category_attrs_list = [{x['id']: x['name']} for x in attrs]
+                category_attrs = {a: b
+                                  for d in category_attrs_list
+                                  for a, b in d.items()}
 
                 break
 
+        for i in enumerate(images):
 
+            category_attrs[f"Image{i[0]+1}"] = i[1]['url']
+            if i[0] == 5:
 
-        if len(images) < 5:
-            for i in range(5 - len(images)):
-                images.append({'url': 'None'})
+                pass
 
-        for atrr in data['attributes']:
+        source_product_attrs = data['attributes']
+
+        for atrr in source_product_attrs:
 
             if re.search('Boyut/Ebat', atrr['attributeName']):
 
@@ -153,7 +157,10 @@ def hpapi_add_listing(items):
 
                 color = atrr['attributeValue']
 
-            
+            if re.search('Tema', atrr['attributeName']):
+
+                style = atrr['attributeValue']
+
             if re.search('Şekil', atrr['attributeName']):
 
                 shape = atrr['attributeValue']
@@ -162,48 +169,76 @@ def hpapi_add_listing(items):
 
                 shape = 'Dikdörtgen'
 
+        category_attrs["merchantSku"] = data.get('stockCode', None)
+        category_attrs["VaryantGroupID"] = data.get('productMainId', None)
+        category_attrs["Barcode"] = data.get('barcode', None)
+        category_attrs["UrunAdi"] = data.get('title', None)
+        category_attrs["UrunAciklamasi"] = data.get('description', None)
+        category_attrs["Marka"] = data.get('brand', "Myfloor")
+        category_attrs["GarantiSuresi"] = 24
+        category_attrs["kg"] = "1"
+        category_attrs["tax_vat_rate"] = "8"
+        category_attrs["price"] = data.get('salePrice', 0)
+        category_attrs["stock"] = data.get('quantity', 0)
+        category_attrs["Video1"] = ''        
+
+        attrs_state = False
+
+
+        if re.search('dip çubuğu', data['title']):
+
+            category_attrs["renk_variant_property"] = color
+            category_attrs["secenek_variant_property"] = ''
+
+            attrs_state = True
+
+
+        elif re.search('Maket Bıçağ', data['title']):
+
+            category_attrs["adet_variant_property"] = 1
+            category_attrs["ebatlar_variant_property"] = size
+
+            attrs_state = True
+
+        elif re.search(r'Koko|Kauçuk|Nem Alıcı Paspas|Kapı önü Paspası|Halı|Tatami|Kıvırcık|Comfort|Hijyen|Halı Paspas|Halıfleks Paspas', data['title']):
+
+            category_attrs["00004LW9"] = style  #Desen / Tema"
+            category_attrs["00005JUG"] = 'Var'  #Kaymaz Taban
+            category_attrs["sekil"] = shape
+            category_attrs["renk_variant_property"] = color
+            category_attrs["00001CM1"] = size  #Ebatlar
+
+            attrs_state = True
+
+        if not attrs_state:
+
+            lastItem = "Video1"
+            category_attr_temp = {a: '' for i, a in enumerate(category_attrs) if i > list(category_attrs).index(lastItem)}   # This to zero non essential attributes
+            category_attrs.update(category_attr_temp)
+
         listing_details = {
             "categoryId": category,
             "merchant": store_id,
-            "attributes": {
-                "merchantSku": data.get('stockCode', None),
-                "VaryantGroupID": data.get('productMainId', None),
-                "Barcode": data.get('barcode', None),
-                "UrunAdi": data.get('title', None),
-                "UrunAciklamasi": data.get('description', None),
-                "Marka": data.get('brand', "Myfloor"),
-                "GarantiSuresi": 0,
-                "kg": "1",
-                "tax_vat_rate": "8",
-                "price": data.get('salePrice', 0),
-                "stock": data.get('quantity', 0),
-                "Image1": images[0]['url'],
-                "Image2": images[1]['url'],
-                "Image3": images[2]['url'],
-                "Image4": images[3]['url'],
-                "Image5": images[4]['url'],
-                "Video1": "",
-                "renk_variant_property": color,
-                "sekil_product_property": shape,
-                "00005JUG": "Var",  # Kaymaz Taban Var/Yok
-                "ebatlar_variant_property": size
-            }
+            "attributes": category_attrs
         }
 
         ready_data.append(listing_details)
 
         # Write to JSON file
-    with open('integrator.json', 'w') as json_file:
+    with open('integrator.json', 'w', encoding='utf-8') as json_file:
 
-        json.dump(ready_data[0], json_file)
+        json.dump(ready_data, json_file)
 
     # printr(f"Creating new hepsiburada product with sku: {
-            #    data['productMainId']}")
+        #    data['productMainId']}")
 
-    files = { "file": ("integrator.json", open("integrator.json", "rb"), "application/json") }
+    files = {"file": ("integrator.json", open(
+        "integrator.json", "rb"), "application/json")}
+    
+    headers['Accept'] = 'application/json'
+    headers.pop('Content-Type')
 
-
-    response = requests.post(url, files=files,headers=headers)
+    response = requests.post(url, files=files, headers=headers)
 
     print(response.text)
 
@@ -283,12 +318,15 @@ def get_categories():
 
                 if file_data[category]['baseAttributes']:
 
-                    continue 
+                    categories[category] = file_data[category]
 
-                baseAttrs, attrs, variyantAttrs = get_category_attrs(payload, file_data[category])
-                file_data[category]['baseAttributes'] =  baseAttrs
-                file_data[category]['attributes'] =  attrs
-                file_data[category]['variantAttributes'] =  variyantAttrs
+                    continue
+
+                baseAttrs, attrs, variyantAttrs = get_category_attrs(
+                    payload, file_data[category])
+                file_data[category]['baseAttributes'] = baseAttrs
+                file_data[category]['attributes'] = attrs
+                file_data[category]['variantAttributes'] = variyantAttrs
 
                 categories[category] = file_data[category]
 
@@ -299,13 +337,16 @@ def get_categories():
                 json.dump(categories, json_file)
 
         return file_data
-    
+
     return None
+
 
 def get_category_attrs(payload, category):
 
-    property_url = f'https://mpop.hepsiburada.com/product/api/categories/{category['categoryId']}/attributes'
-    property_response = requests.request("GET", property_url, headers=headers, data=payload)
+    property_url = f'https://mpop.hepsiburada.com/product/api/categories/{
+        category['categoryId']}/attributes'
+    property_response = requests.request(
+        "GET", property_url, headers=headers, data=payload)
     property_data = json.loads(property_response.text)['data']
 
     if property_data:
@@ -314,5 +355,4 @@ def get_category_attrs(payload, category):
         attrs = property_data['attributes']
         variyantAttrs = property_data['variantAttributes']
 
-    return baseAttrs,attrs,variyantAttrs
-
+    return baseAttrs, attrs, variyantAttrs
