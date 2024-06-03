@@ -275,7 +275,7 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, no_ma
                     else:
 
                         filtered_products = [product for product in products if product['qty'] is not None]
-                        source_val = max(filtered_products, key=lambda x: x['qty'])
+                        source_val = min(filtered_products, key=lambda x: x['qty'])
 
                         if source_val['qty'] == 0:
 

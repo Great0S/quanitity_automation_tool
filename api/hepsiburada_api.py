@@ -103,6 +103,7 @@ def hpapi_add_listing(items):
     shape = ''
     style = ''
     category_attrs = ''
+    category_target = ''
 
     categories = get_categories()
 
@@ -110,7 +111,7 @@ def hpapi_add_listing(items):
 
         data = items[data][0]['data']
         images = data['images']
-        category = data['categoryName']
+        source_category = data['categoryName']
         product = data['title']
 
         for cat_data in categories:
@@ -119,7 +120,7 @@ def hpapi_add_listing(items):
 
             if re.search(cat_data, product):
 
-                category = item_data['categoryId']
+                category_target = item_data['categoryId']
                 attrs = item_data['baseAttributes'] + item_data['attributes'] + item_data['variantAttributes']
                 category_attrs_list = [{x['id']: x['name']} for x in attrs]
                 category_attrs = {
@@ -127,9 +128,9 @@ def hpapi_add_listing(items):
 
                 break
 
-            elif category == cat_data:
+            elif source_category == cat_data:
 
-                category = item_data['categoryId']
+                category_target = item_data['categoryId']
                 attrs = item_data['baseAttributes'] + item_data['attributes'] + item_data['variantAttributes']
                 category_attrs_list = [{x['id']: x['name']} for x in attrs]
                 category_attrs = {a: b
@@ -180,25 +181,17 @@ def hpapi_add_listing(items):
         category_attrs["tax_vat_rate"] = "8"
         category_attrs["price"] = data.get('salePrice', 0)
         category_attrs["stock"] = data.get('quantity', 0)
-        category_attrs["Video1"] = ''        
-
-        attrs_state = False
-
+        category_attrs["Video1"] = ''       
 
         if re.search('dip çubuğu', data['title']):
 
             category_attrs["renk_variant_property"] = color
             category_attrs["secenek_variant_property"] = ''
 
-            attrs_state = True
-
-
         elif re.search('Maket Bıçağ', data['title']):
 
             category_attrs["adet_variant_property"] = 1
             category_attrs["ebatlar_variant_property"] = size
-
-            attrs_state = True
 
         elif re.search(r'Koko|Kauçuk|Nem Alıcı Paspas|Kapı önü Paspası|Halı|Tatami|Kıvırcık|Comfort|Hijyen|Halı Paspas|Halıfleks Paspas', data['title']):
 
@@ -208,21 +201,14 @@ def hpapi_add_listing(items):
             category_attrs["renk_variant_property"] = color
             category_attrs["00001CM1"] = size  #Ebatlar
 
-            attrs_state = True
-
-        if not attrs_state:
-
-            lastItem = "Video1"
-            category_attr_temp = {a: '' for i, a in enumerate(category_attrs) if i > list(category_attrs).index(lastItem)}   # This to zero non essential attributes
-            category_attrs.update(category_attr_temp)
-
         listing_details = {
-            "categoryId": category,
+            "categoryId": category_target,
             "merchant": store_id,
             "attributes": category_attrs
         }
 
         ready_data.append(listing_details)
+        category_attrs = {k: '' for k in category_attrs}
 
         # Write to JSON file
     with open('integrator.json', 'w', encoding='utf-8') as json_file:
