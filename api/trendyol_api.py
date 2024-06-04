@@ -73,7 +73,7 @@ def prepare_data(data):
     return decoded_data
 
 
-def get_trendyol_stock_data(every_product: bool = False):
+def get_trendyol_stock_data(every_product: bool = False, Filters=''):
     """
     The function `get_data` retrieves products data from multiple pages and appends it to a list.
 
@@ -89,7 +89,7 @@ def get_trendyol_stock_data(every_product: bool = False):
 
     products = []
 
-    uri_addon = f"?page={page}&size=100"
+    uri_addon = f"?page={page}&size=100" + Filters
 
     decoded_data = prepare_data(request_data(uri_addon, "GET", {}))
 
@@ -134,9 +134,9 @@ def get_trendyol_stock_data(every_product: bool = False):
 
         page += 1
 
-        url_addon = f"?page={page}&size=100"
+        uri_addon = re.sub(r"\?page=\d", f"?page={page}", uri_addon)
 
-        decoded_data = prepare_data(request_data(url_addon, "GET", {}))
+        decoded_data = prepare_data(request_data(uri_addon, "GET", {}))
 
     printr('[orange3]Trendyol[/orange3] products data request is successful. Response: [orange3]OK[/orange3]')
 
@@ -220,3 +220,74 @@ def post_trendyol_data(product):
         printr(f"""Request for trendyol product {
                product['sku']} is unsuccessful | Response: {
                    post_response.text}""")
+
+
+def delete_trendyol_product(ids, include_keyword, exclude_keyword=''):
+
+    url = "https://api.trendyol.com/sapigw/suppliers/120101/v2/products"
+    batch_url = "https://api.trendyol.com/sapigw/suppliers/120101/products/batch-requests/"
+    items = []
+
+    for item in ids:
+
+        if re.search(include_keyword, item['data']['title']):
+
+            if exclude_keyword:
+
+                if not re.search(exclude_keyword, item['data']['title']):
+
+                    items.append({"barcode": item['data']['barcode']})
+
+            items.append({"barcode": item['data']['barcode']})
+
+    payload = json.dumps({
+        "items": items
+    })
+
+    response = requests.request("DELETE", url, headers=headers, data=payload)
+
+    if response.status_code == 200:
+
+        response_json = json.loads(response.text)
+
+        while True:
+
+            request_response = requests.request(
+                "GET", batch_url + response_json['batchRequestId'], headers=headers, data=payload)
+
+            if request_response.status_code == 200:
+
+                batch_feedback = json.loads(request_response.text)
+                failed = []
+
+                if batch_feedback['status'] == 'IN_PROGRESS':
+
+                    time.sleep(5)
+
+                if batch_feedback['status'] == 'COMPLETED':                
+
+                    for item_report in batch_feedback['items']:
+
+                        if item_report['status'] == 'FAILED':
+
+                            failed.append({'barcode': item_report['requestItem']['barcode'], 'reason': item_report['failureReasons'][0]})
+
+                    if failed:
+
+                        printr(f"\nSuccessfully deleted products: {batch_feedback['itemCount']-len(failed)}\t\t\tFailed to delete: {len(failed)}\n")
+                        printr(f"Failed items:\n")
+                        for i, item in enumerate(failed):
+
+                            printr(f"{i+1}. {item['barcode']}: {item['reason']}")
+
+                        break
+
+                    else:
+
+                        printr(f"Successfully deleted products: {batch_feedback['itemCount']}\n")
+
+                        break
+
+
+products = get_trendyol_stock_data(True, '&archived=True')
+delete_trendyol_product(products, include_keyword="'lı", exclude_keyword="16'lı")
