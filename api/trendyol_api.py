@@ -289,5 +289,5 @@ def delete_trendyol_product(ids, include_keyword, exclude_keyword=''):
                         break
 
 
-products = get_trendyol_stock_data(True, '&archived=True')
-delete_trendyol_product(products, include_keyword="'lı", exclude_keyword="16'lı")
+# products = get_trendyol_stock_data(True, '&archived=True')
+# delete_trendyol_product(products, include_keyword="'lı", exclude_keyword="16'lı")
