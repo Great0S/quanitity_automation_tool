@@ -15,7 +15,6 @@ import requests
 from rich import print as printr
 
 
-
 client_id = os.environ.get('LWA_APP_ID')
 client_secret = os.environ.get('LWA_CLIENT_SECRET')
 refresh_token = os.environ.get('SP_API_REFRESH_TOKEN')
@@ -58,9 +57,6 @@ def get_access_token():
     return access_token_data
 
 
-# access_token = get_access_token()
-
-
 def request_data(session_data=None, operation_uri='', params: dict = None, payload=None, method='GET'):
     """
     The function `request_data` sends a request to a specified API endpoint with optional parameters and
@@ -95,7 +91,7 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
             session_data.headers = headers
 
             init_request = session_data.get(f"{endpoint_url}{uri}",
-                                       data=payload)
+                                            data=payload)
 
         else:
 
@@ -531,7 +527,8 @@ def spapi_getlistings(every_product: bool = False):
 
                         elif every_product and result:
 
-                            amazon_products.append({'sku': result['sku'], 'data':result})
+                            amazon_products.append(
+                                {'sku': result['sku'], 'data': result})
 
                     time.sleep(5)
 
@@ -672,7 +669,74 @@ def spapi_update_listing(product):
     if listing_update_request and listing_update_request['status'] == 'ACCEPTED':
 
         printr(f"""[white]Amazon[/white] product with code: {
-                           product["sku"]}, New value: [green]{product["qty"]}[/green]""")
+            product["sku"]}, New value: [green]{product["qty"]}[/green]""")
+
+    else:
+
+        printr(f"""[white]Amazon[/white] product with code: {product["sku"]} failed
+              to update || Reason: [red]{listing_update_request}[/red]""")
+
+
+def spapi_add_listing(product):
+
+   
+
+    product_definitions = request_data(
+        operation_uri=f"/definitions/2020-09-01/productTypes",
+        params={
+            "marketplaceIds": MarketPlaceID,
+            "itemName": product['categoryName'],
+            "locale": "tr_TR",
+            "searchLocale": "tr_TR",
+        },
+        payload=[],
+        method='GET')
+    
+    if product_definitions:
+
+        product_attrs = request_data(
+        operation_uri=f"/definitions/2020-09-01/productTypes/{product_definitions['']}",
+        params={
+            "marketplaceIds": MarketPlaceID,
+            "requirements": "LISTING",
+            "locale": "en_US",
+        },
+        payload=[],
+        method='GET')
+
+    params = {
+        'marketplaceIds': MarketPlaceID,
+        'issueLocale': 'en_US'}
+
+    data_payload = json.dumps({
+        "productType": "HOME_BED_AND_BATH",
+        "requirements": "LISTING",
+        "attributes": {
+            "condition_type": [
+                {
+                    "value": "new_new",
+                    "marketplace_id": "ATVPDKIKX0DER"
+                }
+            ],
+            "item_name": [
+                {
+                    "value": "AmazonBasics 16\" Underseat Spinner Carry-On",
+                    "language_tag": "en_US",
+                    "marketplace_id": "ATVPDKIKX0DER"
+                }
+            ], }
+    })
+
+    listing_update_request = request_data(
+        operation_uri=f"/listings/2021-08-01/items/{AmazonSA_ID}/{sku}",
+        params=params,
+        payload=data_payload,
+        method='PUT')
+
+    if listing_update_request and listing_update_request['status'] == 'ACCEPTED':
+
+        printr(f"""[white]Amazon[/white] product with code: {
+            product["sku"]}, New value: [green]{product["qty"]}[/green]""")
 
     else:
 

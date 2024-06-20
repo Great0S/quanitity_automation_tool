@@ -6,7 +6,7 @@
 
 import re
 from rich import print as printr
-from api.amazon_seller_api import spapi_getlistings, spapi_update_listing
+from api.amazon_seller_api import spapi_add_listing, spapi_getlistings, spapi_update_listing
 from api.hepsiburada_api import hbapi_stock_data, hbapi_update_listing, hpapi_add_listing
 from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
 from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
@@ -287,6 +287,10 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, no_ma
 
                             continue
 
+                        if item_key == 'EVA1':
+
+                            pass
+
                         if source_val['qty'] == product['qty']:
 
                             if source_val['price'] == product['price']:
@@ -387,7 +391,7 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS):
     platform_to_function = {
         'n11': create_n11_data,
         'hepsiburada': hpapi_add_listing,
-        'amazon': spapi_update_listing,
+        'amazon': spapi_add_listing,
         'pttavm': pttavm_updatedata,
         'pazarama': pazarama_updateRequest,
         'trendyol': post_trendyol_data,
