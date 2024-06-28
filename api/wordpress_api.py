@@ -46,7 +46,7 @@ def products_request():
         return None
 
 
-def get_wordpress_products(everyproduct: bool = False):
+def get_wordpress_products(everyproduct: bool = False, local: bool = False):
 
     products = products_request()
 

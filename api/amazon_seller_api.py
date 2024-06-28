@@ -3,6 +3,7 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from glob import glob
 from urllib import parse
 import csv
 import gzip
@@ -348,7 +349,7 @@ def spapi_get_orders():
     return orders_dict
 
 
-def spapi_getlistings(every_product: bool = False):
+def spapi_getlistings(every_product: bool = False, local: bool = False):
     """
     The function `spapi_getListings` retrieves a report from an API, downloads and decompresses the
     report file, converts it from CSV to JSON format, and returns the inventory items as a list of
@@ -356,6 +357,141 @@ def spapi_getlistings(every_product: bool = False):
     :return: The `spapi_getListings` function returns a list of inventory items in JSON format after
     processing and downloading data from an Amazon API endpoint.
     """
+
+    file_saved = 'amazon-all-inventory'
+
+    def csv_to_json(filename=""):
+        """
+        The `csv_to_json` function reads a CSV file, removes the Byte Order Mark (BOM) character if
+        present, and converts the data into a list of dictionaries.
+        """
+
+        def remove_bom(text):
+            """
+            The function `remove_bom` removes the Byte Order Mark (BOM) character from the beginning 
+            of a text if present.
+            """
+
+            # Remove the BOM character if present
+            if text.startswith('\ufeff'):
+
+                return text[1:]
+
+            return text
+
+        with open(filename, mode='r', newline='', encoding='utf-8-sig') as csv_file:
+
+            csv_reader = csv.DictReader(csv_file, delimiter='\t')
+
+            dict_list = []
+
+            for row in csv_reader:
+
+                clean_row = {remove_bom(key): remove_bom(val)
+                             for key, val in row.items()}
+
+                dict_list.append(clean_row)
+
+        return dict_list
+
+
+    def get_item_details(items_list, session_data, included_data, every_product: bool = False):
+
+        request_count = 0
+
+        amazon_products = []
+
+        params = {"marketplaceIds": MarketPlaceID,
+                  "issueLocale": 'en_US',
+                  "includedData": included_data}
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+
+            futures = []
+
+            for item in items_list:
+
+                if not re.search('_fba', item['seller-sku']):
+
+                    sku = item['seller-sku']
+
+                else:
+
+                    continue
+
+                futures.append(executor.submit(
+                    request_data, session_data, f"""/listings/2021-08-01/items/{AmazonSA_ID}/{
+                        sku}""", params))
+
+                request_count += 1
+
+                if request_count >= 10:
+
+                    for future in futures:
+
+                        price = 0
+
+                        result = future.result()
+
+                        if not every_product and result:
+
+                            if 'value_with_tax' in result['attributes']['purchasable_offer'][0]['our_price'][0]['schedule'][0]:
+
+                                price = result['attributes']['purchasable_offer'][0]['our_price'][0]['schedule'][0]['value_with_tax']
+
+                            if 'quantity' in result['fulfillmentAvailability'][0]:
+
+                                quanitity = result['fulfillmentAvailability'][0]['quantity']
+
+                                if result['summaries']:
+
+                                    asin = result['summaries'][0]['asin']
+
+                            else:
+
+                                continue
+
+                            amazon_products.append(
+                                {'sku': result['sku'], 'id': asin, 'qty': quanitity, price: price})
+
+                        elif every_product and result:
+
+                            amazon_products.append(
+                                {'sku': result['sku'], 'data': result})
+
+                    time.sleep(5)
+
+                    request_count = 0
+
+                    futures = []
+
+        return amazon_products
+
+
+    if local:
+
+        dir_path = os.getcwd()
+        matching_files = glob(os.path.join(dir_path, f'*{file_saved}*'))
+
+        for file in matching_files:
+        
+            if re.search(r'\.csv', file):
+            
+                file_saved = file
+
+        json_data = csv_to_json(file_saved)
+        products = get_item_details(json_data,
+                                    session,
+                                    included_data='summaries,attributes,fulfillmentAvailability',
+                                    every_product=every_product)
+
+        printr('[white]Amazon[/white] products data request is successful. Response: [orange3]OK[/orange3]')
+
+        return products
+
+
+
+
 
     params = {
         'MarketplaceIds': MarketPlaceID,
@@ -422,7 +558,6 @@ def spapi_getlistings(every_product: bool = False):
                 shutil.copyfileobj(f_in, f_out)
 
     if report_link:
-        file_saved = 'amazon-all-inventory.csv'
 
         if compression:
             file_download = f'amazon-all-inventory-{report_id}.{compression}'
@@ -430,117 +565,12 @@ def spapi_getlistings(every_product: bool = False):
             download_and_save_file(report_link, file_download)
             decompress_gzip_file(file_download, file_saved)
 
-    def csv_to_json(filename=""):
-        """
-        The `csv_to_json` function reads a CSV file, removes the Byte Order Mark (BOM) character if
-        present, and converts the data into a list of dictionaries.
-        """
-
-        def remove_bom(text):
-            """
-            The function `remove_bom` removes the Byte Order Mark (BOM) character from the beginning 
-            of a text if present.
-            """
-
-            # Remove the BOM character if present
-            if text.startswith('\ufeff'):
-
-                return text[1:]
-
-            return text
-
-        with open(filename, mode='r', newline='', encoding='utf-8-sig') as csv_file:
-
-            csv_reader = csv.DictReader(csv_file, delimiter='\t')
-
-            dict_list = []
-
-            for row in csv_reader:
-
-                clean_row = {remove_bom(key): remove_bom(val)
-                             for key, val in row.items()}
-
-                dict_list.append(clean_row)
-
-        return dict_list
-
-    inv_items = csv_to_json(file_saved)
-
-    def get_item_details(session_data, included_data, every_product: bool = False):
-
-        request_count = 0
-
-        amazon_products = []
-
-        params = {"marketplaceIds": MarketPlaceID,
-                  "issueLocale": 'en_US',
-                  "includedData": included_data}
-
-        with ThreadPoolExecutor(max_workers=5) as executor:
-
-            futures = []
-
-            for item in inv_items:
-
-                if not re.search('_fba', item['seller-sku']):
-
-                    sku = item['seller-sku']
-
-                else:
-
-                    continue
-
-                futures.append(executor.submit(
-                    request_data, session_data, f"""/listings/2021-08-01/items/{AmazonSA_ID}/{
-                        sku}""", params))
-
-                request_count += 1
-
-                if request_count >= 10:
-
-                    for future in futures:
-
-                        price = 0
-
-                        result = future.result()
-
-                        if not every_product and result:
-
-                            if 'value_with_tax' in result['attributes']['purchasable_offer'][0]['our_price'][0]['schedule'][0]:
-
-                                price = result['attributes']['purchasable_offer'][0]['our_price'][0]['schedule'][0]['value_with_tax']
-
-                            if 'quantity' in result['fulfillmentAvailability'][0]:
-
-                                quanitity = result['fulfillmentAvailability'][0]['quantity']
-
-                                if result['summaries']:
-
-                                    asin = result['summaries'][0]['asin']
-
-                            else:
-
-                                continue
-
-                            amazon_products.append(
-                                {'sku': result['sku'], 'id': asin, 'qty': quanitity, price: price})
-
-                        elif every_product and result:
-
-                            amazon_products.append(
-                                {'sku': result['sku'], 'data': result})
-
-                    time.sleep(5)
-
-                    request_count = 0
-
-                    futures = []
-
-        return amazon_products
-
-    products = get_item_details(
-        session, included_data='summaries,attributes,fulfillmentAvailability',
-        every_product=every_product)
+   
+    inv_items = csv_to_json(file_saved)    
+    products = get_item_details(inv_items,
+                                session,
+                                included_data='summaries,attributes,fulfillmentAvailability',
+                                every_product=every_product)
 
     printr('[white]Amazon[/white] products data request is successful. Response: [orange3]OK[/orange3]')
 
@@ -677,15 +707,18 @@ def spapi_update_listing(product):
               to update || Reason: [red]{listing_update_request}[/red]""")
 
 
-def spapi_add_listing(product):
+def spapi_add_listing(products):
 
-   
+    for product in products.items():
 
-    product_definitions = request_data(
+        product_sku = product[0]
+        product_data = product[1][0]['data']
+
+        product_definitions = request_data(
         operation_uri=f"/definitions/2020-09-01/productTypes",
         params={
             "marketplaceIds": MarketPlaceID,
-            "itemName": product['categoryName'],
+            "itemName": product_data['categoryName'],
             "locale": "tr_TR",
             "searchLocale": "tr_TR",
         },

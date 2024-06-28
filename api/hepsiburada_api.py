@@ -58,7 +58,7 @@ def request_data(subdomain, url_addons: str, request_type: str, payload_content:
         continue
 
 
-def hbapi_stock_data(everyproduct: bool = False):
+def hbapi_stock_data(everyproduct: bool = False, local: bool = False):
     """
     This Python function retrieves stock data for products from HepsiBurada, 
     with an option to include all product details.

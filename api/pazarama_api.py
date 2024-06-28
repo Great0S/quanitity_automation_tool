@@ -77,7 +77,7 @@ def request_data(method='GET', uri='', params=None, payload=None):
         return None
 
 
-def getPazarama_productsList(everyProduct: bool = False):
+def getPazarama_productsList(everyProduct: bool = False, local: bool = False):
     """
     This Python function retrieves a list of products from Pazarama API and returns a subset of product
     data based on a specified condition.

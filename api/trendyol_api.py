@@ -73,7 +73,7 @@ def prepare_data(data):
     return decoded_data
 
 
-def get_trendyol_stock_data(every_product: bool = False, Filters=''):
+def get_trendyol_stock_data(every_product: bool = False, local: bool = False, Filters=''):
     """
     The function `get_data` retrieves products data from multiple pages and appends it to a list.
 
@@ -193,7 +193,7 @@ def post_trendyol_data(product):
 
                     if request_status == 'SUCCESS':
 
-                        printr(f'Trendyol product with code: {
+                        printr(f'[orange3]Trendyol[/orange3] product with code: {
                                product["sku"]}, New value: {product["qty"]}')
 
                         break

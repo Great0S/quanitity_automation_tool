@@ -76,7 +76,7 @@ def assign_vars(raw_xml, response_namespace, list_name, error_message=False, nam
     return None, None
 
 
-def get_n11_stock_data(every_product: bool = False):
+def get_n11_stock_data(every_product: bool = False, local: bool = False):
     """
     The function `get_n11_stock_data` sends a SOAP request to the N11 API 
     to retrieve a list of products and their stock information.

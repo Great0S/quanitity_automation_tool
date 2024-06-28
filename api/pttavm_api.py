@@ -124,7 +124,7 @@ def formatdata(response):
     return body_content
 
 
-def getpttavm_procuctskdata(everyproduct: bool = False):
+def getpttavm_procuctskdata(everyproduct: bool = False, local: bool = False):
     """
     The function `getPTTAVM_procuctskData` retrieves product 
     data from an API and returns a list of

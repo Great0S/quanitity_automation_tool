@@ -15,7 +15,7 @@ from api.n11_api import create_n11_data, get_n11_stock_data, post_n11_data
 from api.wordpress_api import create_wordpress_products, get_wordpress_products, update_wordpress_products
 
 
-def get_data(every_product: bool = False, source: str = None, targets: list = None, match: bool = False):
+def get_data(every_product: bool = False, local: bool = False, source: str = None, targets: list = None, match: bool = False):
     """
     The `get_data()` function retrieves stock data 
     from various platforms and returns specific data and
@@ -25,8 +25,8 @@ def get_data(every_product: bool = False, source: str = None, targets: list = No
     # Retrieve stock data from APIs
     if targets:
 
-        source_platform, source_codes = filter_data(every_product, [source])
-        target_platforms, target_codes = filter_data(every_product, targets)
+        source_platform, source_codes = filter_data(every_product, local, [source])
+        target_platforms, target_codes = filter_data(every_product, local, targets)
         all_codes = list(set(target_codes +
                              source_codes))
 
@@ -65,7 +65,7 @@ def get_data(every_product: bool = False, source: str = None, targets: list = No
     return data_content, all_codes
 
 
-def filter_data(every_product, targets):
+def filter_data(every_product, local, targets):
     """
     The function `filter_data` filters and retrieves 
     stock data for different platforms based on
@@ -90,7 +90,7 @@ def filter_data(every_product, targets):
 
             if re.search(platform, name):
 
-                data_content[f"{name}_data"] = function(every_product)
+                data_content[f"{name}_data"] = function(every_product, local)
 
     for _, item in data_content.items():
 
@@ -386,7 +386,7 @@ def execute_updates(source=None, targets=None, options=None):
                 printr("Invalid input. Please enter 'y' for yes or 'n' for no.")
 
 
-def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS):
+def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA):
 
     platform_to_function = {
         'n11': create_n11_data,
@@ -399,10 +399,16 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS):
     }
 
     data_lists, all_codes = get_data(every_product=True,
-                                     source=SOURCE_PLATFORM, targets=[TARGET_PLATFORM], match=True)
+                                     local=LOCAL_DATA,
+                                     source=SOURCE_PLATFORM,
+                                     targets=[TARGET_PLATFORM],
+                                     match=True)
 
-    filtered_data = filter_data_list(
-        data=data_lists, all_codes=all_codes, every_product=True, no_match=True, source=None)
+    filtered_data = filter_data_list(data=data_lists,
+                                     all_codes=all_codes,
+                                     every_product=True,
+                                     no_match=True,
+                                     source=None)
 
     if filtered_data:
 
@@ -428,11 +434,20 @@ if operation == '1':
         TARGET_PLATFORM = input(
             '\nPlease enter the target platform to copy to: Ex. PTTAVM\n')
         TARGET_OPTIONS = 'copy'
+        printr('\nWhich storage do you want to use?\n')
+        printr('1. Online storage\n2. Offline storage\n')
+        storage_operation = input('Choose an operation from above: ')
+
+        if storage_operation == '2':
+
+            LOCAL_DATA = True
+
+
 
     elif create_option == '2':
         TARGET_OPTIONS = 'manual'
 
-    create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS)
+    create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA)
 
 elif operation == '2':
     printr('Do you want to update specific platforms ?\n')
