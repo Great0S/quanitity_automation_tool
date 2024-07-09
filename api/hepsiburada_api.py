@@ -181,7 +181,11 @@ def hpapi_add_listing(items):
         category_attrs["tax_vat_rate"] = "8"
         category_attrs["price"] = data.get('salePrice', 0)
         category_attrs["stock"] = data.get('quantity', 0)
-        category_attrs["Video1"] = ''       
+        category_attrs["Video1"] = ''    
+
+        if category_attrs["stock"] == 0:
+
+            continue   
 
         if re.search('dip çubuğu', data['title']):
 

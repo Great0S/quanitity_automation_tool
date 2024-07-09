@@ -386,7 +386,7 @@ def execute_updates(source=None, targets=None, options=None):
                 printr("Invalid input. Please enter 'y' for yes or 'n' for no.")
 
 
-def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA):
+def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA = False):
 
     platform_to_function = {
         'n11': create_n11_data,
@@ -442,7 +442,9 @@ if operation == '1':
 
             LOCAL_DATA = True
 
+        else:
 
+            LOCAL_DATA = False
 
     elif create_option == '2':
         TARGET_OPTIONS = 'manual'
