@@ -58,18 +58,30 @@ def get_access_token():
     return access_token_data
 
 
-def request_data(session_data=None, operation_uri='', params: dict = None, payload=None, method='GET'):
+def request_data(session_data=None, operation_uri='', params: dict = None, payload=None, method='GET', url=None):
     """
     The function `request_data` sends a request to a specified API endpoint with optional parameters and
     handles various response scenarios.
     """
 
     endpoint_url = f'https://sellingpartnerapi-eu.amazon.com{operation_uri}?'
+    request_url = ''
 
     if params:
+
         uri = '&'.join([f'{k}={params[k]}' for k, v in params.items()])
+
     else:
+
         uri = ''
+
+    if url:
+
+        request_url = url
+
+    else:
+
+        request_url = endpoint_url + uri
 
     # Get the current time
     current_time = datetime.now(timezone.utc)
@@ -91,13 +103,13 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
 
             session_data.headers = headers
 
-            init_request = session_data.get(f"{endpoint_url}{uri}",
+            init_request = session_data.get(f"{request_url}",
                                             data=payload)
 
         else:
 
             init_request = requests.request(method,
-                                            f"{endpoint_url}{uri}",
+                                            f"{request_url}",
                                             headers=headers,
                                             data=payload,
                                             timeout=30)
@@ -394,7 +406,6 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
 
         return dict_list
 
-
     def get_item_details(items_list, session_data, included_data, every_product: bool = False):
 
         request_count = 0
@@ -467,16 +478,15 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
 
         return amazon_products
 
-
     if local:
 
         dir_path = os.getcwd()
         matching_files = glob(os.path.join(dir_path, f'*{file_saved}*'))
 
         for file in matching_files:
-        
+
             if re.search(r'\.csv', file):
-            
+
                 file_saved = file
 
         json_data = csv_to_json(file_saved)
@@ -485,13 +495,10 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
                                     included_data='summaries,attributes,fulfillmentAvailability',
                                     every_product=every_product)
 
-        printr('[white]Amazon[/white] products data request is successful. Response: [orange3]OK[/orange3]')
+        printr(
+            '[white]Amazon[/white] products data request is successful. Response: [orange3]OK[/orange3]')
 
         return products
-
-
-
-
 
     params = {
         'MarketplaceIds': MarketPlaceID,
@@ -565,8 +572,7 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
             download_and_save_file(report_link, file_download)
             decompress_gzip_file(file_download, file_saved)
 
-   
-    inv_items = csv_to_json(file_saved)    
+    inv_items = csv_to_json(file_saved)
     products = get_item_details(inv_items,
                                 session,
                                 included_data='summaries,attributes,fulfillmentAvailability',
@@ -709,59 +715,120 @@ def spapi_update_listing(product):
 
 def spapi_add_listing(products):
 
+    data_payloads = []
+
     for product in products.items():
 
         product_sku = product[0]
         product_data = product[1][0]['data']
 
         product_definitions = request_data(
-        operation_uri=f"/definitions/2020-09-01/productTypes",
-        params={
-            "marketplaceIds": MarketPlaceID,
-            "itemName": product_data['categoryName'],
-            "locale": "tr_TR",
-            "searchLocale": "tr_TR",
-        },
-        payload=[],
-        method='GET')
-    
-    if product_definitions:
+            operation_uri=f"/definitions/2020-09-01/productTypes",
+            params={
+                "marketplaceIds": MarketPlaceID,
+                "itemName": product_data['categoryName'],
+                "locale": "tr_TR",
+                "searchLocale": "tr_TR",
+            },
+            payload=[],
+            method='GET')
 
-        product_attrs = request_data(
-        operation_uri=f"/definitions/2020-09-01/productTypes/{product_definitions['']}",
-        params={
-            "marketplaceIds": MarketPlaceID,
-            "requirements": "LISTING",
-            "locale": "en_US",
-        },
-        payload=[],
-        method='GET')
+        if product_definitions:
 
-    params = {
-        'marketplaceIds': MarketPlaceID,
-        'issueLocale': 'en_US'}
+            product_attrs = request_data(
+                operation_uri=f"/definitions/2020-09-01/productTypes/{
+                    product_definitions['productTypes'][0]['name']}",
+                params={
+                    "marketplaceIds": MarketPlaceID,
+                    "requirements": "LISTING",
+                    "locale": "en_US",
+                },
+                payload=[],
+                method='GET')
 
-    data_payload = json.dumps({
-        "productType": "HOME_BED_AND_BATH",
-        "requirements": "LISTING",
-        "attributes": {
-            "condition_type": [
-                {
-                    "value": "new_new",
-                    "marketplace_id": "ATVPDKIKX0DER"
-                }
-            ],
-            "item_name": [
-                {
-                    "value": "AmazonBasics 16\" Underseat Spinner Carry-On",
-                    "language_tag": "en_US",
-                    "marketplace_id": "ATVPDKIKX0DER"
-                }
-            ], }
-    })
+            if product_attrs:
+
+                attributes = product_attrs['propertyGroups']
+
+                params = {
+                    'marketplaceIds': MarketPlaceID,
+                    'issueLocale': 'en_US'}
+
+                data_payload = json.dumps({
+                    "productType": product_attrs['productType'],
+                    "requirements": product_attrs['requirements'],
+                    "attributes": {
+                        "offer": {
+                            "condition_type": "New",
+                            "list_price": {
+                                "currencyCode": "USD",
+                                "amount": attributes['offer']['propertyNames']
+                            }
+                        },
+                        "images": {
+                            "main_product_image_locator": attributes['images']['propertyNames'],
+                            "other_product_image_locator_1": attributes['images']['propertyNames'],
+                            "other_product_image_locator_2": attributes['images']['propertyNames'],
+                            "other_product_image_locator_3": attributes['images']['propertyNames'],
+                            "other_product_image_locator_4": attributes['images']['propertyNames'],
+                            "other_product_image_locator_5": attributes['images']['propertyNames'],
+                        },
+                        "shipping": {
+                                "item_dimensions": {
+                                    "length": {
+                                        "value": attributes['shipping']['propertyNames'],
+                                        "unit": "inches"
+                                    },
+                                    "width": {
+                                        "value": "16",
+                                        "unit": "inches"
+                                    },
+                                    "height": {
+                                        "value": "10",
+                                        "unit": "inches"
+                                    }
+                                },
+                            },
+                        "variations": [
+                            {
+                                "parentage_level": attributes['variations']['propertyNames'],
+                                "child_parent_sku_relationship": attributes['variations']['propertyNames'],
+                                # ["color","size","color_size","style","material"]
+                                "variation_theme": attributes['variations']['propertyNames']
+                            }
+                        ],
+                        "safety_and_compliance": {
+                            "country_of_origin": attributes['safety_and_compliance']['propertyNames'],
+                        },
+                        "product_identity": {
+                            "item_name": attributes['product_identity']['propertyNames'],
+                            "brand": attributes['product_identity']['propertyNames'],
+                            "externally_assigned_product_identifier": attributes['product_identity']['propertyNames'],
+                            "item_type_keyword": attributes['product_identity']['propertyNames']
+                        },
+                        "product_details":
+                            {
+                                "product_description": attributes['product_details']['propertyNames'],
+                                "material": attributes['product_details']['propertyNames'],
+                                "number_of_items": attributes['product_details']['propertyNames'],
+                                "color": attributes['product_details']['propertyNames'],
+                                "size": attributes['product_details']['propertyNames'],
+                                "part_number": attributes['product_details']['propertyNames'],
+                        },
+                    },
+                    "marketplaceIds": ["ATVPDKIKX0DER"],
+                    "locale": "tr_TR",
+                    "productTypeVersion": {
+                        "version": "U8L4z4Ud95N16tZlR7rsmbQ==",
+                        "latest": True,
+                        "releaseCandidate": False
+                    }})
+
+                data_payloads.append(data_payload)
 
     listing_update_request = request_data(
-        operation_uri=f"/listings/2021-08-01/items/{AmazonSA_ID}/{sku}",
+        operation_uri=f"/listings/2021-08-01/items/{
+            AmazonSA_ID}/{product_sku}",
         params=params,
         payload=data_payload,
         method='PUT')

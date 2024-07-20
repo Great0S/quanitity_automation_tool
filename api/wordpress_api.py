@@ -28,8 +28,9 @@ def products_request():
                 products.append(product)
 
             count += 1
-            products_request = wcapi.get(
-                'products', params={"per_page": 100, "page": count}).json()
+            products_request_raw = wcapi.get(
+                'products', params={"per_page": 100, "page": count})
+            products_request = products_request_raw.json()
 
             if len(products_request) == 100:
 
