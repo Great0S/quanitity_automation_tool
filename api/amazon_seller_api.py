@@ -722,6 +722,18 @@ def spapi_add_listing(products):
         product_sku = product[0]
         product_data = product[1][0]['data']
         source_product_attrs = product_data['attributes']
+        product_images = {}
+
+        for i in enumerate(product_data['images']):
+
+            if i[0] == 0:
+
+                product_images['main_product_image_locator'] = i[1]['url']
+
+            else:
+
+                product_images[f"other_product_image_locator_{
+                    i[0]}"] = i[1]['url']
 
         for atrr in source_product_attrs:
 
@@ -748,6 +760,16 @@ def spapi_add_listing(products):
             if re.search('Hav Yüksekliği', atrr['attributeName']):
 
                 thickness = atrr['attributeValue']
+                match = re.search(r'\d+\s*mm', thickness)
+
+                if match:
+
+                    result = match.group()
+                    thickness = result
+
+                else:
+
+                    thickness = '0 mm'
 
             if re.search('Şekil', atrr['attributeName']):
 
@@ -757,8 +779,6 @@ def spapi_add_listing(products):
 
                 shape = 'Dikdörtgen'
 
-        
-        
         product_definitions = request_data(
             operation_uri=f"/definitions/2020-09-01/productTypes",
             params={
@@ -773,8 +793,8 @@ def spapi_add_listing(products):
         if product_definitions:
 
             product_attrs = request_data(
-                operation_uri=f"/definitions/2020-09-01/productTypes/{
-                    product_definitions['productTypes'][0]['name']}",
+                operation_uri=f"""/definitions/2020-09-01/productTypes/{
+                    product_definitions['productTypes'][0]['name']}""",
                 params={
                     "marketplaceIds": MarketPlaceID,
                     "requirements": "LISTING",
@@ -808,7 +828,7 @@ def spapi_add_listing(products):
                                 "allowGiftMessage": False
                             },
                         },
-                        "images": {},
+                        "images": product_images,
                         "variations": [
                             {
                                 "parentage_level": "parent",
@@ -846,48 +866,36 @@ def spapi_add_listing(products):
                                 "size": size,
                                 "style": style,
                                 "item_shape": shape,
-                                "item_thickness": attributes['product_details']['propertyNames'],
+                                "item_thickness": "Düşük Hav",
                                 "part_number": product_data['productMainId'],
                         },
                     },
-                    "marketplaceIds": ["ATVPDKIKX0DER"],
-                    "locale": "tr_TR",
-                    "productTypeVersion": {
-                        "version": "U8L4z4Ud95N16tZlR7rsmbQ==",
-                        "latest": True,
-                        "releaseCandidate": False
-                    }}
-                
-                product_images = {}
+                    # "marketplaceIds": ["ATVPDKIKX0DER"],
+                    # "locale": "tr_TR",
+                    # "productTypeVersion": {
+                    #     "version": "U8L4z4Ud95N16tZlR7rsmbQ==",
+                    #     "latest": True,
+                    #     "releaseCandidate": False
+                    # }
+                    }
 
-                for i in enumerate(product_data['images']):
-
-                    if i[0] == 0:
-
-                        product_images['main_product_image_locator'] = i[1]['url']
-                    
-                    else:
-
-                        product_images[f"other_product_image_locator_{i[0]+1}"] = i[1]['url']
-
-                data_payload['attributes']['images'] = product_images
                 data_payload_dump = json.dumps(data_payload)
 
                 data_payloads.append(data_payload_dump)
 
-    listing_update_request = request_data(
-        operation_uri=f"/listings/2021-08-01/items/{
-            AmazonSA_ID}/{product_sku}",
-        params=params,
-        payload=data_payload,
-        method='PUT')
+                listing_add_request = request_data(
+                    operation_uri=f"""/listings/2021-08-01/items/{
+                        AmazonSA_ID}/{product_sku}""",
+                    params=params,
+                    payload=data_payload_dump,
+                    method='PUT')
 
-    if listing_update_request and listing_update_request['status'] == 'ACCEPTED':
+                if listing_add_request and listing_add_request['status'] == 'ACCEPTED':
+                
+                    printr(f"""New [white]Amazon[/white] product added with code: {
+                        product_sku}, qty: [green]{product_data['quantity']}[/green]""")
 
-        printr(f"""[white]Amazon[/white] product with code: {
-            product["sku"]}, New value: [green]{product["qty"]}[/green]""")
-
-    else:
-
-        printr(f"""[white]Amazon[/white] product with code: {product["sku"]} failed
-              to update || Reason: [red]{listing_update_request}[/red]""")
+                else:
+                
+                    printr(f"""[white]Amazon[/white] new product with code: {product_sku} creation has failed
+                            || Reason: [red]{listing_add_request}[/red]""")
