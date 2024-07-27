@@ -813,8 +813,19 @@ def spapi_add_listing(products):
 
                 data_payload = {
                     "productType": product_attrs['productType'],
-                    "requirements": product_attrs['requirements'],
+                    "requirements": "LISTING",
                     "attributes": {
+                        "condition_type": [
+                            {
+                                "value": "new_new"
+                            }
+                        ],
+                        "item_name": [
+                            {
+                                "value": product_data['title'],
+                                "language_tag": "tr_TR"
+                            }
+                        ],
                         "offer": {
                             "fulfillment_channel_availability": "DEFAULT",
                             "purchasable_offer": True,
@@ -857,8 +868,6 @@ def spapi_add_listing(products):
                                 "product_description": product_data['description'],
                                 "generic_keyword": product_data['title'].split(' '),
                                 "style": "Modern",
-                                "target_gender": "Unisex",
-                                "age_range_description": "Adult",
                                 "item_package_quantity": product_data['quantity'],
                                 "material": materyal,
                                 "number_of_items": 1,
@@ -877,7 +886,7 @@ def spapi_add_listing(products):
                     #     "latest": True,
                     #     "releaseCandidate": False
                     # }
-                    }
+                }
 
                 data_payload_dump = json.dumps(data_payload)
 
@@ -891,11 +900,11 @@ def spapi_add_listing(products):
                     method='PUT')
 
                 if listing_add_request and listing_add_request['status'] == 'ACCEPTED':
-                
+
                     printr(f"""New [white]Amazon[/white] product added with code: {
                         product_sku}, qty: [green]{product_data['quantity']}[/green]""")
 
                 else:
-                
+
                     printr(f"""[white]Amazon[/white] new product with code: {product_sku} creation has failed
                             || Reason: [red]{listing_add_request}[/red]""")
