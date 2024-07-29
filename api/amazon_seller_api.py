@@ -727,6 +727,63 @@ def spapi_add_listing(products):
 
         product_sku = product[0]
         product_data = product[1][0]['data']
+        source_product_attrs = product_data['attributes']
+        product_images = {}
+
+        for i in enumerate(product_data['images']):
+
+            if i[0] == 0:
+
+                product_images['main_product_image_locator'] = i[1]['url']
+
+            else:
+
+                product_images[f"other_product_image_locator_{
+                    i[0]}"] = i[1]['url']
+
+        for atrr in source_product_attrs:
+
+            if re.search('Boyut/Ebat', atrr['attributeName']):
+
+                size = atrr['attributeValue']
+
+            if re.search(r'Renk|Color', atrr['attributeName']):
+
+                color = atrr['attributeValue']
+
+            if re.search('Özellik', atrr['attributeName']):
+
+                feature = atrr['attributeValue']
+
+            if re.search('Materyal', atrr['attributeName']):
+
+                materyal = atrr['attributeValue']
+
+            if re.search('Tema', atrr['attributeName']):
+
+                style = atrr['attributeValue']
+
+            if re.search('Hav Yüksekliği', atrr['attributeName']):
+
+                thickness = atrr['attributeValue']
+                match = re.search(r'\d+\s*mm', thickness)
+
+                if match:
+
+                    result = match.group()
+                    thickness = result
+
+                else:
+
+                    thickness = '0 mm'
+
+            if re.search('Şekil', atrr['attributeName']):
+
+                shape = atrr['attributeValue']
+
+            else:
+
+                shape = 'Dikdörtgen'
 
         product_definitions = request_data(
             operation_uri=f"/definitions/2020-09-01/productTypes",
@@ -742,12 +799,12 @@ def spapi_add_listing(products):
         if product_definitions:
 
             product_attrs = request_data(
-                operation_uri=f"/definitions/2020-09-01/productTypes/{
-                    product_definitions['productTypes'][0]['name']}",
+                operation_uri=f"""/definitions/2020-09-01/productTypes/{
+                    product_definitions['productTypes'][0]['name']}""",
                 params={
                     "marketplaceIds": MarketPlaceID,
                     "requirements": "LISTING",
-                    "locale": "en_US",
+                    "locale": "tr_TR",
                 },
                 payload=[],
                 method='GET')
@@ -758,93 +815,102 @@ def spapi_add_listing(products):
 
                 params = {
                     'marketplaceIds': MarketPlaceID,
-                    'issueLocale': 'en_US'}
+                    'issueLocale': 'tr_TR'}
 
-                data_payload = json.dumps({
+                data_payload = {
                     "productType": product_attrs['productType'],
-                    "requirements": product_attrs['requirements'],
+                    "requirements": "LISTING",
                     "attributes": {
+                        "condition_type": [
+                            {
+                                "value": "new_new"
+                            }
+                        ],
+                        "item_name": [
+                            {
+                                "value": product_data['title'],
+                                "language_tag": "tr_TR"
+                            }
+                        ],
                         "offer": {
+                            "fulfillment_channel_availability": "DEFAULT",
+                            "purchasable_offer": True,
                             "condition_type": "New",
                             "list_price": {
-                                "currencyCode": "USD",
-                                "amount": attributes['offer']['propertyNames']
-                            }
-                        },
-                        "images": {
-                            "main_product_image_locator": attributes['images']['propertyNames'],
-                            "other_product_image_locator_1": attributes['images']['propertyNames'],
-                            "other_product_image_locator_2": attributes['images']['propertyNames'],
-                            "other_product_image_locator_3": attributes['images']['propertyNames'],
-                            "other_product_image_locator_4": attributes['images']['propertyNames'],
-                            "other_product_image_locator_5": attributes['images']['propertyNames'],
-                        },
-                        "shipping": {
-                                "item_dimensions": {
-                                    "length": {
-                                        "value": attributes['shipping']['propertyNames'],
-                                        "unit": "inches"
-                                    },
-                                    "width": {
-                                        "value": "16",
-                                        "unit": "inches"
-                                    },
-                                    "height": {
-                                        "value": "10",
-                                        "unit": "inches"
-                                    }
-                                },
+                                "currencyCode": "TRY",
+                                "amount": product_data['salePrice']
                             },
+                            "gift_options": {
+                                "allowGiftWrap": False,
+                                "allowGiftMessage": False
+                            },
+                        },
+                        "images": product_images,
                         "variations": [
                             {
-                                "parentage_level": attributes['variations']['propertyNames'],
-                                "child_parent_sku_relationship": attributes['variations']['propertyNames'],
+                                "parentage_level": "parent",
+                                "child_parent_sku_relationship":  "relationship",
                                 # ["color","size","color_size","style","material"]
-                                "variation_theme": attributes['variations']['propertyNames']
+                                "variation_theme": "color_size"
                             }
                         ],
                         "safety_and_compliance": {
-                            "country_of_origin": attributes['safety_and_compliance']['propertyNames'],
+                            "country_of_origin": "Türkiye",
+                            "batteries_required": False,
+                            "batteries_included": False,
+                            "hazmat": False
                         },
                         "product_identity": {
-                            "item_name": attributes['product_identity']['propertyNames'],
-                            "brand": attributes['product_identity']['propertyNames'],
-                            "externally_assigned_product_identifier": attributes['product_identity']['propertyNames'],
-                            "item_type_keyword": attributes['product_identity']['propertyNames']
+                            "item_name": product_data['title'],
+                            "brand": product_data['brand'],
+                            "externally_assigned_product_identifier": product_data['barcode'],
+                            "item_type_keyword": product_attrs['displayName'],
+                            "model_number": product_data['productMainId'],
+                            "manufacturer": product_data['brand'],
+                            "sku": product_data['stockCode']
                         },
                         "product_details":
                             {
-                                "product_description": attributes['product_details']['propertyNames'],
-                                "material": attributes['product_details']['propertyNames'],
-                                "number_of_items": attributes['product_details']['propertyNames'],
-                                "color": attributes['product_details']['propertyNames'],
-                                "size": attributes['product_details']['propertyNames'],
-                                "part_number": attributes['product_details']['propertyNames'],
+                                "product_description": product_data['description'],
+                                "generic_keyword": product_data['title'].split(' '),
+                                "style": "Modern",
+                                "item_package_quantity": product_data['quantity'],
+                                "material": materyal,
+                                "number_of_items": 1,
+                                "color": color,
+                                "size": size,
+                                "style": style,
+                                "item_shape": shape,
+                                "item_thickness": "Düşük Hav",
+                                "part_number": product_data['productMainId'],
                         },
                     },
-                    "marketplaceIds": ["ATVPDKIKX0DER"],
-                    "locale": "tr_TR",
-                    "productTypeVersion": {
-                        "version": "U8L4z4Ud95N16tZlR7rsmbQ==",
-                        "latest": True,
-                        "releaseCandidate": False
-                    }})
+                    # "marketplaceIds": ["ATVPDKIKX0DER"],
+                    # "locale": "tr_TR",
+                    # "productTypeVersion": {
+                    #     "version": "U8L4z4Ud95N16tZlR7rsmbQ==",
+                    #     "latest": True,
+                    #     "releaseCandidate": False
+                    # }
+                }
 
-                data_payloads.append(data_payload)
+                data_payload_dump = json.dumps(data_payload)
 
-    listing_update_request = request_data(
-        operation_uri=f"/listings/2021-08-01/items/{
-            AmazonSA_ID}/{product_sku}",
-        params=params,
-        payload=data_payload,
-        method='PUT')
+                data_payloads.append(data_payload_dump)
 
-    if listing_update_request and listing_update_request['status'] == 'ACCEPTED':
+                listing_add_request = request_data(
+                    operation_uri=f"""/listings/2021-08-01/items/{
+                        AmazonSA_ID}/{product_sku}""",
+                    params=params,
+                    payload=data_payload_dump,
+                    method='PUT')
 
-        printr(f"""[white]Amazon[/white] product with code: {
-            product["sku"]}, New value: [green]{product["qty"]}[/green]""")
+                if listing_add_request and listing_add_request['status'] == 'ACCEPTED':
 
-    else:
+                    printr(f"""New [white]Amazon[/white] product added with code: {
+                        product_sku}, qty: [green]{product_data['quantity']}[/green]""")
 
-        printr(f"""[white]Amazon[/white] product with code: {product["sku"]} failed
-              to update || Reason: [red]{listing_update_request}[/red]""")
+                else:
+
+                    printr(f"""[white]Amazon[/white] new product with code: {product_sku} creation has failed
+                            || Reason: [red]{listing_add_request}[/red]""")
