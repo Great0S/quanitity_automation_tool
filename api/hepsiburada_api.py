@@ -11,17 +11,8 @@ from rich import print as printr
 # setting up the headers for making API requests.
 products = []
 
-auth_hash = os.environ.get('HEPSIBURADAAUTHHASH')
 
-store_id = os.environ.get('HEPSIBURADAMERCHENETID')
-
-headers = {
-    'Content-Type': 'application/json',
-    'Authorization': f'Basic {auth_hash}'
-}
-
-
-def request_data(subdomain, url_addons: str, request_type: str, payload_content: str):
+def request_data(self, subdomain: str, url_addons: str, request_type: str, payload_content: str):
     """
     The function `request_data` sends a request to a specified URL with 
     specified headers, request type,
@@ -34,7 +25,7 @@ def request_data(subdomain, url_addons: str, request_type: str, payload_content:
     while True:
 
         api_request = requests.request(
-            request_type, url, headers=headers, data=payload, timeout=3000)
+            request_type, url, headers=self.headers, data=payload, timeout=3000)
 
         if api_request.status_code == 200:
 
@@ -93,256 +84,298 @@ def hbapi_stock_data(everyproduct: bool = False, local: bool = False):
     return listings_list
 
 
-def hpapi_add_listing(items):
+class HpApi:
 
-    url = "https://mpop.hepsiburada.com/product/api/products/import?version=1"
+    def __init__(self):
 
-    ready_data = []
-    size = ''
-    color = ''
-    shape = ''
-    style = ''
-    category_attrs = ''
-    category_target = ''
-
-    categories = get_categories()
-
-    for data in items:
-
-        data = items[data][0]['data']
-        images = data['images']
-        source_category = data['categoryName']
-        product = data['title']
-
-        for cat_data in categories:
-
-            item_data = categories[cat_data]
-
-            if re.search(cat_data, product):
-
-                category_target = item_data['categoryId']
-                attrs = item_data['baseAttributes'] + item_data['attributes'] + item_data['variantAttributes']
-                category_attrs_list = [{x['id']: x['name']} for x in attrs]
-                category_attrs = {
-                    a: b for d in category_attrs_list for a, b in d.items()}
-
-                break
-
-            elif source_category == cat_data:
-
-                category_target = item_data['categoryId']
-                attrs = item_data['baseAttributes'] + item_data['attributes'] + item_data['variantAttributes']
-                category_attrs_list = [{x['id']: x['name']} for x in attrs]
-                category_attrs = {a: b
-                                  for d in category_attrs_list
-                                  for a, b in d.items()}
-
-                break
-
-        for i in enumerate(images):
-
-            category_attrs[f"Image{i[0]+1}"] = i[1]['url']
-            if i[0] == 5:
-
-                pass
-
-        source_product_attrs = data['attributes']
-
-        for atrr in source_product_attrs:
-
-            if re.search('Boyut/Ebat', atrr['attributeName']):
-
-                size = atrr['attributeValue']
-
-            if re.search('Renk', atrr['attributeName']):
-
-                color = atrr['attributeValue']
-
-            if re.search('Tema', atrr['attributeName']):
-
-                style = atrr['attributeValue']
-
-            if re.search('Şekil', atrr['attributeName']):
-
-                shape = atrr['attributeValue']
-
-            else:
-
-                shape = 'Dikdörtgen'
-
-        category_attrs["merchantSku"] = data.get('stockCode', None)
-        category_attrs["VaryantGroupID"] = data.get('productMainId', None)
-        category_attrs["Barcode"] = data.get('barcode', None)
-        category_attrs["UrunAdi"] = data.get('title', None)
-        category_attrs["UrunAciklamasi"] = data.get('description', None)
-        category_attrs["Marka"] = data.get('brand', "Myfloor")
-        category_attrs["GarantiSuresi"] = 24
-        category_attrs["kg"] = "1"
-        category_attrs["tax_vat_rate"] = "8"
-        category_attrs["price"] = data.get('salePrice', 0)
-        category_attrs["stock"] = data.get('quantity', 0)
-        category_attrs["Video1"] = ''    
-
-        if category_attrs["stock"] == 0:
-
-            continue   
-
-        if re.search('dip çubuğu', data['title']):
-
-            category_attrs["renk_variant_property"] = color
-            category_attrs["secenek_variant_property"] = ''
-
-        elif re.search('Maket Bıçağ', data['title']):
-
-            category_attrs["adet_variant_property"] = 1
-            category_attrs["ebatlar_variant_property"] = size
-
-        elif re.search(r'Koko|Kauçuk|Nem Alıcı Paspas|Kapı önü Paspası|Halı|Tatami|Kıvırcık|Comfort|Hijyen|Halı Paspas|Halıfleks Paspas', data['title']):
-
-            category_attrs["00004LW9"] = style  #Desen / Tema"
-            category_attrs["00005JUG"] = 'Var'  #Kaymaz Taban
-            category_attrs["sekil"] = shape
-            category_attrs["renk_variant_property"] = color
-            category_attrs["00001CM1"] = size  #Ebatlar
-
-        listing_details = {
-            "categoryId": category_target,
-            "merchant": store_id,
-            "attributes": category_attrs
+        self.store_id = os.environ.get('HEPSIBURADAMERCHENETID')
+        self.mpop_url = 'https://mpop.hepsiburada.com/'
+        self.listing_external_url = f'https://listing-external.hepsiburada.com/Listings/merchantid/{
+            self.store_id}'
+        self.auth_hash = os.environ.get('HEPSIBURADAAUTHHASH')
+        self.headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Basic {self.auth_hash}'
         }
 
-        ready_data.append(listing_details)
-        category_attrs = {k: '' for k in category_attrs}
+    def hpapi_populate_listing(items, op, self):
 
-        # Write to JSON file
-    with open('integrator.json', 'w', encoding='utf-8') as json_file:
+        def create_listing(self, url, ready_data):
 
-        json.dump(ready_data, json_file)
+            with open('integrator.json', 'w', encoding='utf-8') as json_file:
+                json.dump(ready_data, json_file)
 
-    # printr(f"Creating new hepsiburada product with sku: {
-        #    data['productMainId']}")
+            files = {"file": ("integrator.json", open(
+                "integrator.json", "rb"), "application/json")}
 
-    files = {"file": ("integrator.json", open(
-        "integrator.json", "rb"), "application/json")}
-    
-    headers['Accept'] = 'application/json'
-    headers.pop('Content-Type')
+            self.headers['Accept'] = 'application/json'
+            self.headers.pop('Content-Type')
 
-    response = requests.post(url, files=files, headers=headers)
+            response = requests.post(url, files=files, headers=self.headers)
 
-    print(response.text)
+            printr(response.text)
 
+        def get_categories(self):
 
-def hbapi_update_listing(product):
-    """
-    This Python function updates stock information for a product on 
-    HepsiBurada platform and checks for
-    any errors during the process.
+            url = self.mpop_url + "product/api/categories/get-all-categories?size=10000"
 
-    :param product: The `hbapi_updateListing` function seems to be 
-    updating stock information for a
-    product on HepsiBurada platform. The function takes a `product` 
-    object as a parameter, which likely
-    contains information such as the product ID, SKU, and quantity
-    """
+            payload = {}
+            categories = {}
+            file_name = 'hp_categories.json'
 
-    stock_update_payload = json.dumps([{
-        "hepsiburadaSku": product["id"],
-        "merchantSku": product["sku"],
-        "availableStock": product["qty"]
-    }])
+            def get_category_attrs(payload, category, self):
 
-    stock_update_request_raw = request_data(
-        'listing-external', f"""/Listings/merchantid/{
-            store_id}/stock-uploads""", 'POST', stock_update_payload)
+                property_url = self.mpop_url + \
+                    f"""product/api/categories/{
+                        category['categoryId']}/attributes"""
+                property_response = requests.request("GET",
+                                                     property_url,
+                                                     headers=self.headers,
+                                                     data=payload)
+                property_data = json.loads(property_response.text)['data']
 
-    if stock_update_request_raw:
+                if property_data:
 
-        update_state_id = json.loads(stock_update_request_raw.text)['id']
+                    baseAttrs = property_data['baseAttributes']
+                    attrs = property_data['attributes']
+                    variyantAttrs = property_data['variantAttributes']
 
-        while True:
+                return baseAttrs, attrs, variyantAttrs
 
-            check_status_request = request_data(
-                'listing-external', f"""/Listings/merchantid/{
-                    store_id}/stock-uploads/id/{update_state_id}""", 'GET', [])
+            if os.path.exists(file_name):
 
-            if check_status_request:
+                with open(file_name, 'r', encoding='utf-8') as json_file:
 
-                check_status = json.loads(check_status_request.text)
+                    file_data = json.load(json_file)
 
-                if check_status['status'] == 'Done' and not check_status['errors']:
+                    for category in file_data:
 
-                    printr(f"""[orange_red1]HepsiBurada[/orange_red1] product with code: {
-                           product["sku"]}, New value: [green]{product["qty"]}[/green]""")
+                        if file_data[category]['baseAttributes']:
+
+                            categories[category] = file_data[category]
+
+                            continue
+
+                        baseAttrs, attrs, variyantAttrs = get_category_attrs(payload,
+                                                                             file_data[category])
+                        file_data[category]['baseAttributes'] = baseAttrs
+                        file_data[category]['attributes'] = attrs
+                        file_data[category]['variantAttributes'] = variyantAttrs
+
+                        categories[category] = file_data[category]
+
+                if len(categories) == len(file_data):
+
+                    with open(file_name, 'w', encoding='utf-8') as json_file:
+
+                        json.dump(categories, json_file)
+
+                return file_data
+
+            return None
+
+        url = self.mpop_url + "product/api/products/import?version=1"
+
+        ready_data = []
+        size = ''
+        color = ''
+        shape = ''
+        style = ''
+        category_attrs = ''
+        category_target = ''
+
+        categories = get_categories()
+
+        for data in items:
+
+            data = items[data][0]['data']
+            images = data['images']
+            source_category = data['categoryName']
+            product = data['title']
+
+            for cat_data in categories:
+
+                item_data = categories[cat_data]
+
+                if re.search(cat_data, product):
+
+                    category_target = item_data['categoryId']
+                    attrs = item_data['baseAttributes'] + \
+                        item_data['attributes'] + \
+                        item_data['variantAttributes']
+                    category_attrs_list = [{x['id']: x['name']} for x in attrs]
+                    category_attrs = {
+                        a: b for d in category_attrs_list for a, b in d.items()}
 
                     break
 
-                if check_status['errors']:
+                elif source_category == cat_data:
 
-                    printr(f"""[orange_red1]HepsiBurada[/orange_red1] product with code: {
-                           product["sku"]} [red]failed[/red] to update || Reason: [indian_red1]{
-                        check_status["errors"]}[/indian_red1]""")
+                    category_target = item_data['categoryId']
+                    attrs = item_data['baseAttributes'] + \
+                        item_data['attributes'] + \
+                        item_data['variantAttributes']
+                    category_attrs_list = [{x['id']: x['name']} for x in attrs]
+                    category_attrs = {a: b
+                                      for d in category_attrs_list
+                                      for a, b in d.items()}
 
                     break
 
-            else:
+            for i in enumerate(images):
+
+                category_attrs[f"Image{i[0]+1}"] = i[1]['url']
+                if i[0] == 5:
+
+                    pass
+
+            source_product_attrs = data['attributes']
+
+            for atrr in source_product_attrs:
+
+                if re.search('Boyut/Ebat', atrr['attributeName']):
+
+                    size = atrr['attributeValue']
+
+                if re.search('Renk', atrr['attributeName']):
+
+                    color = atrr['attributeValue']
+
+                if re.search('Tema', atrr['attributeName']):
+
+                    style = atrr['attributeValue']
+
+                if re.search('Şekil', atrr['attributeName']):
+
+                    shape = atrr['attributeValue']
+
+                else:
+
+                    shape = 'Dikdörtgen'
+
+            category_attrs["merchantSku"] = data.get('stockCode', None)
+            category_attrs["VaryantGroupID"] = data.get('productMainId', None)
+            category_attrs["Barcode"] = data.get('barcode', None)
+            category_attrs["UrunAdi"] = data.get('title', None)
+            category_attrs["UrunAciklamasi"] = data.get('description', None)
+            category_attrs["Marka"] = data.get('brand', "Myfloor")
+            category_attrs["GarantiSuresi"] = 24
+            category_attrs["kg"] = "1"
+            category_attrs["tax_vat_rate"] = "8"
+            category_attrs["price"] = data.get('salePrice', 0)
+            category_attrs["stock"] = data.get('quantity', 0)
+            category_attrs["Video1"] = ''
+
+            if category_attrs["stock"] == 0:
 
                 continue
 
+            if re.search('dip çubuğu', data['title']):
 
-def get_categories():
+                category_attrs["renk_variant_property"] = color
+                category_attrs["secenek_variant_property"] = ''
 
-    url = "https://mpop.hepsiburada.com/product/api/categories/get-all-categories?size=10000"
+            elif re.search('Maket Bıçağ', data['title']):
 
-    payload = {}
-    categories = {}
-    file_name = 'hp_categories.json'
+                category_attrs["adet_variant_property"] = 1
+                category_attrs["ebatlar_variant_property"] = size
 
-    if os.path.exists(file_name):
+            elif re.search(r'Koko|Kauçuk|Nem Alıcı Paspas|Kapı önü Paspası|Halı|Tatami|Kıvırcık|Comfort|Hijyen|Halı Paspas|Halıfleks Paspas', data['title']):
 
-        with open(file_name, 'r', encoding='utf-8') as json_file:
+                category_attrs["00004LW9"] = style  # Desen / Tema"
+                category_attrs["00005JUG"] = 'Var'  # Kaymaz Taban
+                category_attrs["sekil"] = shape
+                category_attrs["renk_variant_property"] = color
+                category_attrs["00001CM1"] = size  # Ebatlar
 
-            file_data = json.load(json_file)
+            if op == 'info':
 
-            for category in file_data:
+                listing_details = {
+                    "merchantId": self.store_id,
+                    "items": [
+                        {
+                            "attributes": {category_attrs}
+                        }
+                    ]
+                }
 
-                if file_data[category]['baseAttributes']:
+            else:
 
-                    categories[category] = file_data[category]
+                listing_details = {
+                    "categoryId": category_target,
+                    "merchant": self.store_id,
+                    "attributes": category_attrs
+                }
+
+            ready_data.append(listing_details)
+            category_attrs = {k: '' for k in category_attrs}
+
+            create_listing(self, url, ready_data)
+
+    def update_listing(product, self, options = None):
+        """
+        This Python function updates stock information for a product on 
+        HepsiBurada platform and checks for
+        any errors during the process.
+
+        :param product: The `hbapi_updateListing` function seems to be 
+        updating stock information for a
+        product on HepsiBurada platform. The function takes a `product` 
+        object as a parameter, which likely
+        contains information such as the product ID, SKU, and quantity
+        """
+
+        if options:
+
+            if options != 'full':
+
+                update_payload = json.dumps(product)
+
+        else:
+
+            update_payload = json.dumps([{
+                "hepsiburadaSku": product["id"],
+                "merchantSku": product["sku"],
+                "availableStock": product["qty"]
+            }])
+
+        update_request_raw = request_data('listing-external',
+                                                f"""/Listings/merchantid/{
+                                                    self.store_id}/stock-uploads""",
+                                                'POST',
+                                                update_payload)
+
+        if update_request_raw:
+
+            update_state_id = json.loads(update_request_raw.text)['id']
+
+            while True:
+
+                check_status_request = request_data('listing-external',
+                                                    f"""/Listings/merchantid/{
+                                                        self.store_id}/stock-uploads/id/{update_state_id}""",
+                                                    'GET',
+                                                    [])
+
+                if check_status_request:
+
+                    check_status = json.loads(check_status_request.text)
+
+                    if check_status['status'] == 'Done' and not check_status['errors']:
+
+                        printr(f"""[orange_red1]HepsiBurada[/orange_red1] product with code: {
+                               product["sku"]}, New value: [green]{product["qty"]}[/green]""")
+
+                        break
+
+                    if check_status['errors']:
+
+                        printr(f"""[orange_red1]HepsiBurada[/orange_red1] product with code: {
+                               product["sku"]} [red]failed[/red] to update || Reason: [indian_red1]{
+                            check_status["errors"]}[/indian_red1]""")
+
+                        break
+
+                else:
 
                     continue
-
-                baseAttrs, attrs, variyantAttrs = get_category_attrs(
-                    payload, file_data[category])
-                file_data[category]['baseAttributes'] = baseAttrs
-                file_data[category]['attributes'] = attrs
-                file_data[category]['variantAttributes'] = variyantAttrs
-
-                categories[category] = file_data[category]
-
-        if len(categories) == len(file_data):
-
-            with open(file_name, 'w', encoding='utf-8') as json_file:
-
-                json.dump(categories, json_file)
-
-        return file_data
-
-    return None
-
-
-def get_category_attrs(payload, category):
-
-    property_url = f'https://mpop.hepsiburada.com/product/api/categories/{
-        category['categoryId']}/attributes'
-    property_response = requests.request(
-        "GET", property_url, headers=headers, data=payload)
-    property_data = json.loads(property_response.text)['data']
-
-    if property_data:
-
-        baseAttrs = property_data['baseAttributes']
-        attrs = property_data['attributes']
-        variyantAttrs = property_data['variantAttributes']
-
-    return baseAttrs, attrs, variyantAttrs

@@ -25,8 +25,10 @@ def get_data(every_product: bool = False, local: bool = False, source: str = Non
     # Retrieve stock data from APIs
     if targets:
 
-        source_platform, source_codes = filter_data(every_product, local, [source])
-        target_platforms, target_codes = filter_data(every_product, local, targets)
+        source_platform, source_codes = filter_data(
+            every_product, local, [source])
+        target_platforms, target_codes = filter_data(
+            every_product, local, targets)
         all_codes = list(set(target_codes +
                              source_codes))
 
@@ -110,16 +112,16 @@ def process_update_data(source=None, targets=None, options=None):
     list `platform_updates`.
     """
 
-    all = False
+    all_data = False
 
     if options:
 
-        if options == 'full':
+        if options == 'full' or options == 'info':
 
             data_lists, all_codes = get_data(
                 every_product=True, source=source, targets=targets)
 
-            all = True
+            all_data = True
 
     else:
 
@@ -129,7 +131,7 @@ def process_update_data(source=None, targets=None, options=None):
     # to store data during the processing of stock
     # data from N11 and Trendyol APIs.
     platform_updates = filter_data_list(
-        data_lists, all_codes, source, every_product=all)
+        data=data_lists, source=source, every_product=all_data)
 
     printr(f"""\nLength of the two lists:- \nPlatform updates is {
         len(platform_updates)}\n""")
@@ -137,7 +139,7 @@ def process_update_data(source=None, targets=None, options=None):
     return platform_updates
 
 
-def filter_data_list(data, all_codes, source, every_product: bool = False, no_match=False):
+def filter_data_list(data, source, every_product: bool = False, no_match=False):
     """
     The function `filter_data_list` compares quantity values
     for items across different platforms and returns a list of
@@ -274,8 +276,10 @@ def filter_data_list(data, all_codes, source, every_product: bool = False, no_ma
 
                     else:
 
-                        filtered_products = [product for product in products if product['qty'] is not None]
-                        source_val = min(filtered_products, key=lambda x: x['qty'])
+                        filtered_products = [
+                            product for product in products if product['qty'] is not None]
+                        source_val = min(filtered_products,
+                                         key=lambda x: x['qty'])
 
                         if source_val['qty'] == 0:
 
@@ -351,12 +355,14 @@ def execute_updates(source=None, targets=None, options=None):
 
         count = 1
 
-        for update in post_data:
+        if not options:
 
-            printr(f"""{count}. Product with sku {update['sku']} from {
-                   update['platform']} has a new stock! || New stock: {update['qty']}""")
+            for update in post_data:
 
-            count += 1
+                printr(f"""{count}. Product with sku {update['sku']} from {
+                       update['platform']} has a new stock! || New stock: {update['qty']}""")
+
+                count += 1
 
         while True:
 
@@ -372,21 +378,38 @@ def execute_updates(source=None, targets=None, options=None):
 
                 printr("\nUpdate in progress...\n")
 
-                for post in post_data:
+                if options:
 
-                    for platform, func in platform_to_function.items():
+                    for post in post_data:
 
-                        if platform == post['platform']:
+                        item_data = post_data[post][0]['data']
 
-                            func(post)
+                        for platform, func in platform_to_function.items():
+
+                            for target_platform in targets:
+
+                                if platform == target_platform:
+
+                                    func(item_data, options)
+                
+                else:
+
+                    for post in post_data:
+
+                        for platform, func in platform_to_function.items():
+
+                            if platform == post['platform']:
+
+                                func(post)
 
                 break
 
             else:
+
                 printr("Invalid input. Please enter 'y' for yes or 'n' for no.")
 
 
-def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA = False):
+def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA=False):
 
     platform_to_function = {
         'n11': create_n11_data,
@@ -447,30 +470,37 @@ if operation == '1':
             LOCAL_DATA = False
 
     elif create_option == '2':
+
         TARGET_OPTIONS = 'manual'
 
-    create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA)
+    create_products(SOURCE_PLATFORM, TARGET_PLATFORM,
+                    TARGET_OPTIONS, LOCAL_DATA)
 
 elif operation == '2':
+
     printr('Do you want to update specific platforms ?\n')
     printr('1. Yes\n2. No\n')
     options = input('Choose an option from above: ')
 
     if options == '1':
+
         SOURCE_PLATFORM = input(
             'Please enter the source website platform: Ex. Trendyol\n')
         TARGET_PLATFORM = input(
             '\nPlease enter the target website platform: Ex. Magento\n').split(' ')
 
-        printr('Available operations:\n1. Full update\n2. Partial update\n')
-        select_op = input("\nWhich operation will you be doing today ? ")
+        printr('Available operations:\n\n1. Full update\n2. Partial update\n')
+        select_op = input("Which operation will you be doing today ? ")
 
         if select_op == '1':
+
             TARGET_OPTIONS = 'full'
+
         elif select_op == '2':
-            printr('Available partial operations: \n1. Quantity\n2. Price\n3. Information (Images, Properties, descriptons)\n')
+
+            printr('Available partial operations: \n\n1. Quantity\n2. Price\n3. Information (Images, Properties, descriptions)\n')
             select_partial_op = input(
-                "\nWhich partial operation will you choose ? ")
+                "Which partial operation will you choose ? ")
 
             if select_partial_op == '1':
                 TARGET_OPTIONS = 'qty'
