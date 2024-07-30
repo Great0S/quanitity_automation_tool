@@ -49,7 +49,7 @@ def get_access_token():
     }
 
     token_response = requests.request(
-        "POST", token_url, headers=headers, data=payload, timeout=30)
+        "POST", token_url, headers=headers, data=payload, timeout=300)
 
     response_content = json.loads(token_response.text)
 
@@ -102,9 +102,15 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
         if session_data:
 
             session_data.headers = headers
+            try:
 
-            init_request = session_data.get(f"{request_url}",
+                init_request = session_data.get(f"{request_url}",
                                             data=payload)
+            except ConnectionError:
+
+                printr("Amazon request had a ConnectionError, sleeping for 5 seconds!")
+
+                time.sleep(5)
 
         else:
 
