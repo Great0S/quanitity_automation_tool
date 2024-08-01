@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 client = DataKiosk()
 
 # res = client.create_query(
-#     query="{analytics_salesAndTraffic_2023_11_15{salesAndTrafficByAsin(startDate:\"2022-09-01\" endDate:\"2022-09-30\" aggregateBy:SKU marketplaceIds:[\"ATVPDKIKX0DER\"]){childAsin endDate marketplaceId parentAsin sales{orderedProductSales{amount currencyCode}totalOrderItems totalOrderItemsB2B}sku startDate traffic{browserPageViews browserPageViewsB2B browserPageViewsPercentage browserPageViewsPercentageB2B browserSessionPercentage unitSessionPercentageB2B unitSessionPercentage}}}}")
+#     query="{analytics_salesAndTraffic_2023_11_15{salesAndTrafficByAsin(startDate:"2022-09-01" endDate:"2022-09-30" aggregateBy:SKU marketplaceIds:["ATVPDKIKX0DER"]){childAsin endDate marketplaceId parentAsin sales{orderedProductSales{amount currencyCode}totalOrderItems totalOrderItemsB2B}sku startDate traffic{browserPageViews browserPageViewsB2B browserPageViewsPercentage browserPageViewsPercentageB2B browserSessionPercentage unitSessionPercentageB2B unitSessionPercentage}}}}")
 # print(res)
 
 # orders API
@@ -176,3 +176,24 @@ orders = Orders().get_orders(
     RestrictedResources=['buyerInfo', 'shippingAddress'],
     LastUpdatedAfter=(datetime.utcnow() - timedelta(days=1)).isoformat()
 )
+
+dad = {"merchantId": "1343cf54-cf2b-4d63-9d38-53c589795a42",
+       "items": [
+           {"Image1": "https://cdn.dsmcdn.com/ty1315/product/media/images/prod/QC/20240516/06/a5be782e-8cd1-37ec-a6ff-9b6c06feb5dc/1_org_zoom.jpg",
+            "Image2": "https://cdn.dsmcdn.com/ty1316/product/media/images/prod/QC/20240516/06/465bb1f1-db6d-31e6-8d03-22c1e5023a35/1_org_zoom.jpg",
+            "Image3": "https://cdn.dsmcdn.com/ty1316/product/media/images/prod/QC/20240516/06/5bd61a47-750b-3f78-a058-aafb97a24917/1_org_zoom.jpg",
+            "Image4": "https://cdn.dsmcdn.com/ty1314/product/media/images/prod/QC/20240516/05/269afd59-bbbd-3dc5-88c5-38a690be2b63/1_org_zoom.jpg",
+            "Image5": "https://cdn.dsmcdn.com/ty1314/product/media/images/prod/QC/20240516/06/c70c9cc8-b8b0-3cff-94b6-00cd60455e82/1_org_zoom.jpg",
+            "hbsku": "HBCV00005YK3Y8",
+            "merchantSku": "2S-NM4X-I06J",
+            "VaryantGroupID": "2S-NM4X-I06J",
+            "Barcode": "789393947221",
+            "UrunAdi": "Nem Alu0131cu0131 Kaymaz Taban Kapu0131 u00d6nu00fc Paspasu0131",
+            "UrunAciklamasi": "u00dcru00fcn Ebatlaru0131 :45cm x 75cm Nem Alu0131cu0131 Kaymaz Tabanlu0131 Kapu0131 u00d6nu00fc Paspasu0131 Islak Alanlarda Kullanu0131m u0130u00e7in Uygunluk Su Geu00e7irmez Kaymaz Nitril Taban Tu00fcrkiye'de u00dcretilmiu015ftir.",
+            "Marka": "Myfloor",
+            "GarantiSuresi": 24,
+            "kg": "1",
+            "tax_vat_rate": "8",
+            "price": 249,
+            "stock": 994,
+            "Video1": ""}]}
