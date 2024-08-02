@@ -2,15 +2,14 @@
  importing necessary modules in Python for working with JSON data, regular expressions, time-related
  functions, operating system functionalities, and making HTTP requests, respectively."""
 import json
+import logging
 import re
 import time
 import os
 import requests
-from rich import print as printr
 
-# The code snippet is initializing some variables
-# and setting up the headers for making API requests.
 
+logger = logging.getLogger(__name__)
 auth_hash = os.environ.get('TRENDYOLAUTHHASH')
 store_id = os.environ.get('TRENDYOLSTOREID')
 headers = {
@@ -138,7 +137,7 @@ def get_trendyol_stock_data(every_product: bool = False, local: bool = False, Fi
 
         decoded_data = prepare_data(request_data(uri_addon, "GET", {}))
 
-    printr('[orange3]Trendyol[/orange3] products data request is successful. Response: [orange3]OK[/orange3]')
+    logger.info('Trendyol products data request is successful. Response: OK')
 
     if every_product:
 
@@ -173,7 +172,7 @@ def post_trendyol_data(product):
 
         if re.search('failure', post_response.text):
 
-            printr(f"Request failure for trendyol product {
+            logger.error(f"Request failure for product {
                    product['code']} | Response: {post_response.text}")
 
         else:
@@ -193,14 +192,14 @@ def post_trendyol_data(product):
 
                     if request_status == 'SUCCESS':
 
-                        printr(f'[orange3]Trendyol[/orange3] product with code: {
+                        logger.info(f'Product with code: {
                                product["sku"]}, New value: {product["qty"]}')
 
                         break
 
                     elif request_status == 'FAILED':
 
-                        printr(f"""Trendyol product with code: {
+                        logger.error(f"""Product with code: {
                             product["sku"]} failed to update || Reason: {
                             batchid_request["items"][0]["failureReasons"]}""")
 
@@ -217,7 +216,7 @@ def post_trendyol_data(product):
 
         post_response.raise_for_status()
 
-        printr(f"""Request for trendyol product {
+        logger.error(f"""Request for trendyol product {
                product['sku']} is unsuccessful | Response: {
                    post_response.text}""")
 
@@ -274,17 +273,17 @@ def delete_trendyol_product(ids, include_keyword, exclude_keyword=''):
 
                     if failed:
 
-                        printr(f"\nSuccessfully deleted products: {batch_feedback['itemCount']-len(failed)}\t\t\tFailed to delete: {len(failed)}\n")
-                        printr(f"Failed items:\n")
+                        logger.info(f"Successfully deleted products: {batch_feedback['itemCount']-len(failed)}\t\t\tFailed to delete: {len(failed)}")
+                        logger.error(f"Failed items:")
                         for i, item in enumerate(failed):
 
-                            printr(f"{i+1}. {item['barcode']}: {item['reason']}")
+                            logger.error(f"{i+1}. {item['barcode']}: {item['reason']}")
 
                         break
 
                     else:
 
-                        printr(f"Successfully deleted products: {batch_feedback['itemCount']}\n")
+                        logger.info(f"Successfully deleted products: {batch_feedback['itemCount']}")
 
                         break
 

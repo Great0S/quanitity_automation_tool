@@ -1,6 +1,9 @@
+import logging
 import requests
 import json
-from rich import print as printr
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_access_token():
@@ -26,8 +29,8 @@ def get_access_token():
 
     else:
 
-        printr(f'[magenta]Pazarama[/magenta] access token request has failed || Reason: {
-               response.text}')
+        logger.error(f'Access token request has failed || Reason: {
+                     response.text}')
 
 
 def request_data(method='GET', uri='', params=None, payload=None):
@@ -72,7 +75,7 @@ def request_data(method='GET', uri='', params=None, payload=None):
 
     else:
 
-        printr(f'Pazarama request has failed || Reason: {response.text}')
+        logger.error(f'Request has failed || Reason: {response.text}')
 
         return None
 
@@ -112,7 +115,7 @@ def getPazarama_productsList(everyProduct: bool = False, local: bool = False):
                      'data': product
                      })
 
-        printr('[magenta]Pazarama[/magenta] products data request is successful. Response: [orange3]OK[/orange3]')
+        logger.info('Products data request is successful. Response: OK')
 
         return products
 
@@ -148,10 +151,10 @@ def pazarama_updateRequest(product):
 
         if update_request['success'] == True:
 
-            printr(f"""[magenta]Pazarama[/magenta] product with code: {
+            logger.info(f"""Product with code: {
                 product["sku"]}, New value: [green]{product["qty"]}[/green]""")
 
         else:
 
-            printr(f'[magenta]Pazarama[/magenta] product with code: {
-                   sku} failed to update || Reason: {update_request['data'][0]['error']}')
+            logger.error(f'Product with code: {sku} failed to update || Reason: {
+                         update_request['data'][0]['error']}')

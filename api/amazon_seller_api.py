@@ -4,6 +4,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from glob import glob
+import logging
 from urllib import parse
 import csv
 import gzip
@@ -13,7 +14,6 @@ import re
 import shutil
 import time
 import requests
-from rich import print as printr
 
 
 client_id = os.environ.get('LWA_APP_ID')
@@ -28,7 +28,7 @@ credentials = {
 }
 
 session = requests.session()
-
+logger = logging.getLogger(__name__)
 
 def get_access_token():
     """
@@ -108,7 +108,7 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
                                             data=payload)
             except ConnectionError:
 
-                printr("Amazon request had a ConnectionError, sleeping for 5 seconds!")
+                logger.error("Amazon request had a ConnectionError, sleeping for 5 seconds!")
 
                 time.sleep(5)
 
@@ -128,7 +128,7 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
 
             else:
 
-                printr("SP-API Has encountred an error. Try again later!")
+                logger.error("SP-API Has encountred an error. Try again later!")
                 jsonify = None
 
             return jsonify
@@ -152,7 +152,7 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
 
             else:
 
-                printr(f"An error has occured || {error_message}")
+                logger.error(f"An error has occured || {error_message}")
 
                 return None
 
@@ -341,15 +341,14 @@ def spapi_get_orders():
                     count += 1
                     orders_dict.append(oi)
 
-            printr(f'{count} orders has been added')
+            logger.info(f'{count} orders has been added')
 
             if request_count % 30 == 0:
-                printr(f"Processing {count} orders please wait!")
+                logger.info(f"Processing {count} orders please wait!")
 
                 spapi_getorderitems(30, orders_dict)
 
-                printr(
-                    f"Processed {count} orders || Orders left: {len(orders_dict)-count}")
+                logger.info(f"Processed {count} orders || Orders left: {len(orders_dict) - count}")
 
                 request_count = 0
 
@@ -501,8 +500,8 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
                                     included_data='summaries,attributes,fulfillmentAvailability',
                                     every_product=every_product)
 
-        printr(
-            '[white]Amazon[/white] products data request is successful. Response: [orange3]OK[/orange3]')
+        logger.info(
+            'Products data request is successful. Response: OK')
 
         return products
 
@@ -584,7 +583,7 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
                                 included_data='summaries,attributes,fulfillmentAvailability',
                                 every_product=every_product)
 
-    printr('[white]Amazon[/white] products data request is successful. Response: [orange3]OK[/orange3]')
+    logger.info('Amazon products data request is successful. Response: OK')
 
     return products
 
@@ -599,7 +598,7 @@ def filter_order_data(orders_list, order, result, items):
 
         try:
 
-            printr(result.get('AmazonOrderId', None))
+            logger.info(result.get('AmazonOrderId', None))
 
             data = {
                 "ASIN": item.get('ASIN', None),
@@ -710,13 +709,13 @@ def spapi_update_listing(product):
 
     if listing_update_request and listing_update_request['status'] == 'ACCEPTED':
 
-        printr(f"""[white]Amazon[/white] product with code: {
-            product["sku"]}, New value: [green]{product["qty"]}[/green]""")
+        logger.info(f"""Product with code: {
+            product["sku"]}, New value: {product["qty"]}""")
 
     else:
 
-        printr(f"""[white]Amazon[/white] product with code: {product["sku"]} failed
-              to update || Reason: [red]{listing_update_request}[/red]""")
+        logger.error(f"""Product with code: {product["sku"]} failed
+              to update || Reason: {listing_update_request}""")
 
 
 def spapi_add_listing(products):
@@ -907,10 +906,10 @@ def spapi_add_listing(products):
 
                 if listing_add_request and listing_add_request['status'] == 'ACCEPTED':
 
-                    printr(f"""New [white]Amazon[/white] product added with code: {
-                        product_sku}, qty: [green]{product_data['quantity']}[/green]""")
+                    logger.info(f"""New product added with code: {
+                        product_sku}, qty: {product_data['quantity']}""")
 
                 else:
 
-                    printr(f"""[white]Amazon[/white] new product with code: {product_sku} creation has failed
-                            || Reason: [red]{listing_add_request}[/red]""")
+                    logger.error(f"""New product with code: {product_sku} creation has failed
+                            || Reason: {listing_add_request}""")

@@ -1,14 +1,14 @@
 """ The lines `import csv`, `import os`, `import requests`, and `import xmltodict` are importing
  necessary Python libraries/modules for the script to use."""
 import csv
+import logging
 import os
 import re
 import time
 import requests
 import xmltodict
-from rich import print as printr
 
-
+logger = logging.getLogger(__name__)
 username = os.environ.get('PTTAVMUSERNAME')
 password = os.environ.get('PTTAVMPASSWORD')
 TedarikciId = os.environ.get('PTTAVMTEDARIKCIID')
@@ -19,40 +19,6 @@ def requestdata(method: str = 'POST', uri: str = '', params: dict = None, data: 
     The function `requestData` sends a SOAP request to a specific 
     URL with provided parameters and data,
     handling the response accordingly.
-
-    :param method: The `method` parameter in the `requestData` 
-    function specifies the HTTP method to be
-    used for the request. By default, it is set to 'POST', but 
-    you can provide a different HTTP method
-    like 'GET', 'PUT', 'DELETE', etc, defaults to POST
-    :type method: str (optional)
-    :param uri: The `uri` parameter in the `requestData` function 
-    represents the specific endpoint or
-    operation that you want to call on the SOAP web service hosted at
-    "https://ws.pttavm.com:93/service.svc". It is used to construct 
-    the SOAPAction header in the HTTP
-    request to specify the
-    :type uri: str
-    :param params: The `params` parameter in the `requestData` 
-    function is used to pass any query
-    parameters that need to be included in the request URL. These 
-    parameters are typically used for
-    filtering or pagination purposes when making HTTP requests
-    :type params: dict
-    :param data: The `data` parameter in the `requestData` function 
-    is used to pass the SOAP body
-    content for the SOAP request. It is a string that contains the 
-    XML data to be sent in the SOAP
-    envelope's body section. This data typically includes the specific 
-    operation or action that the SOAP
-    request is intended to
-    :type data: list
-    :return: The function `requestData` returns the response object 
-    from the HTTP request made to the
-    specified URL. If the response status code is 200, it returns the 
-    response object. If there is an
-    error or the status code is not 200, it prints an error message 
-    and returns None.
     """
 
     url = "https://ws.pttavm.com:93/service.svc"
@@ -101,15 +67,6 @@ def formatdata(response):
     The `formatData` function parses an XML response 
     into a dictionary and returns the body content.
 
-    :param response: It looks like the code snippet 
-    you provided is a function named `formatData` that
-    takes a `response` parameter. The function is designed 
-    to parse an XML response into a dictionary
-    using the `xmltodict` library and then access specific 
-    elements within the response
-    :return: The function `formatData(response)` returns 
-    the body content of the XML response parsed
-    into a dictionary using the xmltodict library.
     """
 
     # Access the response elements
@@ -129,21 +86,6 @@ def getpttavm_procuctskdata(everyproduct: bool = False, local: bool = False):
     The function `getPTTAVM_procuctskData` retrieves product 
     data from an API and returns a list of
     products with specific details.
-
-    :param everyProduct: The `everyProduct` parameter in the 
-    `getPTTAVM_procuctskData` function is a
-    boolean parameter with a default value of `False`. This 
-    parameter is used to determine whether to
-    return data for every product or just a summary of products, 
-    defaults to False
-    :type everyProduct: bool (optional)
-    :return: If the `everyProduct` parameter is `False`, the 
-    function will return a list of dictionaries
-    containing product information (id, sku, qty, price) extracted 
-    from the API response. If the
-    `everyProduct` parameter is `True`, the function will return 
-    the entire list of products as received
-    from the API without any further processing.
     """
 
     api_call = requestdata(uri='StokKontrolListesi')
@@ -168,8 +110,8 @@ def getpttavm_procuctskdata(everyproduct: bool = False, local: bool = False):
                 products.append({'id': product['a:UrunKodu'],
                                  'data': product})
 
-        printr(f"""[cyan]PTTAVM[/cyan] products data request is successful. Response: [orange3]{
-               api_call.reason}[/orange3]""")
+        logger.info(f"""Products data request is successful. Response: {
+               api_call.reason}""")
 
         return products
 
@@ -181,12 +123,6 @@ def pttavm_updatedata(product):
     The function `pttavm_updateData` updates product data 
     on a platform called PTTAVM by sending a
     request with the provided product information.
-
-    :param product: The `pttavm_updateData` function seems 
-    to be updating product data for a PTTAVM
-    system. The function takes a `product` dictionary as a 
-    parameter, which should contain the following
-    keys:
     """
 
     sku = product['sku']
@@ -215,12 +151,12 @@ def pttavm_updatedata(product):
         responses_msg = formatdata(update_request)[
             'StokFiyatGuncelle3Response']['StokFiyatGuncelle3Result']
 
-        printr(f"""[bright_cyan]PTTAVM[/bright_cyan] product success: {
-            responses_msg['a:Success']}, sku: {sku}, New stock: {qty}, New price: [green]{price}[/green]""")
+        logger.info(f"""Product success: {
+            responses_msg['a:Success']}, sku: {sku}, New stock: {qty}, New price: {price}""")
 
     else:
 
-        printr(f"""Request failure for [bright_cyan]PTTAVM[/bright_cyan] product {sku} | Response: {
+        logger.error(f"""Request failure for product {sku} | Response: {
             update_request}""")
 
 

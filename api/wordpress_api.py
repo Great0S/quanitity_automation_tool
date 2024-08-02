@@ -1,8 +1,11 @@
 import json
+import logging
 import os
 import re
 from woocommerce import API
-from rich import print as printr
+
+
+logger = logging.getLogger(__name__)
 
 wcapi = API(
     url="https://www.emanzemin.com",
@@ -67,7 +70,7 @@ def get_wordpress_products(everyproduct: bool = False, local: bool = False):
                                       'qty': item.get('stock_quantity', 0),
                                       "stock_check": item['stock_status']})
 
-    printr("[grey66]Wordpress[/grey66] products data request is successful. Response: [orange3]OK[/orange3]")
+    logger.info("Wordpress products data request is successful. Response: OK")
 
     return filtered_products
 
@@ -92,13 +95,13 @@ def update_wordpress_products(data):
 
         if update_request['stock_quantity'] == int(data['qty']):
 
-            printr(f"""[grey66]Wordpress[/grey66] product success, sku: {
+            logger.info(f"""Product success, sku: {
                 data['sku']}, New stock: {
                 data['qty']}""")
 
         else:
 
-            printr(f"""[grey66]Wordpress[/grey66] product update failed, sku: {
+            logger.error(f"""Product update failed, sku: {
                 data['sku']}, New stock: {
                     data['qty']}""")
 
@@ -186,20 +189,20 @@ def create_wordpress_products(data):
 
             if create_product_request.status_code == 201:
 
-                printr(f"""[grey66]Wordpress[/grey66] new product request is success, sku: {
+                logger.info(f"""New product request is success, sku: {
                     item_data['stockCode']}, Details: {create_product_request.ok, create_product_request.reason}""")
 
             elif create_product_request.status_code == 400:
 
                 error = json.loads(create_product_request.text)
 
-                printr(f"""[grey66]Wordpress[/grey66] new product request failed for {item_data['stockCode']}!, message: {
+                logger.error(f"""New product request failed for {item_data['stockCode']}!, message: {
                     error['code']}, Details: {
                         error['message']}""")
 
             else:
 
-                printr(f"""[grey66]Wordpress[/grey66] product request failed, sku: {
+                logger.error(f"""Product request failed, sku: {
                     item_data['stockCode']}, Details: {create_product_request.text}""")
 
 

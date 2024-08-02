@@ -7,7 +7,6 @@ import re
 import time
 import json
 import requests
-from rich import print as printr
 from circuitbreaker import CircuitBreaker
 
 products = []
@@ -65,14 +64,19 @@ class HpApi:
         payload = payload_content
         url = f"{subdomain}{url_addons}"
         circuit_breaker = CircuitBreaker(
-            failure_threshold=5, recovery_timeout=60)
+            failure_threshold=5, 
+            recovery_timeout=60)
         attempt = 0
 
         try:
             with circuit_breaker:
 
                 api_request = requests.request(
-                    request_type, url, headers=self.headers, data=payload, timeout=3000
+                    request_type, 
+                    url, 
+                    headers=self.headers,
+                    data=payload, 
+                    timeout=3000
                 )
 
                 if api_request.status_code == 200:
@@ -82,24 +86,19 @@ class HpApi:
                 if api_request.status_code == 400:
 
                     error_message = json.loads(api_request.text)
-                    printr(
-                        f"""[orange_red1]HepsiBurada[/orange_red1] api [red]bad[/red] request || Payload: {
-                            payload} || Message: {error_message['title']}"""
-                    )
+                    self.logger.error(
+                        f"""API bad request || Payload: {payload} || Message: {error_message['title']}""")
 
                     return None
 
                 if api_request.status_code in [500, 502, 503, 504]:
 
-                    raise Exception("HepsiBurada Server error")
+                    raise Exception("HepsiBurada Server has an error")
 
         except Exception as e:
 
             delay = base_delay * (2**attempt) + random.uniform(0, 1)
-            self.logger(
-                f"""[orange_red1]HepsiBurada[/orange_red1] api request failure || Retrying in {
-                    delay} seconds"""
-            )
+            self.logger(f"""API request failure || Retrying in {delay} seconds""")
             time.sleep(delay)
 
     def prepare_product_data(self, items: dict, source: str = "", op: str = "") -> list:
@@ -375,7 +374,7 @@ class HpApi:
 
             response = requests.post(url, files=files, headers=self.headers)
 
-            printr(response.text)
+            self.logger.info(response.text)
 
     def update_listing(self, products, options=None, source="") -> None:
         """
@@ -505,17 +504,15 @@ class HpApi:
 
                         if check_status["status"] == "Done" and not check_status["errors"]:
 
-                            printr(
-                                f"""[orange_red1]HepsiBurada[/orange_red1] product with code: {
-                                    products["sku"]}, New value: [green]{products["qty"]}[/green]"""
+                            self.logger.info(
+                                f"""Product with code: {products["sku"]}, New value: {products["qty"]}"""
                             )
                             break
 
                         if check_status["errors"]:
 
-                            printr(
-                                f"""[orange_red1]HepsiBurada[/orange_red1] product with code: {
-                                    products["sku"]} [red]failed[/red] to update || Reason: [indian_red1]{check_status["errors"]}[/indian_red1]"""
+                            self.logger.error(
+                                f"""Product with code: {products["sku"]} failed to update || Reason: {check_status["errors"]}"""
                             )
                             break
 

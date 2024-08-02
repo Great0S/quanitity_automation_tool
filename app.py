@@ -7,6 +7,7 @@
 import logging
 import re
 from rich import print as printr
+from rich.logging import RichHandler
 from api.amazon_seller_api import (
     spapi_add_listing,
     spapi_getlistings,
@@ -25,7 +26,8 @@ from api.wordpress_api import (
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[RichHandler(rich_tracebacks=True)]
 )
 logger = logging.getLogger(__name__)
 hpapi = HpApi()
