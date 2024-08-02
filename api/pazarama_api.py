@@ -75,7 +75,7 @@ def request_data(method='GET', uri='', params=None, payload=None):
 
     else:
 
-        logger.error(f'Request has failed || Reason: {response.text}')
+        logger.error(f'Request has failed || Status code: {response.status_code} || Reason: {response.text}')
 
         return None
 

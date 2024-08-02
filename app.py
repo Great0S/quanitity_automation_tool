@@ -6,8 +6,8 @@
 
 import logging
 import re
-from rich import print as printr
 from rich.logging import RichHandler
+from rich.prompt import Prompt
 from api.amazon_seller_api import (
     spapi_add_listing,
     spapi_getlistings,
@@ -423,7 +423,7 @@ def execute_updates(source=None, targets=None, options=None):
 
         while True:
 
-            user_input = input("\nDo you want to continue? (y/n): ")
+            user_input = Prompt.ask("\nDo you want to continue? (y/n): ")
 
             if user_input.lower() == "n":
 
@@ -459,7 +459,7 @@ def execute_updates(source=None, targets=None, options=None):
 
             else:
 
-                logger.error("Invalid input. Please enter 'y' for yes or 'n' for no.")
+                logger.error("Invalid Prompt.ask. Please enter 'y' for yes or 'n' for no.")
 
 
 def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA=False):
@@ -497,28 +497,24 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA
     logger.info("Done")
 
 
-printr("What operation would you like to perform?\n")
-printr("1. Create new product\n2. Update existing product\n")
-operation = input("Choose an operation from above: ")
+logger.info("What operation would you like to perform?")
+logger.info("1. Create new product\t\t2. Update existing product")
+operation = Prompt.ask("Choose an operation from above: ", choices=["1","2"])
 
 if operation == "1":
 
-    printr("How would you like to create a new product?\n")
-    printr("1. Copy from another platform\n2. Enter details manually\n")
-    create_option = input("Choose an option from above: ")
+    logger.info("How would you like to create a new product?")
+    logger.info("1. Copy from another platform\t\t2. Enter details manually")
+    create_option = Prompt.ask("Choose an option from above: ", choices=["1","2"])
 
     if create_option == "1":
 
-        SOURCE_PLATFORM = input(
-            "Please enter the source platform to copy from: Ex. Trendyol\n"
-        )
-        TARGET_PLATFORM = input(
-            "\nPlease enter the target platform to copy to: Ex. PTTAVM\n"
-        )
+        SOURCE_PLATFORM = Prompt.ask("Please enter the source platform to copy from: Ex. Trendyol")
+        TARGET_PLATFORM = Prompt.ask("Please enter the target platform to copy to: Ex. PTTAVM")
         TARGET_OPTIONS = "copy"
-        printr("\nWhich storage do you want to use?\n")
-        printr("1. Online storage\n2. Offline storage\n")
-        storage_operation = input("Choose an operation from above: ")
+        logger.info("Which storage do you want to use?")
+        logger.info("1. Online storage\t\t2. Offline storage")
+        storage_operation = Prompt.ask("Choose an operation from above: ", choices=["1","2"])
 
         if storage_operation == "2":
 
@@ -536,21 +532,17 @@ if operation == "1":
 
 elif operation == "2":
 
-    printr("Do you want to update specific platforms ?\n")
-    printr("1. Yes\n2. No\n")
-    options = input("Choose an option from above: ")
+    logger.info("Do you want to update specific platforms ?")
+    logger.info("1. Yes\t\t2. No")
+    options = Prompt.ask("Choose an option from above: ", choices=["1","2"])
 
     if options == "1":
 
-        SOURCE_PLATFORM = input(
-            "Please enter the source website platform: Ex. Trendyol\n"
-        )
-        TARGET_PLATFORM = input(
-            "\nPlease enter the target website platform: Ex. Magento\n"
-        ).split(" ")
+        SOURCE_PLATFORM = Prompt.ask("Please enter the source website platform: Ex. Trendyol")
+        TARGET_PLATFORM = Prompt.ask("Please enter the target website platform: Ex. Magento").split(" ")
 
-        printr("Available operations:\n\n1. Full update\n2. Partial update\n")
-        select_op = input("Which operation will you be doing today ? ")
+        logger.info("Available operations:\t\t1. Full update\t2. Partial update")
+        select_op = Prompt.ask("Which operation will you be doing today ? ")
 
         if select_op == "1":
 
@@ -558,10 +550,8 @@ elif operation == "2":
 
         elif select_op == "2":
 
-            printr(
-                "Available partial operations: \n\n1. Quantity\n2. Price\n3. Information (Images, Properties, descriptions)\n"
-            )
-            select_partial_op = input("Which partial operation will you choose ? ")
+            logger.info("Available partial operations: \t\t1. Quantity\t2. Price\t3. Information (Images, Properties, descriptions)")
+            select_partial_op = Prompt.ask("Which partial operation will you choose ? ", choices=["1","2","3"])
 
             if select_partial_op == "1":
                 TARGET_OPTIONS = "qty"
