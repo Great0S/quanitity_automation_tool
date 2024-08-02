@@ -64,7 +64,7 @@ class HpApi:
         payload = payload_content
         url = f"{subdomain}{url_addons}"
         circuit_breaker = CircuitBreaker(
-            failure_threshold=5, 
+            failure_threshold=5,
             recovery_timeout=60)
         attempt = 0
 
@@ -72,10 +72,10 @@ class HpApi:
             with circuit_breaker:
 
                 api_request = requests.request(
-                    request_type, 
-                    url, 
+                    request_type,
+                    url,
                     headers=self.headers,
-                    data=payload, 
+                    data=payload,
                     timeout=3000
                 )
 
@@ -98,7 +98,8 @@ class HpApi:
         except Exception as e:
 
             delay = base_delay * (2**attempt) + random.uniform(0, 1)
-            self.logger(f"""API request failure || Retrying in {delay} seconds""")
+            self.logger(f"""API request failure || Retrying in {
+                        delay} seconds""")
             time.sleep(delay)
 
     def prepare_product_data(self, items: dict, source: str = "", op: str = "") -> list:
@@ -417,57 +418,71 @@ class HpApi:
                         "malzeme": ""
                     }})
 
-                listing_details["merchantId"] = self.store_id
-                listing_details["items"] = listing_items
-
-                with open("integrator-ticket-upload.json", "w", encoding="utf-8") as json_file:
-
-                    json.dump(listing_details, json_file)
-
-                    files = {
-                        "file": (
-                            "integrator-ticket-upload.json",
-                            open("integrator-ticket-upload.json", "rb"),
-                            "application/json",
-                        )
-                    }
-
+                item_count = 0
+                
                 self.headers["Accept"] = "application/json;charset=UTF-8"
                 self.headers.pop("Content-Type")
-                update_request_raw = requests.post(
-                    url=self.mpop_url + f"""ticket-api/api/integrator/import""",
-                    files=files,
-                    headers=self.headers
-                )
 
-                if update_request_raw:
+                while len(listing_items) > 0:
 
-                    update_state_response = json.loads(update_request_raw.text)
+                    batch_size = min(len(listing_items), 100)
+                    listing_details["merchantId"] = self.store_id
+                    listing_details["items"] = listing_items[:batch_size]
+                    listing_items = listing_items[batch_size:]
+                    item_count += 1
 
-                    if update_state_response['success'] == True:
-
-                        update_state_id = update_state_response["data"]["trackingId"]
-
-                        while True:
-                        
-                            check_status_request = self.request_data(
-                                subdomain=self.mpop_url,
-                                url_addons=f"""/ticket-api/api/integrator/status/{update_state_id}""",
-                                request_type="GET",
-                                payload_content=[],
-                            )
-                            if check_status_request:
-                            
-                                check_status = json.loads(check_status_request.text)
-
-                                if check_status['success'] == False:
-
-                                    self.logger.error(f"""Update file uploaded successfuly but request success is {check_status['success']} | Reason: {check_status['message']}""")
-                                    break
+                    with open("integrator-ticket-upload.json", "w", encoding="utf-8") as json_file:
                     
-                    else:
+                        json.dump(listing_details, json_file)
+    
+                        files = {
+                            "file": (
+                                "integrator-ticket-upload.json",
+                                open("integrator-ticket-upload.json", "rb"),
+                                "application/json",
+                            )
+                        }
 
-                        self.logger.error(f"""Update request success is {update_state_response['success']} | Reason: {update_state_response['message']}""")
+                    
+                    update_request_raw = requests.post(
+                        url=self.mpop_url + f"""ticket-api/api/integrator/import""",
+                        files=files,
+                        headers=self.headers
+                    )
+
+                    if update_request_raw:
+
+                        update_state_response = json.loads(update_request_raw.text)
+
+                        if update_state_response['success'] == True:
+
+                            update_state_id = update_state_response["data"]["trackingId"]
+
+                            while True:
+                            
+                                check_status_request = self.request_data(
+                                    subdomain=self.mpop_url,
+                                    url_addons=f"""/ticket-api/api/integrator/status/{update_state_id}""",
+                                    request_type="GET",
+                                    payload_content=[],
+                                )
+                                if check_status_request:
+                                
+                                    check_status = json.loads(check_status_request.text)
+
+                                    if check_status['success'] == False:
+
+                                        self.logger.error(f"""Update file uploaded successfuly but request success is {check_status['success']} | Reason: {check_status['message']}""")
+                                        break
+
+                                    self.logger.info(f"""Status of update file uploaded success is {check_status['success']} | Reason: {check_status['message']}""")
+                                    break
+
+                                    
+                        else:
+
+                            self.logger.error(f"""Update request success is {update_state_response['success']} | Reason: {update_state_response['message']}""")
+                            
 
         else:
 

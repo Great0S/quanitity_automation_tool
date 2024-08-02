@@ -423,7 +423,7 @@ def execute_updates(source=None, targets=None, options=None):
 
         while True:
 
-            user_input = Prompt.ask("\nDo you want to continue? (y/n): ")
+            user_input = Prompt.ask("Do you want to continue? (y/n): ", choices=["y","n"])
 
             if user_input.lower() == "n":
 
@@ -541,8 +541,8 @@ elif operation == "2":
         SOURCE_PLATFORM = Prompt.ask("Please enter the source website platform: Ex. Trendyol")
         TARGET_PLATFORM = Prompt.ask("Please enter the target website platform: Ex. Magento").split(" ")
 
-        logger.info("Available operations:\t\t1. Full update\t2. Partial update")
-        select_op = Prompt.ask("Which operation will you be doing today ? ")
+        logger.info("Available operations: 1. Full update\t2. Partial update")
+        select_op = Prompt.ask("Which operation will you be doing today ? ", choices=["1","2"])
 
         if select_op == "1":
 
@@ -550,7 +550,7 @@ elif operation == "2":
 
         elif select_op == "2":
 
-            logger.info("Available partial operations: \t\t1. Quantity\t2. Price\t3. Information (Images, Properties, descriptions)")
+            logger.info("Available partial operations: 1. Quantity\t2. Price\t3. Information (Images, Properties, descriptions)")
             select_partial_op = Prompt.ask("Which partial operation will you choose ? ", choices=["1","2","3"])
 
             if select_partial_op == "1":
