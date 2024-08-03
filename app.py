@@ -7,10 +7,12 @@
 import asyncio
 import logging
 import re
+import sys
 from rich.logging import RichHandler
 from rich.prompt import Prompt
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, Horizontal, VerticalScroll
+from textual.console import Console
 from textual.widgets import Footer, Label, RadioSet, RadioButton, Input, Log
 from api.amazon_seller_api import (
     spapi_add_listing,
@@ -29,11 +31,7 @@ from api.wordpress_api import (
 )
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(module)s - %(levelname)s - %(message)s",
-    handlers=[RichHandler(rich_tracebacks=True)])
-logger = logging.getLogger(__name__)
+
 
 hpapi = HpApi()
 
@@ -639,6 +637,9 @@ async def execute_updates(source=None, targets=None, options=None):
         "wordpress": update_wordpress_products,
     }
 
+    print("Updates starting")
+    sys.stdout.flush()
+
     post_data = process_update_data(source, targets, options)
 
     if post_data:
@@ -736,5 +737,15 @@ async def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCA
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(module)s - %(levelname)s - %(message)s",
+    handlers=[RichHandler(rich_tracebacks=True)])
+    logger = logging.getLogger(__name__)
     app = ProductManagerApp()
-    app.run()
+    
+    # Create a console instance
+    console = Console()
+
+    # Run the app within the console
+    console.print(app.run())
