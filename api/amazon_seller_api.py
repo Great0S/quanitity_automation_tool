@@ -913,3 +913,65 @@ def spapi_add_listing(products):
 
                     logger.error(f"""New product with code: {product_sku} creation has failed
                             || Reason: {listing_add_request}""")
+
+def extract_category_item_attrs():
+
+    amazon_attrs = {}
+    processed_attrs = {}
+    temporary_attr = {}
+
+    # Load the JSON file
+    with open('amazonRUGattrs.json', 'r', encoding='utf-8') as attrFile:
+        amazon_attrs = json.load(attrFile)
+
+    # Get the 'properties' from the loaded JSON
+    properties = amazon_attrs.get('properties', {})
+
+    for attribute_name, attribute_details in properties.items():
+
+        sub_attributes = attribute_details
+        temporary_attr[attribute_name] = {}
+
+        if 'items' in sub_attributes:
+            items_attributes = sub_attributes['items']
+            items_properties = items_attributes.get('properties', {})
+
+            for property_name, property_details in items_properties.items():
+                temporary_attr[attribute_name][property_name] = {}
+
+                if 'examples' in property_details:
+                    temporary_attr[attribute_name][property_name] = property_details.get('examples', [None])[0]
+                else:
+                    if 'items' in property_details:
+                        nested_items = property_details['items']
+                    
+                        if 'required' in nested_items:
+                            for required_obj in nested_items.get('required', []):
+                                temporary_attr[attribute_name][property_name][required_obj] = {}
+                            
+                                if 'properties' in nested_items.get('properties', {}):
+                                    obj_properties = nested_items['properties'].get(required_obj, {})
+                                    temporary_attr[attribute_name][property_name][required_obj] = obj_properties.get('examples', [None])[0]
+                                else:
+                                    nested_properties = nested_items['properties'].get(required_obj, {}).get('items', {})
+                                
+                                    if 'properties' in nested_properties:
+                                        for sub_required in nested_properties.get('required', []):
+                                            sub_property_details = nested_properties['properties'].get(sub_required, {})
+                                            temporary_attr[attribute_name][property_name][required_obj][sub_required] = sub_property_details.get('examples', [None])[0]
+                    else:
+                        if 'properties' in property_details:
+                            for inner_property_name, inner_property_details in property_details['properties'].items():
+                                temporary_attr[attribute_name][property_name][inner_property_name] = inner_property_details.get('examples', [None])[0]
+
+        # Determine the type of the attribute
+        attribute_type = sub_attributes.get('type')
+        if attribute_type == 'array':
+            processed_attrs[attribute_name] = [temporary_attr[attribute_name]]
+        else:
+            processed_attrs[attribute_name] = temporary_attr[attribute_name]
+
+    # Save the result to a new JSON file
+    with open('amazon_rug_attrs2.json', 'w', encoding='utf-8') as attrFile:
+        json.dump(processed_attrs, attrFile, indent=4)
+    return processed_attrs

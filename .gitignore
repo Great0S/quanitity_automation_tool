@@ -160,3 +160,5 @@ styles.tcss
 test.py
 textual-test.py
 test.tcss
+amazon_rug_attrs.json
+amazon_rug_attrs2.json
