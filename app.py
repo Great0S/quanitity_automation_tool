@@ -517,20 +517,30 @@ def process(data_dict: dict = None):
 
         logger.info("User input recieved, processing...")
 
-        for k, v in data_dict.items():
+        try:
 
-            if k == 'update':
+            for k, v in data_dict.items():
 
-                execute_updates(source=data_dict['update']['source'], 
-                                targets=data_dict['update']['target'], 
-                                options=data_dict['update']['options'])
+                if k == 'update':
+
+                    execute_updates(source=data_dict['update']['source'], 
+                                    targets=data_dict['update']['target'], 
+                                    options=data_dict['update']['options'])
+                    break
+
+                create_products(SOURCE_PLATFORM=data_dict['create']['source'], 
+                                TARGET_PLATFORM=data_dict['create']['target'], 
+                                TARGET_OPTIONS=data_dict['create']['options'], 
+                                LOCAL_DATA=data_dict['create']['local_data'])
                 break
 
-            create_products(SOURCE_PLATFORM=data_dict['create']['source'], 
-                            TARGET_PLATFORM=data_dict['create']['target'], 
-                            TARGET_OPTIONS=data_dict['create']['options'], 
-                            LOCAL_DATA=data_dict['create']['local_data'])
-            break
+        except KeyboardInterrupt:
+
+            logger.warning("The program has been interrupted.")
+            logger.info("Shutting down...")
+            exit()
+
+            
 
 if __name__ == "__main__":
 
