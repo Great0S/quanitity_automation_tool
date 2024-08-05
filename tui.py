@@ -1,10 +1,15 @@
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import Vertical, Horizontal, VerticalScroll
 from textual.widgets import Label, RadioSet, RadioButton, Input, Log
+
 
 class ProductManagerApp(App[str]):
 
     CSS_PATH = "styles.tcss"
+    TITLE = "Product Manager"
+    SUB_TITLE = "Product Manager User Interface"
+
+
 
     def on_mount(self) -> None:
 
@@ -14,6 +19,8 @@ class ProductManagerApp(App[str]):
         self.hide_containers([
             "create_container",
             "copy_container",
+            "copy_source_container",
+            "copy_target_container",
             "update_container",
             "specific_update_op_container",
             "specific_partial_op_choice_container",
@@ -42,15 +49,19 @@ class ProductManagerApp(App[str]):
 
             with Horizontal(id="copy_container"):
 
-                yield Label("Please select the source platform to copy from: Ex. Trendyol")
-                with RadioSet(id="source_platform"):
-                    for button in self.platform_radio_set():
-                        yield button
+                with Horizontal(id="copy_source_container"):
 
-                yield Label("Please enter the target platform to copy to: Ex. PTTAVM")
-                with RadioSet(id="target_platform"):
-                    for button in self.platform_radio_set():
-                        yield button
+                    yield Label("Please select the source platform to copy from: Ex. Trendyol")
+                    with RadioSet(id="copy_source_platform"):
+                        for button in self.platform_radio_set():
+                            yield button
+
+                with Horizontal(id="copy_target_container"):
+
+                    yield Label("Please enter the target platform to copy to: Ex. PTTAVM")
+                    with RadioSet(id="copy_target_platform"):
+                        for button in self.platform_radio_set():
+                            yield button
 
             with Horizontal(id="storage_container"):
 
@@ -125,18 +136,27 @@ class ProductManagerApp(App[str]):
                 self.show_container("update_container")
 
         if event.radio_set.id == "create_choice":
+
             self.hide_containers(["create_container"])
+
             if event.pressed.id == "auto_copy":
+
                 self.show_container("copy_container")
+                self.show_container("copy_source_container")
+
             if event.pressed.id == "manual_copy":
+
                 self.query_one(Log).write_line(
                     "Enter details manually selected.")
 
-        if event.radio_set.id == "source_platform":
+        if event.radio_set.id == "copy_source_platform":
 
             self.source = event.pressed.id
+            self.hide_containers(["copy_source_container"])
+            self.show_container("copy_target_container")
 
-        if event.radio_set.id == "target_platform":
+
+        if event.radio_set.id == "copy_target_platform":
 
             self.target = event.pressed.id
             self.hide_containers(["copy_container"])

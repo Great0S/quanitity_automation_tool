@@ -529,7 +529,7 @@ def process(data_dict: dict = None):
             create_products(SOURCE_PLATFORM=data_dict['create']['source'], 
                             TARGET_PLATFORM=data_dict['create']['target'], 
                             TARGET_OPTIONS=data_dict['create']['options'], 
-                            LOCAL_DATA=data_dict['create']['local'])
+                            LOCAL_DATA=data_dict['create']['local_data'])
             break
 
 if __name__ == "__main__":
