@@ -4,16 +4,11 @@
  functionalities provided by these APIs to retrieve stock data, update listings, and perform other
  operations related to each platform."""
 
-import asyncio
 import logging
 import re
-import sys
+from tui import ProductManagerApp
 from rich.logging import RichHandler
 from rich.prompt import Prompt
-from textual.app import App, ComposeResult
-from textual.containers import Vertical, Horizontal, VerticalScroll
-from textual.console import Console
-from textual.widgets import Footer, Label, RadioSet, RadioButton, Input, Log
 from api.amazon_seller_api import (
     spapi_add_listing,
     spapi_getlistings,
@@ -31,231 +26,12 @@ from api.wordpress_api import (
 )
 
 # Configure logging
-
-
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(module)s - %(levelname)s - %(message)s",
+    handlers=[RichHandler(rich_tracebacks=True)])
+logger = logging.getLogger(__name__)
 hpapi = HpApi()
-
-
-class ProductManagerApp(App[None]):
-
-    CSS_PATH = "styles.tcss"
-
-    def on_mount(self) -> None:
-
-        self.source = ''
-        self.target = ''
-        self.target_options = ''
-        self.hide_containers([
-            "create_container",
-            "copy_container",
-            "update_container",
-            "specific_update_op_container",
-            "specific_partial_op_choice_container",
-            "storage_container",
-            "specific_partial_op_source_platform_container",
-            "specific_partial_op_target_platform_container"
-        ])
-
-    def compose(self) -> ComposeResult:
-
-        with VerticalScroll():
-
-            with Horizontal(id="operation_container"):
-
-                yield Label("What operation would you like to perform?")
-                with RadioSet(id="operation_choice"):
-                    yield RadioButton("Create new product", id="create")
-                    yield RadioButton("Update existing product", id="update")
-
-            with Horizontal(id="create_container"):
-
-                yield Label("How would you like to create a new product?")
-                with RadioSet(id="create_choice"):
-                    yield RadioButton("Copy from another platform", id="auto_copy")
-                    yield RadioButton("Enter details manually", id="manual_copy")
-
-            with Horizontal(id="copy_container"):
-
-                yield Label("Please select the source platform to copy from: Ex. Trendyol")
-                with RadioSet(id="source_platform"):
-                    for button in self.platform_radio_set():
-                        yield button
-
-                yield Label("Please enter the target platform to copy to: Ex. PTTAVM")
-                with RadioSet(id="target_platform"):
-                    for button in self.platform_radio_set():
-                        yield button
-
-            with Horizontal(id="storage_container"):
-
-                yield Label("Which storage do you want to use?")
-                with RadioSet(id="storage_choice"):
-                    yield RadioButton("Online storage", id="online_storage")
-                    yield RadioButton("Offline storage", id="offline_storage")
-
-            with Horizontal(id="update_container"):
-
-                yield Label("Do you want to update specific platforms?")
-                with RadioSet(id="update_choice"):
-                    yield RadioButton("Yes", id="yes_specific_update")
-                    yield RadioButton("No", id="no_specific_update")
-
-            with Horizontal(id="specific_update_op_container"):
-
-                yield Label("Available operations:")
-                with RadioSet(id="specific_update_op_choice"):
-                    yield RadioButton("Full update", id="specific_full_update")
-                    yield RadioButton("Partial update", id="specific_partial_update")
-
-            with Horizontal(id="specific_partial_op_source_platform_container"):
-
-                yield Label("Please select the source platform to copy from: Ex. Trendyol")
-                with RadioSet(id="specific_partial_op_source_platform"):
-                    for button in self.platform_radio_set():
-                        yield button
-
-            with Horizontal(id="specific_partial_op_target_platform_container"):
-
-                yield Label("Please select the target platform: Ex. Amazon")
-                with RadioSet(id="specific_partial_op_target_platform"):
-                    for button in self.platform_radio_set():
-                        yield button
-
-            with Horizontal(id="specific_partial_op_choice_container"):
-
-                yield Label("Available partial operations:")
-                with RadioSet(id="specific_partial_op_choice"):
-                    yield RadioButton("Quantity", id="quantity")
-                    yield RadioButton("Price", id="price")
-                    yield RadioButton("Information (Images, Properties, descriptions)", id="info")
-
-        yield Log()
-
-    def platform_radio_set(self) -> list:
-        return [
-            RadioButton("Trendyol", id='trendyol'),
-            RadioButton("Amazon", id='amazon'),
-            RadioButton("HepsiBurada", id='hepsiburada'),
-            RadioButton("N11", id='n11'),
-            RadioButton("Pazarama", id='pazarama'),
-            RadioButton("PTTAVM", id='pttavm'),
-            RadioButton("Wordpress", id='wordpress')
-        ]
-
-    def hide_containers(self, container_ids: list) -> None:
-        for container_id in container_ids:
-            self.query_one(f"#{container_id}").display = False
-
-    def show_container(self, container_id: str) -> None:
-        self.query_one(f"#{container_id}").display = True
-
-    async def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
-
-        if event.radio_set.id == "operation_choice":
-            self.hide_containers(["operation_container"])
-            if event.pressed.id == "create":
-                self.show_container("create_container")
-            if event.pressed.id == "update":
-                self.show_container("update_container")
-
-        if event.radio_set.id == "create_choice":
-            self.hide_containers(["create_container"])
-            if event.pressed.id == "auto_copy":
-                self.show_container("copy_container")
-            if event.pressed.id == "manual_copy":
-                self.query_one(Log).write_line(
-                    "Enter details manually selected.")
-
-        if event.radio_set.id == "source_platform":
-
-            self.source = event.pressed.id
-
-        if event.radio_set.id == "target_platform":
-
-            self.target = event.pressed.id
-            self.hide_containers(["copy_container"])
-            self.show_container("storage_container")
-
-        if event.radio_set.id == "storage_choice":
-
-            if event.pressed.id == "online_storage":
-
-                asyncio.create_task(create_products(
-                    self.source, self.target, "copy", False))
-                app.exit()
-
-            asyncio.create_task(create_products(
-                self.source, self.target, "", True))
-            app.exit()
-
-        if event.radio_set.id == "update_choice":
-
-            self.hide_containers(["update_container"])
-            if event.pressed.id == "yes_specific_update":
-
-                self.show_container("specific_update_op_container")
-
-            if event.pressed.id == "no_specific_update":
-
-                self.query_one(Log).write_line(
-                    "No specific platform update selected.")
-                asyncio.create_task(execute_updates())
-                app.exit()
-
-        if event.radio_set.id == "specific_update_op_choice":
-
-            if event.pressed.id == "specific_full_update":
-
-                self.query_one(Log).write_line("Full update selected.")
-                asyncio.create_task(execute_updates(
-                    self.source, self.target, "full"))
-                app.exit()
-
-            if event.pressed.id == "specific_partial_update":
-
-                self.hide_containers(["specific_update_op_container"])
-                self.show_container(
-                    "specific_partial_op_source_platform_container")
-
-        if event.radio_set.id == "specific_partial_op_source_platform":
-
-            self.source = event.pressed.id
-            self.hide_containers(
-                ["specific_partial_op_source_platform_container"])
-            self.show_container(
-                "specific_partial_op_target_platform_container")
-
-        if event.radio_set.id == "specific_partial_op_target_platform":
-
-            self.target = event.pressed.id
-            self.hide_containers(
-                ["specific_partial_op_target_platform_container"])
-            self.show_container("specific_partial_op_choice_container")
-
-        if event.radio_set.id == "specific_partial_op_choice":
-            if event.pressed.id == "quantity":
-
-                self.query_one(Log).write_line(
-                    "Partial update for quantity selected.")
-                asyncio.create_task(execute_updates(
-                    self.source, self.target, "qty"))
-                app.exit()
-
-            if event.pressed.id == "price":
-
-                self.query_one(Log).write_line(
-                    "Partial update for price selected.")
-                asyncio.create_task(execute_updates(
-                    self.source, self.target, "price"))
-                app.exit()
-
-            if event.pressed.id == "info":
-
-                self.query_one(Log).write_line(
-                    "Partial update for information selected.")
-                asyncio.create_task(execute_updates(
-                    self.source, self.target, "info"))
-                app.exit()
 
 
 def get_data(
@@ -392,7 +168,7 @@ def process_update_data(source=None, targets=None, options=None):
     return platform_updates
 
 
-def filter_data_list(data, source, target, every_product: bool = False, no_match=False):
+def filter_data_list(data = '', source = False, target = '', every_product: bool = False, no_match = False):
     """
     The function `filter_data_list` compares quantity values
     for items across different platforms and returns a list of
@@ -620,7 +396,7 @@ def filter_data_list(data, source, target, every_product: bool = False, no_match
     return changed_values
 
 
-async def execute_updates(source=None, targets=None, options=None):
+def execute_updates(source=None, targets=None, options=None):
     """
     The function `execute_updates` processes update data
     for different platforms and calls corresponding
@@ -637,8 +413,7 @@ async def execute_updates(source=None, targets=None, options=None):
         "wordpress": update_wordpress_products,
     }
 
-    print("Updates starting")
-    sys.stdout.flush()
+    logger.info("Updates starting")
 
     post_data = process_update_data(source, targets, options)
 
@@ -701,11 +476,11 @@ async def execute_updates(source=None, targets=None, options=None):
                     "Invalid Prompt.ask. Please enter 'y' for yes or 'n' for no.")
 
 
-async def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA=False):
+def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA=False):
 
     platform_to_function = {
         "n11": create_n11_data,
-        "hepsiburada": hpapi.add_listing,
+        "hepsiburada": hpapi.create_listing,
         "amazon": spapi_add_listing,
         "pttavm": pttavm_updatedata,
         "pazarama": pazarama_updateRequest,
@@ -713,7 +488,7 @@ async def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCA
         "wordpress": create_wordpress_products,
     }
 
-    data_lists, all_codes = get_data(
+    data_lists, _ = get_data(
         every_product=True,
         local=LOCAL_DATA,
         source=SOURCE_PLATFORM,
@@ -723,29 +498,42 @@ async def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCA
 
     filtered_data = filter_data_list(
         data=data_lists,
-        all_codes=all_codes,
         every_product=True,
         no_match=True,
         source=None,
+        target=TARGET_PLATFORM
     )
 
     if filtered_data:
 
-        platform_to_function[TARGET_PLATFORM](filtered_data)
+        platform_to_function[TARGET_PLATFORM](data=filtered_data)
 
     logger.info("Done")
 
 
-if __name__ == "__main__":
-    logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(module)s - %(levelname)s - %(message)s",
-    handlers=[RichHandler(rich_tracebacks=True)])
-    logger = logging.getLogger(__name__)
-    app = ProductManagerApp()
-    
-    # Create a console instance
-    console = Console()
+def process(data_dict: dict = None):
 
-    # Run the app within the console
-    console.print(app.run())
+    if data_dict:
+
+        logger.info("User input recieved, processing...")
+
+        for k, v in data_dict.items():
+
+            if k == 'update':
+
+                execute_updates(source=data_dict['update']['source'], 
+                                targets=data_dict['update']['target'], 
+                                options=data_dict['update']['options'])
+                break
+
+            create_products(SOURCE_PLATFORM=data_dict['create']['source'], 
+                            TARGET_PLATFORM=data_dict['create']['target'], 
+                            TARGET_OPTIONS=data_dict['create']['options'], 
+                            LOCAL_DATA=data_dict['create']['local_data'])
+            break
+
+if __name__ == "__main__":
+
+    input_app = ProductManagerApp()
+    results = input_app.run()
+    process(results)
