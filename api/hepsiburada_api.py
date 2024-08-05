@@ -102,6 +102,281 @@ class HpApi:
                         delay} seconds""")
             time.sleep(delay)
 
+    def create_listing(self, data) -> None:
+        """
+        Sends a POST request to the HepsiBurada API to create a new listing.
+
+        Args:
+            url (str): The URL of the API endpoint.
+            ready_data (list): A list of dictionaries containing product data.
+        """
+
+        if data:
+
+            ready_data = self.prepare_product_data(items=data)
+
+            with open("integrator.json", "w", encoding="utf-8") as json_file:
+
+                json.dump(ready_data, json_file)
+
+            files = {
+                "file": (
+                    "integrator.json",
+                    open("integrator.json", "rb"),
+                    "application/json",
+                )
+            }
+
+            url = self.mpop_url + "product/api/products/import"
+
+            self.headers["Accept"] = "application/json"
+            self.headers.pop("Content-Type")
+
+            response = requests.post(url, files=files, headers=self.headers)
+
+            if response.status_code == 200:
+
+                response_json = json.loads(response.text)
+
+                if response_json['success'] == True:
+
+                    status_check_response = self.request_data(
+                        subdomain=self.mpop_url,
+                        url_addons=f"""/product/api/products/status/{
+                            response_json['data']['trackingId']}""",
+                        request_type="GET",
+                        payload_content=[],
+                    )
+
+                    if status_check_response:
+
+                        status_check = json.loads(status_check_response.text)
+
+                        if status_check['success'] == True:
+
+                            self.logger.info("Listings created successfully")
+
+                        else:
+
+                            pass
+
+                else:
+
+                    self.logger.error("The create request was not successfull")
+
+    def update_listing(self, products, options=None, source="") -> None:
+        """
+        Updates stock information for a product on HepsiBurada.
+
+        Args:
+            product (dict): A dictionary containing product data.
+            options (str, optional): Can be 'full' for a complete update or 'info' for a partial update, defaults to None.
+        """
+
+        update_request_raw = ''
+
+        if options:
+
+            if options != "full":
+
+                update_data = self.prepare_product_data(
+                    items=products, op=options, source=source
+                )
+                listing_details = {}
+                listing_items = []
+                for update_item in update_data:
+
+                    listing_items.append({"hbSku": update_item['attributes'].get('hbsku', ''),
+                                          "productName": update_item['attributes'].get('UrunAdi', ''),
+                                          "productDescription": update_item['attributes'].get('UrunAciklamasi', ''),
+                                          "image1": update_item['attributes']['Image1'],
+                                          "image2": update_item['attributes']['Image2'],
+                                          "image3": update_item['attributes']['Image3'],
+                                          "image4": update_item['attributes']['Image4'],
+                                          "image5": update_item['attributes']['Image5'],
+                                          "video": update_item['attributes']['Video1'],
+                                          "attributes": {
+                        "renk_variant_property": update_item['attributes'].get('renk_variant_property', ''),
+                        "numara_variant_property": update_item['attributes'].get('00001CM1', ''),
+                        "00004LW9": update_item['attributes'].get('00004LW9'),
+                        "00005JUG": update_item['attributes'].get('00005JUG'),
+                        "sekil": update_item['attributes'].get('sekil'),
+                        "00001CM1": update_item['attributes'].get('00001CM1'),
+                        "malzeme": ""
+                    }})
+
+                item_count = 0
+
+                self.headers["Accept"] = "application/json;charset=UTF-8"
+                self.headers.pop("Content-Type")
+
+                while len(listing_items) > 0:
+
+                    batch_size = min(len(listing_items), 100)
+                    listing_details["merchantId"] = self.store_id
+                    listing_details["items"] = listing_items[:batch_size]
+                    listing_items = listing_items[batch_size:]
+                    item_count += 1
+
+                    with open("integrator-ticket-upload.json", "w", encoding="utf-8") as json_file:
+
+                        json.dump(listing_details, json_file)
+
+                        files = {
+                            "file": (
+                                "integrator-ticket-upload.json",
+                                open("integrator-ticket-upload.json", "rb"),
+                                "application/json",
+                            )
+                        }
+
+                    update_request_raw = requests.post(
+                        url=self.mpop_url + f"""ticket-api/api/integrator/import""",
+                        files=files,
+                        headers=self.headers
+                    )
+
+                    if update_request_raw:
+
+                        update_state_response = json.loads(
+                            update_request_raw.text)
+
+                        if update_state_response['success'] == True:
+
+                            update_state_id = update_state_response["data"]["trackingId"]
+
+                            while True:
+
+                                check_status_request = self.request_data(
+                                    subdomain=self.mpop_url,
+                                    url_addons=f"""/ticket-api/api/integrator/status/{
+                                        update_state_id}""",
+                                    request_type="GET",
+                                    payload_content=[],
+                                )
+                                if check_status_request:
+
+                                    check_status = json.loads(
+                                        check_status_request.text)
+
+                                    if check_status['success'] == False:
+
+                                        self.logger.error(f"""Update file uploaded successfuly but request success is {
+                                                          check_status['success']} | Reason: {check_status['message']}""")
+                                        break
+
+                                    self.logger.info(f"""Status of update file uploaded success is {
+                                                     check_status['success']} | Reason: {check_status['message']}""")
+                                    break
+
+                        else:
+
+                            self.logger.error(f"""Update request success is {
+                                              update_state_response['success']} | Reason: {update_state_response['message']}""")
+
+        else:
+
+            update_payload = json.dumps(
+                [
+                    {
+                        "hepsiburadaSku": products["id"],
+                        "merchantSku": products["sku"],
+                        "availableStock": products["qty"],
+                    }
+                ]
+            )
+            update_request_raw = self.request_data(
+                subdomain=self.listing_external_url,
+                url_addons=f"""/stock-uploads""",
+                request_type="POST",
+                payload_content=update_payload,
+            )
+            if update_request_raw:
+
+                update_state_id = json.loads(update_request_raw.text)["id"]
+
+                while True:
+
+                    check_status_request = self.request_data(
+                        subdomain=self.listing_external_url,
+                        url_addons=f"""/stock-uploads/id/{update_state_id}""",
+                        request_type="GET",
+                        payload_content=[],
+                    )
+                    if check_status_request:
+
+                        check_status = json.loads(check_status_request.text)
+
+                        if check_status["status"] == "Done" and not check_status["errors"]:
+
+                            self.logger.info(
+                                f"""Product with code: {
+                                    products["sku"]}, New value: {products["qty"]}"""
+                            )
+                            break
+
+                        if check_status["errors"]:
+
+                            self.logger.error(
+                                f"""Product with code: {products["sku"]} failed to update || Reason: {
+                                    check_status["errors"]}"""
+                            )
+                            break
+
+                    else:
+
+                        continue
+
+    def get_listings(self, everyproduct: bool = False) -> list:
+        """
+        Retrieves stock data for products from HepsiBurada.
+
+        Args:
+            everyproduct (bool, optional): If True, returns all product data. Defaults to False.
+
+        Returns:
+            list: A list of product data.
+        """
+
+        self.logger.info("Fetching product data from HepsiBurada")
+
+        listings_list = []
+
+        try:
+
+            data_request_raw = self.request_data(
+                subdomain=self.listing_external_url,
+                url_addons=f"?limit=1000",
+                request_type="GET",
+                payload_content=[],
+            )
+            formatted_data = json.loads(data_request_raw.text)
+
+            for data in formatted_data["listings"]:
+                if not everyproduct:
+
+                    listings_list.append(
+                        {
+                            "id": data["hepsiburadaSku"],
+                            "sku": data["merchantSku"],
+                            "qty": data["availableStock"],
+                            "price": data["price"],
+                        }
+                    )
+                else:
+                    listings_list.append(
+                        {"sku": data["merchantSku"], "data": data})
+
+            self.logger.info(f"Fetched {len(listings_list)} products")
+
+            return listings_list
+
+        except Exception as e:
+
+            self.logger.error(f"Error fetching product data: {e}")
+
+            return []
+
     def prepare_product_data(self, items: dict, source: str = "", op: str = "") -> list:
         """
         Prepares product data for creating or fetching listings on HepsiBurada.
@@ -203,22 +478,19 @@ class HpApi:
 
         for item_data_list in sorted_items:
 
-            if len(item_data_list[1]) <= 1:
-
-                continue
-
-            else:
-
-                if len(item_data_list[1]) > 2:
-
-                    if item_data_list[1][0]["platform"] == source:
-
-                        self.data = item_data_list[1][0]["data"]
-                        del item_data_list[1][1]
-
-                elif item_data_list[1][0]["platform"] == source:
+            if len(item_data_list[1]) > 2:
+                if item_data_list[1][0]["platform"] == source:
 
                     self.data = item_data_list[1][0]["data"]
+                    del item_data_list[1][1]
+
+            if not source:
+
+                source = item_data_list[1][0]["platform"]
+
+            if item_data_list[1][0]["platform"] == source:
+
+                self.data = item_data_list[1][0]["data"]
 
             if not self.data:
 
@@ -293,9 +565,10 @@ class HpApi:
 
                     self.shape = "Dikdörtgen"
 
-            self.category_attrs["hbsku"] = item_data_list[1][1]["data"][
-                "hepsiburadaSku"
-            ]
+            if op == 'update':
+
+                self.category_attrs["hbsku"] = item_data_list[1][1]["data"]["hepsiburadaSku"]
+
             self.category_attrs["merchantSku"] = self.data.get(
                 "stockCode", None)
             self.category_attrs["VaryantGroupID"] = self.data.get(
@@ -347,241 +620,3 @@ class HpApi:
             self.category_attrs = {k: "" for k in self.category_attrs}
 
         return ready_data
-
-    def create_listing(self, url, ready_data) -> None:
-        """
-        Sends a POST request to the HepsiBurada API to create a new listing.
-
-        Args:
-            url (str): The URL of the API endpoint.
-            ready_data (list): A list of dictionaries containing product data.
-        """
-
-        if ready_data:
-
-            with open("integrator.json", "w", encoding="utf-8") as json_file:
-                json.dump(ready_data, json_file)
-
-            files = {
-                "file": (
-                    "integrator.json",
-                    open("integrator.json", "rb"),
-                    "application/json",
-                )
-            }
-
-            self.headers["Accept"] = "application/json"
-            self.headers.pop("Content-Type")
-
-            response = requests.post(url, files=files, headers=self.headers)
-
-            self.logger.info(response.text)
-
-    def update_listing(self, products, options=None, source="") -> None:
-        """
-        Updates stock information for a product on HepsiBurada.
-
-        Args:
-            product (dict): A dictionary containing product data.
-            options (str, optional): Can be 'full' for a complete update or 'info' for a partial update, defaults to None.
-        """
-
-        update_request_raw = ''
-
-        if options:
-
-            if options != "full":
-
-                update_data = self.prepare_product_data(
-                    items=products, op=options, source=source
-                )
-                listing_details = {}
-                listing_items = []
-                for update_item in update_data:
-
-                    listing_items.append({"hbSku": update_item['attributes'].get('hbsku', ''),
-                                          "productName": update_item['attributes'].get('UrunAdi', ''),
-                                          "productDescription": update_item['attributes'].get('UrunAciklamasi', ''),
-                                          "image1": update_item['attributes']['Image1'],
-                                          "image2": update_item['attributes']['Image2'],
-                                          "image3": update_item['attributes']['Image3'],
-                                          "image4": update_item['attributes']['Image4'],
-                                          "image5": update_item['attributes']['Image5'],
-                                          "video": update_item['attributes']['Video1'],
-                                          "attributes": {
-                        "renk_variant_property": update_item['attributes'].get('renk_variant_property', ''),
-                        "numara_variant_property": update_item['attributes'].get('00001CM1', ''),
-                        "00004LW9": update_item['attributes'].get('00004LW9'),
-                        "00005JUG": update_item['attributes'].get('00005JUG'),
-                        "sekil": update_item['attributes'].get('sekil'),
-                        "00001CM1": update_item['attributes'].get('00001CM1'),
-                        "malzeme": ""
-                    }})
-
-                item_count = 0
-                
-                self.headers["Accept"] = "application/json;charset=UTF-8"
-                self.headers.pop("Content-Type")
-
-                while len(listing_items) > 0:
-
-                    batch_size = min(len(listing_items), 100)
-                    listing_details["merchantId"] = self.store_id
-                    listing_details["items"] = listing_items[:batch_size]
-                    listing_items = listing_items[batch_size:]
-                    item_count += 1
-
-                    with open("integrator-ticket-upload.json", "w", encoding="utf-8") as json_file:
-                    
-                        json.dump(listing_details, json_file)
-    
-                        files = {
-                            "file": (
-                                "integrator-ticket-upload.json",
-                                open("integrator-ticket-upload.json", "rb"),
-                                "application/json",
-                            )
-                        }
-
-                    
-                    update_request_raw = requests.post(
-                        url=self.mpop_url + f"""ticket-api/api/integrator/import""",
-                        files=files,
-                        headers=self.headers
-                    )
-
-                    if update_request_raw:
-
-                        update_state_response = json.loads(update_request_raw.text)
-
-                        if update_state_response['success'] == True:
-
-                            update_state_id = update_state_response["data"]["trackingId"]
-
-                            while True:
-                            
-                                check_status_request = self.request_data(
-                                    subdomain=self.mpop_url,
-                                    url_addons=f"""/ticket-api/api/integrator/status/{update_state_id}""",
-                                    request_type="GET",
-                                    payload_content=[],
-                                )
-                                if check_status_request:
-                                
-                                    check_status = json.loads(check_status_request.text)
-
-                                    if check_status['success'] == False:
-
-                                        self.logger.error(f"""Update file uploaded successfuly but request success is {check_status['success']} | Reason: {check_status['message']}""")
-                                        break
-
-                                    self.logger.info(f"""Status of update file uploaded success is {check_status['success']} | Reason: {check_status['message']}""")
-                                    break
-
-                                    
-                        else:
-
-                            self.logger.error(f"""Update request success is {update_state_response['success']} | Reason: {update_state_response['message']}""")
-                            
-
-        else:
-
-            update_payload = json.dumps(
-                [
-                    {
-                        "hepsiburadaSku": products["id"],
-                        "merchantSku": products["sku"],
-                        "availableStock": products["qty"],
-                    }
-                ]
-            )
-            update_request_raw = self.request_data(
-                subdomain=self.listing_external_url,
-                url_addons=f"""/stock-uploads""",
-                request_type="POST",
-                payload_content=update_payload,
-            )
-            if update_request_raw:
-
-                update_state_id = json.loads(update_request_raw.text)["id"]
-
-                while True:
-
-                    check_status_request = self.request_data(
-                        subdomain=self.listing_external_url,
-                        url_addons=f"""/stock-uploads/id/{update_state_id}""",
-                        request_type="GET",
-                        payload_content=[],
-                    )
-                    if check_status_request:
-
-                        check_status = json.loads(check_status_request.text)
-
-                        if check_status["status"] == "Done" and not check_status["errors"]:
-
-                            self.logger.info(
-                                f"""Product with code: {products["sku"]}, New value: {products["qty"]}"""
-                            )
-                            break
-
-                        if check_status["errors"]:
-
-                            self.logger.error(
-                                f"""Product with code: {products["sku"]} failed to update || Reason: {check_status["errors"]}"""
-                            )
-                            break
-
-                    else:
-
-                        continue
-
-    def get_listings(self, everyproduct: bool = False) -> list:
-        """
-        Retrieves stock data for products from HepsiBurada.
-
-        Args:
-            everyproduct (bool, optional): If True, returns all product data. Defaults to False.
-
-        Returns:
-            list: A list of product data.
-        """
-
-        self.logger.info("Fetching product data from HepsiBurada")
-
-        listings_list = []
-
-        try:
-
-            data_request_raw = self.request_data(
-                subdomain=self.listing_external_url,
-                url_addons=f"?limit=1000",
-                request_type="GET",
-                payload_content=[],
-            )
-            formatted_data = json.loads(data_request_raw.text)
-
-            for data in formatted_data["listings"]:
-                if not everyproduct:
-
-                    listings_list.append(
-                        {
-                            "id": data["hepsiburadaSku"],
-                            "sku": data["merchantSku"],
-                            "qty": data["availableStock"],
-                            "price": data["price"],
-                        }
-                    )
-                else:
-                    listings_list.append(
-                        {"sku": data["merchantSku"], "data": data})
-
-            self.logger.info(f"Fetched {len(listings_list)} products")
-
-            return listings_list
-
-        except Exception as e:
-
-            self.logger.error(f"Error fetching product data: {e}")
-
-            return []
-

@@ -168,7 +168,7 @@ def process_update_data(source=None, targets=None, options=None):
     return platform_updates
 
 
-def filter_data_list(data, source, target, every_product: bool = False, no_match=False):
+def filter_data_list(data = '', source = False, target = '', every_product: bool = False, no_match = False):
     """
     The function `filter_data_list` compares quantity values
     for items across different platforms and returns a list of
@@ -480,7 +480,7 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA
 
     platform_to_function = {
         "n11": create_n11_data,
-        "hepsiburada": hpapi.add_listing,
+        "hepsiburada": hpapi.create_listing,
         "amazon": spapi_add_listing,
         "pttavm": pttavm_updatedata,
         "pazarama": pazarama_updateRequest,
@@ -488,7 +488,7 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA
         "wordpress": create_wordpress_products,
     }
 
-    data_lists, all_codes = get_data(
+    data_lists, _ = get_data(
         every_product=True,
         local=LOCAL_DATA,
         source=SOURCE_PLATFORM,
@@ -498,15 +498,15 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA
 
     filtered_data = filter_data_list(
         data=data_lists,
-        all_codes=all_codes,
         every_product=True,
         no_match=True,
         source=None,
+        target=TARGET_PLATFORM
     )
 
     if filtered_data:
 
-        platform_to_function[TARGET_PLATFORM](filtered_data)
+        platform_to_function[TARGET_PLATFORM](data=filtered_data)
 
     logger.info("Done")
 
