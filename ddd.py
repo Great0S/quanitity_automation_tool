@@ -4,7 +4,7 @@ import requests
 from sp_api.api import Orders
 from sp_api.api import Reports
 from sp_api.api import DataKiosk
-from sp_api.api import ListingsItems, ProductTypeDefinitions
+from sp_api.api import ListingsItems, ProductTypeDefinitions, CatalogItems, CatalogItemsVersion
 from sp_api.base import SellingApiException
 from sp_api.base.reportTypes import ReportType
 from datetime import datetime, timedelta
@@ -21,152 +21,84 @@ client = DataKiosk()
 #     print(ex)
 
 
-sid = os.getenv('AMAZONSELLERACCOUNTID')
+sid = os.getenv("AMAZONSELLERACCOUNTID")
+product_definitions = ProductTypeDefinitions().search_definitions_product_types(
+                itemName = 'Halı',
+                marketplaceIds = ['A33AVAJ2PDY3EV'],
+                searchLocale = "tr_TR",
+                locale = "tr_TR")
+product_attrs = ProductTypeDefinitions().get_definitions_product_type(
+                productType='RUG',
+                marketplaceIds=['A33AVAJ2PDY3EV'],
+                requirements="LISTING",
+                locale="tr_TR")
+product_scheme = requests.get(url=product_attrs.payload['schema']['link']['resource'])
+scheme_json = json.loads(product_scheme.text)
+defi21 = CatalogItems()
+defi21.version = CatalogItemsVersion.V_2022_04_01
+defi212 = defi21.search_catalog_items(marketplaceIds=['A33AVAJ2PDY3EV'],
+                                             keywords=['Paspas', 'halı', 'basamak', 'Bıçağ', 'kapı', 'maket'],
+                                             keywordsLocale='tr_TR',
+                                             brandNames=['Stepmat', 'Myfloor'],
+                                             includedData='attributes,identifiers,images,productTypes,summaries,dimensions,classifications',
+                                             pageSize=20)
 # defi = ProductTypeDefinitions().search_definitions_product_types(keywords='Halı',marketplaceIds=['A33AVAJ2PDY3EV'])
 # defi2 = ProductTypeDefinitions().get_definitions_product_type(productType='RUG',marketplaceIds=['A33AVAJ2PDY3EV'])
 # # print(defi.payload['metaSchema']['link']['resource'])
 # meta = requests.get(defi2.payload['schema']['link']['resource'])
 
-with open('amazon_rug_attrs.json', 'r', encoding='utf-8') as meta:
+with open("amazon_rug_attrs.json", "r", encoding="utf-8") as meta:
     jdata = json.load(meta)
 
 meta_data = jdata
-# print(meta_data)
+browseNodes = {"RUG": "13028044031", "HOME_BED_AND_BATH": "13028044031"}
+
 bod = {
     "productType": "RUG",
     "requirements": "LISTING",
     "attributes": {
-        "item_name": [{
-            "value": "Bukle Halıdan Ekonomik Basamak ve Merdiven Paspası"
-        }],
-        "brand": [{
-            "value": "Stepmat"
-        }],
-        "supplier_declared_has_product_identifier_exemption": [{
-            "value": True
-        }],
-        "recommended_browse_nodes": [{
-            "value": "13028044031"
-        }],
-        "model_number": [{
-            "value": "EKOKARE"
-        }],
-        "manufacturer": [{
-            "value": "Eman Halıcılık San. Ve Tic. Ltd. Şti."
-        }],
-        "fulfillment_availability": [{
-            "fulfillment_channel_code": "DEFAULT",
-            "quantity": "1000",
-            "lead_time_to_ship_max_days": "5",
-            "is_inventory_available": True
-        }],
-        "condition_type": [{
-            "value": "new_new"
-        }],
-        "skip_offer": [{
-            "value": True
-        }],
-        "purchasable_offer": [
+        "item_name": [{"value": "Bukle Halıdan Ekonomik Basamak ve Merdiven Paspası"}],
+        "brand": [{"value": "Stepmat"}],
+        "supplier_declared_has_product_identifier_exemption": [{"value": True}],
+        "recommended_browse_nodes": [{"value": "13028044031"}],
+        "bullet_point": [
             {
-                "currency": "TRY",
-                "discounted_price": {
-                    "schedule": {
-                        "end_at": "",
-                        "start_at": "",
-                        "value_with_tax": ""
-                    }
-                },
-                "end_at": {
-                    "value": ""
-                },
-                "map_price": {},
-                "maximum_seller_allowed_price": {},
-                "minimum_seller_allowed_price": {},
-                "our_price": {
-                    "schedule": {
-                        "value_with_tax": "249.99"
-                    }
-                },
-                "start_at": {
-                    "value": "2024-08-07"
-                }
-            }
-        ],
-        "pattern": [
-            {
-                "value": "Düz"
-            }
-        ],
-        "pile_height": [{
-            "value": "Düşük Hav"
-        }],
-        "included_components": [{
-            "value": "Tek adet Bukle Halıdan Ekonomik Basamak ve Merdiven Paspası"
-        }],
-        "list_price": [{
-            "currency": "TRY",
-            "value_with_tax": "129"
-        }],
-        "gift_options": [{
-            "can_be_messaged": "false",
-            "can_be_wrapped": "false"
-        }],
-        "product_description": [{
-            "value": "Bukle Halıdan Ekonomik Basamak ve Merdiven Paspası Evdeki merdivenlerinizi güzelleştirmek ve güvenliğini artırmak için Bukle Halıdan Ekonomik Basamak ve Merdiven Paspası tam da ihtiyacınız olan ürün! Bu paspas, premium kalite iplik kullanılarak üretilmiştir ve üst yüzeyi sayesinde merdivenlerinizde kaymaz bir yüzey sağlar. Ahşap, beton ve mermer merdivenlerde rahatlıkla kullanabilirsiniz. Ayrıca,6 mm hav yüksekliği sayesinde ayaklarınızı yumuşak bir zeminde hissedeceksiniz. Ürün Özellikleri: Malzeme: Premium kalite iplik ; Boyutlar: 25 cm x 65 cm ; Kullanım Alanları: Merdivenler, basamaklar, koridorlar ve daha fazlası ; Temizlik Kolaylığı: Sadece silerek temizlenebilir ; Türkiye Üretimi: Güvenilir ve kaliteli bir ürün ; Bu paspas, uygulaması ve kullanımı son derece kolaydır. Adet olarak satıldığı için ihtiyacınıza göre sipariş verebilirsiniz. Evdeki merdivenlerinizi daha estetik ve güvenli hale getirmek için hemen bu ürünü sepetinize ekleyin!"
-        }],
-        "bullet_point": [{
-            "value": "Bukle Halıdan Ekonomik Basamak ve Merdiven Paspası"
-        }],
-        "generic_keyword": [{
-            "value": "Bukle,Halıdan,Ekonomik,Basamak,ve,Merdiven,Paspası"
-        }],
-        "special_feature": [{
-            "value": "Kaymaz"
-        }],
-        "style": [{
-            "value": "Klasik"
-        }],
-        "material": [{
-            "value": "Polyester"
-        }],
-        "number_of_items": [{
-            "value": 1
-        }],
-        "color": [{
-            "value": "Gri"
-        }],
-        "size": [{
-            "value": "25 x 65"
-        }],
-        "part_number": [{
-            "value": "EKOKARE"
-        }],
-        "item_length_width": [{
-            "length": {
-                "unit": "centimeters",
-                "value": 25
+                "language_tag": "tr_TR",
+                "value": "Premium Kalite İplik ile Üretilmiş Üst Yüzey",
+                "marketplace_id": "A33AVAJ2PDY3EV",
             },
-            "width": {
-                "unit": "centimeters",
-                "value": 65
-            },
-        }],
-        "item_shape": [{
-            "value": "Dikdörtgen"
-        }],
-        "item_thickness": [{
-            "decimal_value": "5",
-            "unit": 'millimeters'
-        }],
-        "country_of_origin": [{
-            "value": "TR"
-        }],
-        "rug_form_type": [
             {
-                "value": "doormat",
-                "marketplace_id": "A33AVAJ2PDY3EV"
-            }
+                "language_tag": "tr_TR",
+                "value": "Merdivenlerden Kaymaz , Ahşap Beton ve Merdivende Kullanılabilir.",
+                "marketplace_id": "A33AVAJ2PDY3EV",
+            },
+            {
+                "language_tag": "tr_TR",
+                "value": "Uygulaması ve Temizliği Kolaydır.",
+                "marketplace_id": "A33AVAJ2PDY3EV",
+            },
+            {
+                "language_tag": "tr_TR",
+                "value": "Adet Olarak Satılır. Boyutları : 65 x 25 cm.",
+                "marketplace_id": "A33AVAJ2PDY3EV",
+            },
+            {
+                "language_tag": "tr_TR",
+                "value": "Türkiye'de Üretilmiştir.",
+                "marketplace_id": "A33AVAJ2PDY3EV",
+            },
         ],
+        "condition_type": [{"value": "new_new"}],
+        "fulfillment_availability": [
+            {"fulfillment_channel_code": "DEFAULT", "quantity": 100}
+        ],
+        "gift_options": [{"can_be_messaged": "false", "can_be_wrapped": "false"}],
+        "generic_keyword": [
+            {"value": "Bukle,Halıdan,Ekonomik,Basamak,ve,Merdiven,Paspası"}
+        ],
+        "list_price": [{"currency": "TRY", "value_with_tax": "299"}],
+        "manufacturer": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti."}],
+        "material": [{"value": "Polyester"}],
         "main_product_image_locator": [
             {
                 "media_location": "https://cdn.dsmcdn.com/ty1440/product/media/images/prod/QC/20240726/12/208eae59-155e-3a33-8a4b-269689aee1f4/1_org_zoom.jpg"
@@ -191,12 +123,66 @@ bod = {
             {
                 "media_location": "https://cdn.dsmcdn.com/ty1440/product/media/images/prod/QC/20240726/12/a5e6e0b9-f0dc-3253-a3a1-ccf8cf72ea7f/1_org_zoom.jpg"
             }
-        ]
-    }
+        ],
+        "model_number": [{"value": "EKOKARE"}],
+        "number_of_items": [{"value": 1}],
+        "color": [{"value": "Gri"}],
+        "size": [{"value": "65 x 25 cm"}],
+        "special_feature": [{"value": "Kaymaz"}],
+        "style": [{"value": "Klasik"}],
+        "part_number": [{"value": "EKOKARE"}],
+        "pattern": [{"value": "Düz"}],
+        "product_description": [
+            {
+                "value": "Bukle Halıdan Ekonomik Basamak ve Merdiven Paspası Evdeki merdivenlerinizi güzelleştirmek ve güvenliğini artırmak için Bukle Halıdan Ekonomik Basamak ve Merdiven Paspası tam da ihtiyacınız olan ürün! Bu paspas, premium kalite iplik kullanılarak üretilmiştir ve üst yüzeyi sayesinde merdivenlerinizde kaymaz bir yüzey sağlar. Ahşap, beton ve mermer merdivenlerde rahatlıkla kullanabilirsiniz. Ayrıca,6 mm hav yüksekliği sayesinde ayaklarınızı yumuşak bir zeminde hissedeceksiniz. Ürün Özellikleri: Malzeme: Premium kalite iplik ; Boyutlar: 25 cm x 65 cm ; Kullanım Alanları: Merdivenler, basamaklar, koridorlar ve daha fazlası ; Temizlik Kolaylığı: Sadece silerek temizlenebilir ; Türkiye Üretimi: Güvenilir ve kaliteli bir ürün ; Bu paspas, uygulaması ve kullanımı son derece kolaydır. Adet olarak satıldığı için ihtiyacınıza göre sipariş verebilirsiniz. Evdeki merdivenlerinizi daha estetik ve güvenli hale getirmek için hemen bu ürünü sepetinize ekleyin!"
+            }
+        ],
+        "product_site_launch_date": [{"value": "2022-06-15T07:41:20.632Z"}],
+        "pile_height": [{"value": "Düşük Hav"}],
+        "purchasable_offer": [
+            {"currency": "TRY", "our_price": [
+                {"schedule": [{"value_with_tax": 299}]}]}
+        ],
+        "included_components": [
+            {"value": "Tek adet Bukle Halıdan Ekonomik Basamak ve Merdiven Paspası"}
+        ],
+        "item_dimensions": [
+            {
+                "length": {"value": "5", "unit": "millimeters"},
+                "width": {"value": "65", "unit": "centimeters"},
+                "height": {"value": "25", "unit": "centimeters"},
+            }
+        ],
+        "item_shape": [{"value": "Dikdörtgen"}],
+        "item_thickness": [{"decimal_value": "5", "unit": "millimeters"}],
+        "item_length_width": [
+            {
+                "length": {"unit": "centimeters", "value": 65.0},
+                "width": {"unit": "centimeters", "value": 25.0},
+            }
+        ],
+        "country_of_origin": [{"value": "TR"}],
+        "rug_form_type": [{"value": "doormat"}],
+    },
+    "offers": [
+        {
+            "offerType": "B2C",
+            "price": {
+                "currency": "TRY",
+                "currencyCode": "TRY",
+                "amount": 299
+            }
+        }
+    ]
 }
-new_ui = ListingsItems().put_listings_item(sellerId=sid, sku='EKOKAREACGRİ',
-                                           marketplaceIds=['A33AVAJ2PDY3EV'], body=bod)
-print(new_ui.payload['status'])
+new_ui = ListingsItems().put_listings_item(
+    sellerId=sid,
+    sku="EKOKAREACGRİ2",
+    marketplaceIds=["A33AVAJ2PDY3EV"],
+    body=bod,
+    # mode="VALIDATION_PREVIEW",
+)
+print(new_ui.payload["status"])
 # # Orders(restricted_data_token='<token>').get_orders(CreatedAfter=(datetime.utcnow() - timedelta(days=7)).isoformat())
 
 # # or use the shortcut

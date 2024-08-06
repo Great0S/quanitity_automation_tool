@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from glob import glob
 import logging
+import textwrap
 from urllib import parse
 import csv
 import gzip
@@ -14,6 +15,14 @@ import re
 import shutil
 import time
 import requests
+from sp_api.api import DataKiosk
+from sp_api.api import ListingsItems, ProductTypeDefinitions, CatalogItems, CatalogItemsVersion
+from sp_api.base import SellingApiException
+from sp_api.base.reportTypes import ReportType
+from datetime import datetime, timedelta
+
+# DATA KIOSK API
+client = DataKiosk()
 
 
 client_id = os.environ.get('LWA_APP_ID')
@@ -29,6 +38,7 @@ credentials = {
 
 session = requests.session()
 logger = logging.getLogger(__name__)
+
 
 def get_access_token():
     """
@@ -105,10 +115,11 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
             try:
 
                 init_request = session_data.get(f"{request_url}",
-                                            data=payload)
+                                                data=payload)
             except ConnectionError:
 
-                logger.error("Amazon request had a ConnectionError, sleeping for 5 seconds!")
+                logger.error(
+                    "Amazon request had a ConnectionError, sleeping for 5 seconds!")
 
                 time.sleep(5)
 
@@ -128,7 +139,8 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
 
             else:
 
-                logger.error("SP-API Has encountred an error. Try again later!")
+                logger.error(
+                    "SP-API Has encountred an error. Try again later!")
                 jsonify = None
 
             return jsonify
@@ -348,7 +360,8 @@ def spapi_get_orders():
 
                 spapi_getorderitems(30, orders_dict)
 
-                logger.info(f"Processed {count} orders || Orders left: {len(orders_dict) - count}")
+                logger.info(f"Processed {count} orders || Orders left: {
+                            len(orders_dict) - count}")
 
                 request_count = 0
 
@@ -420,6 +433,24 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
         params = {"marketplaceIds": MarketPlaceID,
                   "issueLocale": 'en_US',
                   "includedData": included_data}
+        
+        for item in items_list:
+
+                if not re.search('_fba', item['seller-sku']):
+
+                    sku = item['seller-sku']
+
+                else:
+
+                    continue
+
+                listing_item = ListingsItems().get_listings_item(sellerId=AmazonSA_ID, 
+                                                                 sku=sku, 
+                                                                 includedData=included_data.split(','),
+                                                                 issueLocale='tr_TR', 
+                                                                 marketplaceIds=[MarketPlaceID])
+                
+                print(listing_item)
 
         with ThreadPoolExecutor(max_workers=5) as executor:
 
@@ -718,33 +749,35 @@ def spapi_update_listing(product):
               to update || Reason: {listing_update_request}""")
 
 
-def spapi_add_listing(products):
+def spapi_add_listing(data):
 
-    data_payloads = []
-
-    for product in products.items():
+    for product in data.items():
 
         product_sku = product[0]
         product_data = product[1][0]['data']
         source_product_attrs = product_data['attributes']
         product_images = {}
+        bullet_points_list = textwrap.wrap(product_data['description'], width=len(product_data['description']) // 5)
+        bullet_points = [{'value': bullet_point} for bullet_point in bullet_points_list]
+
 
         for i in enumerate(product_data['images']):
 
             if i[0] == 0:
 
-                product_images['main_product_image_locator'] = i[1]['url']
+                product_images['main_product_image_locator'] = [{"media_location": i[1]['url']}]
 
             else:
 
-                product_images[f"other_product_image_locator_{
-                    i[0]}"] = i[1]['url']
+                product_images[f"other_product_image_locator_{i[0]}"] = [{"media_location": i[1]['url']}]
 
         for atrr in source_product_attrs:
 
             if re.search('Boyut/Ebat', atrr['attributeName']):
 
                 size = atrr['attributeValue']
+                size_match = atrr['attributeValue'].split('x')
+
 
             if re.search(r'Renk|Color', atrr['attributeName']):
 
@@ -765,7 +798,7 @@ def spapi_add_listing(products):
             if re.search('Hav Yüksekliği', atrr['attributeName']):
 
                 thickness = atrr['attributeValue']
-                match = re.search(r'\d+\s*mm', thickness)
+                match = re.search(r'\d+', thickness)
 
                 if match:
 
@@ -784,127 +817,115 @@ def spapi_add_listing(products):
 
                 shape = 'Dikdörtgen'
 
-        product_definitions = request_data(
-            operation_uri=f"/definitions/2020-09-01/productTypes",
-            params={
-                "marketplaceIds": MarketPlaceID,
-                "itemName": product_data['categoryName'],
-                "locale": "tr_TR",
-                "searchLocale": "tr_TR",
-            },
-            payload=[],
-            method='GET')
+        product_definitions = ProductTypeDefinitions().search_definitions_product_types(
+                itemName = product_data['categoryName'],
+                marketplaceIds = MarketPlaceID,
+                searchLocale = "tr_TR",
+                locale = "tr_TR")
 
-        if product_definitions:
+        if product_definitions is not []:
 
-            product_attrs = request_data(
-                operation_uri=f"""/definitions/2020-09-01/productTypes/{
-                    product_definitions['productTypes'][0]['name']}""",
-                params={
-                    "marketplaceIds": MarketPlaceID,
-                    "requirements": "LISTING",
-                    "locale": "tr_TR",
-                },
-                payload=[],
-                method='GET')
+            product_attrs = ProductTypeDefinitions().get_definitions_product_type(
+                productType = product_definitions.payload['productTypes'][0]['name'],
+                marketplaceIds = MarketPlaceID,
+                requirements = "LISTING",
+                locale = "tr_TR")
 
             if product_attrs:
 
-                attributes = product_attrs['propertyGroups']
+                file_path = f'amazon_{product_attrs.payload['productType']}_attrs.json'
 
-                params = {
-                    'marketplaceIds': MarketPlaceID,
-                    'issueLocale': 'tr_TR'}
+                if os.path.isfile(file_path):
+
+                    pass
+
+                else:
+
+                    product_scheme = requests.get(url=product_attrs.payload['schema']['link']['resource'])
+                    scheme_json = json.loads(product_scheme.text)
+                    extract_category_item_attrs(file_data=scheme_json, file_name=product_attrs.payload['productType'])
 
                 data_payload = {
-                    "productType": product_attrs['productType'],
+                    "productType": product_attrs.payload['productType'],
                     "requirements": "LISTING",
                     "attributes": {
-                        "condition_type": [
+                        "item_name": [{"value": product_data['title']}],
+                        "brand": [{"value": product_data['brand']}],
+                        "supplier_declared_has_product_identifier_exemption": [{"value": True}],
+                        "recommended_browse_nodes": [{"value": "13028044031"}],
+                        "bullet_point": bullet_points,
+                        "condition_type": [{"value": "new_new"}],
+                        "fulfillment_availability": [
+                            {"fulfillment_channel_code": "DEFAULT", "quantity": product_data['quantity']}
+                        ],
+                        "gift_options": [{"can_be_messaged": "false", "can_be_wrapped": "false"}],
+                        "generic_keyword": [
+                            {"value": product_data['title'].split(' ')[0]}
+                        ],
+                        "list_price": [{"currency": "TRY", "value_with_tax": product_data['listPrice']}],
+                        "manufacturer": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti."}],
+                        "material": [{"value": materyal}],
+                        "model_number": [{"value": product_data['productMainId']}],
+                        "number_of_items": [{"value": 1}],
+                        "color": [{"value": color}],
+                        "size": [{"value": size}],
+                        "special_feature": [{"value": feature}],
+                        "style": [{"value": style}],
+                        "part_number": [{"value": product_sku}],
+                        "pattern": [{"value": "Düz"}],
+                        "product_description": [
                             {
-                                "value": "new_new"
+                                "value": product_data['description']
                             }
                         ],
-                        "item_name": [
+                        "product_site_launch_date": [{"value": datetime.now(timezone.utc).strftime('%Y-%m-%d')}],
+                        "pile_height": [{"value": "Düşük Hav"}],
+                        "purchasable_offer": [
+                            {"currency": "TRY", "our_price": [
+                                {"schedule": [{"value_with_tax": product_data['salePrice']}]}]}
+                        ],
+                        "included_components": [
+                            {"value": f"Tek adet {product_data['title']}"}
+                        ],
+                        "item_dimensions": [
                             {
-                                "value": product_data['title'],
-                                "language_tag": "tr_TR"
+                                "length": {"value": thickness, "unit": "millimeters"},
+                                "width": {"value": size_match[1], "unit": "centimeters"},
+                                "height": {"value": size_match[0], "unit": "centimeters"},
                             }
                         ],
-                        "offer": {
-                            "fulfillment_channel_availability": "DEFAULT",
-                            "purchasable_offer": True,
-                            "condition_type": "New",
-                            "list_price": {
+                        "item_shape": [{"value": shape}],
+                        "item_thickness": [{"decimal_value": thickness, "unit": "millimeters"}],
+                        "item_length_width": [
+                            {
+                                "length": {"unit": "centimeters", "value": size_match[0]},
+                                "width": {"unit": "centimeters", "value": size_match[1]},
+                            }
+                        ],
+                        "country_of_origin": [{"value": "TR"}],
+                        "rug_form_type": [{"value": "doormat"}],
+                    },
+                    "offers": [
+                        {
+                            "offerType": "B2C",
+                            "price": {
+                                "currency": "TRY",
                                 "currencyCode": "TRY",
                                 "amount": product_data['salePrice']
-                            },
-                            "gift_options": {
-                                "allowGiftWrap": False,
-                                "allowGiftMessage": False
-                            },
-                        },
-                        "images": product_images,
-                        "variations": [
-                            {
-                                "parentage_level": "parent",
-                                "child_parent_sku_relationship":  "relationship",
-                                # ["color","size","color_size","style","material"]
-                                "variation_theme": "color_size"
                             }
-                        ],
-                        "safety_and_compliance": {
-                            "country_of_origin": "Türkiye",
-                            "batteries_required": False,
-                            "batteries_included": False,
-                            "hazmat": False
-                        },
-                        "product_identity": {
-                            "item_name": product_data['title'],
-                            "brand": product_data['brand'],
-                            "externally_assigned_product_identifier": product_data['barcode'],
-                            "item_type_keyword": product_attrs['displayName'],
-                            "model_number": product_data['productMainId'],
-                            "manufacturer": product_data['brand'],
-                            "sku": product_data['stockCode']
-                        },
-                        "product_details":
-                            {
-                                "product_description": product_data['description'],
-                                "generic_keyword": product_data['title'].split(' '),
-                                "style": "Modern",
-                                "item_package_quantity": product_data['quantity'],
-                                "material": materyal,
-                                "number_of_items": 1,
-                                "color": color,
-                                "size": size,
-                                "style": style,
-                                "item_shape": shape,
-                                "item_thickness": "Düşük Hav",
-                                "part_number": product_data['productMainId'],
-                        },
-                    },
-                    # "marketplaceIds": ["ATVPDKIKX0DER"],
-                    # "locale": "tr_TR",
-                    # "productTypeVersion": {
-                    #     "version": "U8L4z4Ud95N16tZlR7rsmbQ==",
-                    #     "latest": True,
-                    #     "releaseCandidate": False
-                    # }
+                        }
+                    ]
                 }
 
-                data_payload_dump = json.dumps(data_payload)
+                data_payload["attributes"].update(product_images)
 
-                data_payloads.append(data_payload_dump)
+                listing_add_request = ListingsItems().put_listings_item(
+                    sellerId=AmazonSA_ID,
+                    sku=product_sku,
+                    marketplaceIds=["A33AVAJ2PDY3EV"],
+                    body=data_payload)
 
-                listing_add_request = request_data(
-                    operation_uri=f"""/listings/2021-08-01/items/{
-                        AmazonSA_ID}/{product_sku}""",
-                    params=params,
-                    payload=data_payload_dump,
-                    method='PUT')
-
-                if listing_add_request and listing_add_request['status'] == 'ACCEPTED':
+                if listing_add_request and listing_add_request.payload['status'] == 'ACCEPTED':
 
                     logger.info(f"""New product added with code: {
                         product_sku}, qty: {product_data['quantity']}""")
@@ -914,15 +935,12 @@ def spapi_add_listing(products):
                     logger.error(f"""New product with code: {product_sku} creation has failed
                             || Reason: {listing_add_request}""")
 
-def extract_category_item_attrs():
 
-    amazon_attrs = {}
+def extract_category_item_attrs(file_data, file_name=''):
+
+    amazon_attrs = file_data
     processed_attrs = {}
     temporary_attr = {}
-
-    # Load the JSON file
-    with open('amazonRUGattrs.json', 'r', encoding='utf-8') as attrFile:
-        amazon_attrs = json.load(attrFile)
 
     # Get the 'properties' from the loaded JSON
     properties = amazon_attrs.get('properties', {})
@@ -944,17 +962,20 @@ def extract_category_item_attrs():
                 else:
                     if 'items' in property_details:
                         nested_items = property_details['items']
-                    
+
                         if 'required' in nested_items:
                             for required_obj in nested_items.get('required', []):
                                 temporary_attr[attribute_name][property_name][required_obj] = {}
-                            
+
                                 if 'properties' in nested_items.get('properties', {}):
-                                    obj_properties = nested_items['properties'].get(required_obj, {})
-                                    temporary_attr[attribute_name][property_name][required_obj] = obj_properties.get('examples', [None])[0]
+                                    obj_properties = nested_items['properties'].get(
+                                        required_obj, {})
+                                    temporary_attr[attribute_name][property_name][required_obj] = obj_properties.get(
+                                        'examples', [None])[0]
                                 else:
-                                    nested_properties = nested_items['properties'].get(required_obj, {}).get('items', {})
-                                
+                                    nested_properties = nested_items['properties'].get(
+                                        required_obj, {}).get('items', {})
+
                                     if 'properties' in nested_properties:
                                         for sub_required in nested_properties.get('required', []):
                                             sub_property_details = nested_properties['properties'].get(sub_required, {})
@@ -966,12 +987,13 @@ def extract_category_item_attrs():
 
         # Determine the type of the attribute
         attribute_type = sub_attributes.get('type')
+
         if attribute_type == 'array':
             processed_attrs[attribute_name] = [temporary_attr[attribute_name]]
         else:
             processed_attrs[attribute_name] = temporary_attr[attribute_name]
 
     # Save the result to a new JSON file
-    with open('amazon_rug_attrs2.json', 'w', encoding='utf-8') as attrFile:
+    with open(f'amazon_{file_name}_attrs.json', 'w', encoding='utf-8') as attrFile:
         json.dump(processed_attrs, attrFile, indent=4)
     return processed_attrs
