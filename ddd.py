@@ -22,26 +22,16 @@ client = DataKiosk()
 
 
 sid = os.getenv("AMAZONSELLERACCOUNTID")
-product_definitions = ProductTypeDefinitions().search_definitions_product_types(
-                itemName = 'Halı',
-                marketplaceIds = ['A33AVAJ2PDY3EV'],
-                searchLocale = "tr_TR",
-                locale = "tr_TR")
-product_attrs = ProductTypeDefinitions().get_definitions_product_type(
-                productType='RUG',
-                marketplaceIds=['A33AVAJ2PDY3EV'],
-                requirements="LISTING",
-                locale="tr_TR")
-product_scheme = requests.get(url=product_attrs.payload['schema']['link']['resource'])
-scheme_json = json.loads(product_scheme.text)
+
+
 defi21 = CatalogItems()
 defi21.version = CatalogItemsVersion.V_2022_04_01
 defi212 = defi21.search_catalog_items(marketplaceIds=['A33AVAJ2PDY3EV'],
-                                             keywords=['Paspas', 'halı', 'basamak', 'Bıçağ', 'kapı', 'maket'],
+                                             keywords=['paspas', 'halı', 'maket', 'kapı','merdiven'],
                                              keywordsLocale='tr_TR',
-                                             brandNames=['Stepmat', 'Myfloor'],
+                                             brandNames='Stepmat,Myfloor',
                                              includedData='attributes,identifiers,images,productTypes,summaries,dimensions,classifications',
-                                             pageSize=20)
+                                             locale='tr_TR')
 # defi = ProductTypeDefinitions().search_definitions_product_types(keywords='Halı',marketplaceIds=['A33AVAJ2PDY3EV'])
 # defi2 = ProductTypeDefinitions().get_definitions_product_type(productType='RUG',marketplaceIds=['A33AVAJ2PDY3EV'])
 # # print(defi.payload['metaSchema']['link']['resource'])

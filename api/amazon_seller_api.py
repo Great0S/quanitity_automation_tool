@@ -384,135 +384,7 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
     The function `spapi_getListings` retrieves a report from an API, downloads and decompresses the
     report file, converts it from CSV to JSON format, and returns the inventory items as a list of
     dictionaries.
-    :return: The `spapi_getListings` function returns a list of inventory items in JSON format after
-    processing and downloading data from an Amazon API endpoint.
     """
-
-    file_saved = 'amazon-all-inventory'
-
-    def csv_to_json(filename=""):
-        """
-        The `csv_to_json` function reads a CSV file, removes the Byte Order Mark (BOM) character if
-        present, and converts the data into a list of dictionaries.
-        """
-
-        def remove_bom(text):
-            """
-            The function `remove_bom` removes the Byte Order Mark (BOM) character from the beginning 
-            of a text if present.
-            """
-
-            # Remove the BOM character if present
-            if text.startswith('\ufeff'):
-
-                return text[1:]
-
-            return text
-
-        with open(filename, mode='r', newline='', encoding='utf-8-sig') as csv_file:
-
-            csv_reader = csv.DictReader(csv_file, delimiter='\t')
-
-            dict_list = []
-
-            for row in csv_reader:
-
-                clean_row = {remove_bom(key): remove_bom(val)
-                             for key, val in row.items()}
-
-                dict_list.append(clean_row)
-
-        return dict_list
-
-    def get_item_details(items_list, session_data, included_data, every_product: bool = False):
-
-        request_count = 0
-
-        amazon_products = []
-
-        params = {"marketplaceIds": MarketPlaceID,
-                  "issueLocale": 'en_US',
-                  "includedData": included_data}
-        
-        for item in items_list:
-
-                if not re.search('_fba', item['seller-sku']):
-
-                    sku = item['seller-sku']
-
-                else:
-
-                    continue
-
-                listing_item = ListingsItems().get_listings_item(sellerId=AmazonSA_ID, 
-                                                                 sku=sku, 
-                                                                 includedData=included_data.split(','),
-                                                                 issueLocale='tr_TR', 
-                                                                 marketplaceIds=[MarketPlaceID])
-                
-                print(listing_item)
-
-        with ThreadPoolExecutor(max_workers=5) as executor:
-
-            futures = []
-
-            for item in items_list:
-
-                if not re.search('_fba', item['seller-sku']):
-
-                    sku = item['seller-sku']
-
-                else:
-
-                    continue
-
-                futures.append(executor.submit(
-                    request_data, session_data, f"""/listings/2021-08-01/items/{AmazonSA_ID}/{
-                        sku}""", params))
-
-                request_count += 1
-
-                if request_count >= 10:
-
-                    for future in futures:
-
-                        price = 0
-
-                        result = future.result()
-
-                        if not every_product and result:
-
-                            if 'value_with_tax' in result['attributes']['purchasable_offer'][0]['our_price'][0]['schedule'][0]:
-
-                                price = result['attributes']['purchasable_offer'][0]['our_price'][0]['schedule'][0]['value_with_tax']
-
-                            if 'quantity' in result['fulfillmentAvailability'][0]:
-
-                                quanitity = result['fulfillmentAvailability'][0]['quantity']
-
-                                if result['summaries']:
-
-                                    asin = result['summaries'][0]['asin']
-
-                            else:
-
-                                continue
-
-                            amazon_products.append(
-                                {'sku': result['sku'], 'id': asin, 'qty': quanitity, price: price})
-
-                        elif every_product and result:
-
-                            amazon_products.append(
-                                {'sku': result['sku'], 'data': result})
-
-                    time.sleep(5)
-
-                    request_count = 0
-
-                    futures = []
-
-        return amazon_products
 
     if local:
 
@@ -525,94 +397,50 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
 
                 file_saved = file
 
-        json_data = csv_to_json(file_saved)
-        products = get_item_details(json_data,
-                                    session,
-                                    included_data='summaries,attributes,fulfillmentAvailability',
-                                    every_product=every_product)
-
-        logger.info(
-            'Products data request is successful. Response: OK')
-
-        return products
-
-    params = {
-        'MarketplaceIds': MarketPlaceID,
-        'reportTypes': 'GET_MERCHANT_LISTINGS_ALL_DATA'}
-
-    report_id_request = request_data(
-        session,
-        "/reports/2021-06-30/reports/",
-        params)
-
-    report_id = report_id_request['reports'][0]['reportId']
-
-    verify_report_status_request = request_data(session,
-                                                f"""/reports/2021-06-30/reports/{
-                                                    report_id}""",
-                                                [])
-
-    processing_status = verify_report_status_request['processingStatus']
+    products = []    
+    count = 0
+    catalog_item = CatalogItems()
+    catalog_item.version = CatalogItemsVersion.V_2022_04_01
+    catalog_items = catalog_item.search_catalog_items(marketplaceIds=[MarketPlaceID],
+                                                      keywords=['paspas', 'halı', 'maket', 'kapı', 'merdiven'],
+                                                      keywordsLocale='tr_TR',
+                                                      brandNames='Stepmat,Myfloor',
+                                                      includedData='attributes,identifiers,images,productTypes,summaries,dimensions,classifications',
+                                                      locale='tr_TR',
+                                                      pageSize=20)
 
     while True:
 
-        if processing_status == 'DONE':
+        for item in catalog_items.payload['items']:
 
-            report_document_id = verify_report_status_request['reportDocumentId']
+            count += 1
+            if not re.search('_fba', item['seller-sku']) or item.payload['quantity'] != 0:
 
-            report_data = request_data(session,
-                                       f"""/reports/2021-06-30/documents/{
-                                           report_document_id}""",
-                                       [])
+                sku = item.payload['seller-sku']
 
-            compression = report_data['compressionAlgorithm']
+            else:
 
-            report_link = report_data['url']
+                continue
 
-            break
+            summaries = item.payload['summaries'][0]
+            attributes = item.payload['attributes']
+            price = item.payload['offers'][0]['price']
+            availability = item.payload['fulfillmentAvailability'][0]
+            combined_dict = {**summaries, **attributes, **price, **availability}
 
-    def download_and_save_file(url, save_path):
-        """
-        The function `download_and_save_file` downloads a file 
-        from a given URL and saves it to a
-        specified path on the local system.
-        """
-        # Send a GET request to the URL
-        response = requests.get(url, stream=True, timeout=30)
+            products.append({'sku': sku, 'data': combined_dict})
 
-        # Raise an exception if the request was not successful
-        response.raise_for_status()
+            if count == 20:
 
-        # Open the file for writing in binary mode
-        with open(save_path, 'wb') as f:
-            # Iterate over the content of the response and write it to the file
-            for chunk in response.iter_content(chunk_size=1024):
-                if chunk:
-                    f.write(chunk)
-
-    def decompress_gzip_file(gzip_file_path, decompressed_file_path):
-        """
-        The function decompresses a gzip file to a specified decompressed file path.
-        """
-        with gzip.open(gzip_file_path, 'rb') as f_in:
-
-            with open(decompressed_file_path, 'wb') as f_out:
-
-                shutil.copyfileobj(f_in, f_out)
-
-    if report_link:
-
-        if compression:
-            file_download = f'amazon-all-inventory-{report_id}.{compression}'
-            file_saved = f'amazon-all-inventory-{report_id}.csv'
-            download_and_save_file(report_link, file_download)
-            decompress_gzip_file(file_download, file_saved)
-
-    inv_items = csv_to_json(file_saved)
-    products = get_item_details(inv_items,
-                                session,
-                                included_data='summaries,attributes,fulfillmentAvailability',
-                                every_product=every_product)
+                catalog_items = catalog_item.search_catalog_items(marketplaceIds=[MarketPlaceID],
+                                                                  keywords=['paspas', 'halı', 'maket', 'kapı', 'merdiven'],
+                                                                  keywordsLocale='tr_TR',
+                                                                  brandNames='Stepmat,Myfloor',
+                                                                  includedData='attributes,identifiers,images,productTypes,summaries,dimensions,classifications',
+                                                                  locale='tr_TR',
+                                                                  pageSize=20,
+                                                                  pageToken=item.payload[''])
+                count = 0
 
     logger.info('Amazon products data request is successful. Response: OK')
 
@@ -757,19 +585,22 @@ def spapi_add_listing(data):
         product_data = product[1][0]['data']
         source_product_attrs = product_data['attributes']
         product_images = {}
-        bullet_points_list = textwrap.wrap(product_data['description'], width=len(product_data['description']) // 5)
-        bullet_points = [{'value': bullet_point} for bullet_point in bullet_points_list]
-
+        bullet_points_list = textwrap.wrap(
+            product_data['description'], width=len(product_data['description']) // 5)
+        bullet_points = [{'value': bullet_point}
+                         for bullet_point in bullet_points_list]
 
         for i in enumerate(product_data['images']):
 
             if i[0] == 0:
 
-                product_images['main_product_image_locator'] = [{"media_location": i[1]['url']}]
+                product_images['main_product_image_locator'] = [
+                    {"media_location": i[1]['url']}]
 
             else:
 
-                product_images[f"other_product_image_locator_{i[0]}"] = [{"media_location": i[1]['url']}]
+                product_images[f"other_product_image_locator_{
+                    i[0]}"] = [{"media_location": i[1]['url']}]
 
         for atrr in source_product_attrs:
 
@@ -777,7 +608,6 @@ def spapi_add_listing(data):
 
                 size = atrr['attributeValue']
                 size_match = atrr['attributeValue'].split('x')
-
 
             if re.search(r'Renk|Color', atrr['attributeName']):
 
@@ -818,22 +648,23 @@ def spapi_add_listing(data):
                 shape = 'Dikdörtgen'
 
         product_definitions = ProductTypeDefinitions().search_definitions_product_types(
-                itemName = product_data['categoryName'],
-                marketplaceIds = MarketPlaceID,
-                searchLocale = "tr_TR",
-                locale = "tr_TR")
+            itemName=product_data['categoryName'],
+            marketplaceIds=MarketPlaceID,
+            searchLocale="tr_TR",
+            locale="tr_TR")
 
         if product_definitions is not []:
 
             product_attrs = ProductTypeDefinitions().get_definitions_product_type(
-                productType = product_definitions.payload['productTypes'][0]['name'],
-                marketplaceIds = MarketPlaceID,
-                requirements = "LISTING",
-                locale = "tr_TR")
+                productType=product_definitions.payload['productTypes'][0]['name'],
+                marketplaceIds=MarketPlaceID,
+                requirements="LISTING",
+                locale="tr_TR")
 
             if product_attrs:
 
-                file_path = f'amazon_{product_attrs.payload['productType']}_attrs.json'
+                file_path = f'amazon_{
+                    product_attrs.payload['productType']}_attrs.json'
 
                 if os.path.isfile(file_path):
 
@@ -841,9 +672,11 @@ def spapi_add_listing(data):
 
                 else:
 
-                    product_scheme = requests.get(url=product_attrs.payload['schema']['link']['resource'])
+                    product_scheme = requests.get(
+                        url=product_attrs.payload['schema']['link']['resource'])
                     scheme_json = json.loads(product_scheme.text)
-                    extract_category_item_attrs(file_data=scheme_json, file_name=product_attrs.payload['productType'])
+                    extract_category_item_attrs(
+                        file_data=scheme_json, file_name=product_attrs.payload['productType'])
 
                 data_payload = {
                     "productType": product_attrs.payload['productType'],
@@ -856,7 +689,8 @@ def spapi_add_listing(data):
                         "bullet_point": bullet_points,
                         "condition_type": [{"value": "new_new"}],
                         "fulfillment_availability": [
-                            {"fulfillment_channel_code": "DEFAULT", "quantity": product_data['quantity']}
+                            {"fulfillment_channel_code": "DEFAULT",
+                                "quantity": product_data['quantity']}
                         ],
                         "gift_options": [{"can_be_messaged": "false", "can_be_wrapped": "false"}],
                         "generic_keyword": [
@@ -958,14 +792,16 @@ def extract_category_item_attrs(file_data, file_name=''):
                 temporary_attr[attribute_name][property_name] = {}
 
                 if 'examples' in property_details:
-                    temporary_attr[attribute_name][property_name] = property_details.get('examples', [None])[0]
+                    temporary_attr[attribute_name][property_name] = property_details.get('examples', [
+                                                                                         None])[0]
                 else:
                     if 'items' in property_details:
                         nested_items = property_details['items']
 
                         if 'required' in nested_items:
                             for required_obj in nested_items.get('required', []):
-                                temporary_attr[attribute_name][property_name][required_obj] = {}
+                                temporary_attr[attribute_name][property_name][required_obj] = {
+                                }
 
                                 if 'properties' in nested_items.get('properties', {}):
                                     obj_properties = nested_items['properties'].get(
@@ -978,12 +814,15 @@ def extract_category_item_attrs(file_data, file_name=''):
 
                                     if 'properties' in nested_properties:
                                         for sub_required in nested_properties.get('required', []):
-                                            sub_property_details = nested_properties['properties'].get(sub_required, {})
-                                            temporary_attr[attribute_name][property_name][required_obj][sub_required] = sub_property_details.get('examples', [None])[0]
+                                            sub_property_details = nested_properties['properties'].get(
+                                                sub_required, {})
+                                            temporary_attr[attribute_name][property_name][required_obj][sub_required] = sub_property_details.get(
+                                                'examples', [None])[0]
                     else:
                         if 'properties' in property_details:
                             for inner_property_name, inner_property_details in property_details['properties'].items():
-                                temporary_attr[attribute_name][property_name][inner_property_name] = inner_property_details.get('examples', [None])[0]
+                                temporary_attr[attribute_name][property_name][inner_property_name] = inner_property_details.get(
+                                    'examples', [None])[0]
 
         # Determine the type of the attribute
         attribute_type = sub_attributes.get('type')
