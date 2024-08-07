@@ -28,7 +28,7 @@ from api.wordpress_api import (
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(module)s - %(levelname)s - %(message)s",
+    format="%(message)s",
     handlers=[RichHandler(rich_tracebacks=True)])
 logger = logging.getLogger(__name__)
 hpapi = HpApi()

@@ -7,16 +7,15 @@ from glob import glob
 import logging
 import textwrap
 from urllib import parse
-import csv
-import gzip
 import json
 import os
 import re
-import shutil
+import csv
+import io
 import time
 import requests
 from sp_api.api import DataKiosk
-from sp_api.api import ListingsItems, ProductTypeDefinitions, CatalogItems, CatalogItemsVersion
+from sp_api.api import ListingsItems, ProductTypeDefinitions, CatalogItems, CatalogItemsVersion, ReportsV2
 from sp_api.base import SellingApiException
 from sp_api.base.reportTypes import ReportType
 from datetime import datetime, timedelta
@@ -386,6 +385,19 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
     dictionaries.
     """
 
+    def process_list_in_chunks(my_list, chunk_size=20):
+        """Processes a list in chunks of specified size.
+
+        Args:
+          my_list: The list to process.
+          chunk_size: The size of each chunk. Defaults to 20.
+
+        Yields:
+          A chunk of the list.
+        """
+        for i in range(0, len(my_list), chunk_size):
+            yield my_list[i:i+chunk_size]
+
     if local:
 
         dir_path = os.getcwd()
@@ -397,54 +409,87 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
 
                 file_saved = file
 
-    products = []    
-    count = 0
-    catalog_item = CatalogItems()
-    catalog_item.version = CatalogItemsVersion.V_2022_04_01
-    catalog_items = catalog_item.search_catalog_items(marketplaceIds=[MarketPlaceID],
-                                                      keywords=['paspas', 'halı', 'maket', 'kapı', 'merdiven'],
-                                                      keywordsLocale='tr_TR',
-                                                      brandNames='Stepmat,Myfloor',
-                                                      includedData='attributes,identifiers,images,productTypes,summaries,dimensions,classifications',
-                                                      locale='tr_TR',
-                                                      pageSize=20)
+    products = []
+    report_items_request = ReportsV2().create_report(
+        reportType=ReportType.GET_MERCHANT_LISTINGS_ALL_DATA, 
+        marketplaceIds=[MarketPlaceID])
 
     while True:
 
-        for item in catalog_items.payload['items']:
+        report_items_response = ReportsV2().get_report(
+            reportId=report_items_request.payload['reportId'])
 
-            count += 1
-            if not re.search('_fba', item['seller-sku']) or item.payload['quantity'] != 0:
+        if report_items_response.payload['processingStatus'] == 'DONE':
 
-                sku = item.payload['seller-sku']
+            break
 
-            else:
+        time.sleep(1)
 
-                continue
+    get_report_items_document = ReportsV2().get_report_document(reportDocumentId=report_items_response.payload['reportDocumentId'],
+                                                                download=True,
+                                                                decrypt=True)
+    report_string = get_report_items_document.payload['document']
 
-            summaries = item.payload['summaries'][0]
-            attributes = item.payload['attributes']
-            price = item.payload['offers'][0]['price']
-            availability = item.payload['fulfillmentAvailability'][0]
-            combined_dict = {**summaries, **attributes, **price, **availability}
+    if report_string.startswith('\ufeff'):
 
-            products.append({'sku': sku, 'data': combined_dict})
+        report_string = report_string[1:]
 
-            if count == 20:
+    report_items_document = io.StringIO(report_string)
+    report_reader = csv.DictReader(report_items_document, delimiter='\t')
+    report_items_data = list(report_reader)
+    items_skus = [item['seller-sku']
+                  for item in report_items_data if not re.search(r'\_fba', item['seller-sku'])]
 
-                catalog_items = catalog_item.search_catalog_items(marketplaceIds=[MarketPlaceID],
-                                                                  keywords=['paspas', 'halı', 'maket', 'kapı', 'merdiven'],
-                                                                  keywordsLocale='tr_TR',
-                                                                  brandNames='Stepmat,Myfloor',
-                                                                  includedData='attributes,identifiers,images,productTypes,summaries,dimensions,classifications',
-                                                                  locale='tr_TR',
-                                                                  pageSize=20,
-                                                                  pageToken=item.payload[''])
-                count = 0
+    catalog_item = CatalogItems()
+    catalog_item.version = CatalogItemsVersion.V_2022_04_01
+    items_skus_string_list = process_list_in_chunks(items_skus, 20)
+    start_time = time.time()
+    end_time = start_time + 2
+
+    while time.time() < end_time:
+        
+        for sku_string in items_skus_string_list:
+
+            sku_strings = ','.join(sku_string)
+            catalog_items_request = catalog_item.search_catalog_items(marketplaceIds=[MarketPlaceID],
+                                                                      includedData='attributes,identifiers,images,productTypes,summaries',
+                                                                      locale='tr_TR',
+                                                                      sellerId=AmazonSA_ID,
+                                                                      identifiersType='SKU',
+                                                                      identifiers=sku_strings,
+                                                                      pageSize=20)
+            
+
+            if catalog_items_request:
+                for item in catalog_items_request.payload['items']:
+
+                    sku = [i['identifier'] for i in item['identifiers'][0]['identifiers'] 
+                           if i['identifierType'] == 'SKU']
+                    
+                    summaries = item['summaries'][0]
+
+                    identifiers = {f'{k}{item['identifiers'][0]['identifiers'].index(i)}': v
+                                   for i in item['identifiers'][0]['identifiers']
+                                   for k, v in i.  items()}
+                    
+                    attributes = item['attributes']
+
+                    images = {f'link{item['images'][0]['images'].index(i)}': i['link'] 
+                              for i in item['images'][0]['images'] 
+                              for k, v in i.items() if v == 'MAIN'}
+                    
+                    combined_dict = {**identifiers, **summaries, **attributes, **images}
+
+                    products.append({'sku': sku[0], 'data': combined_dict})
+
+            time.sleep(0.5)
 
     logger.info('Amazon products data request is successful. Response: OK')
 
     return products
+
+
+spapi_getlistings(True)
 
 
 def filter_order_data(orders_list, order, result, items):
