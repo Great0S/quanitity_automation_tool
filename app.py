@@ -194,110 +194,87 @@ def filter_data_list(data = '', source = False, target = '', every_product: bool
         source = True
 
     for platform in platforms:
-
         if platform != source:
-
             if f"{platform}_data" in data:
-
-                for source_item in data[f"{platform}_data"]:
-
-                    if "data" in source_item:
-
-                        qty = int(source_item['data']["quantity"])
-                        item_id = source_item['data']["id"]
-                    
-                    else:
-
-                        qty = source_item["qty"]
-                        item_id = source_item["id"]
-
-
+                for targets_item in data[f"{platform}_data"]:
                     if source:
-
                         if no_match:
 
                             target_skus = list(item["sku"] for item in data[f"{target}_data"])
                             platform = target
 
-                        for target_item in data[f"{platform}_data"]:
-
-                            if target_item["sku"] == source_item["sku"]:
+                        for source_item in data[f"{source}_data"]:
+                            if source_item["sku"] == targets_item["sku"]:
                                 if no_match:
 
                                     break
-
-                                elif target_item["sku"] in matching_ids:
-
-                                    if every_product:
-
-                                        matching_ids[target_item["sku"]].append(
-                                            {
-                                                "platform": platform,
-                                                "data": source_item["data"],
-                                            }
-                                        )
-                                    else:
-
-                                        matching_ids[target_item["sku"]].append(
-                                            {
-                                                "platform": platform,
-                                                "id": item_id,
-                                                "price": source_item.get("price", 0),
-                                                "qty": qty,
-                                            }
-                                        )
-
+                               
                                 else:
-
                                     if every_product:
 
-                                        matching_ids[target_item["sku"]] = [
+                                        matching_ids[source_item["sku"]] = [
+                                            {
+                                                "platform": source,
+                                                "data": source_item["data"],
+                                            },
                                             {
                                                 "platform": platform,
-                                                "data": source_item["data"],
+                                                "data": targets_item["data"],
                                             }
                                         ]
 
                                     else:
 
-                                        matching_ids[target_item["sku"]] = [
+                                        qty = targets_item["qty"]
+                                        item_id = targets_item["id"]
+                                        matching_ids[source_item["sku"]] = [
                                             {
                                                 "platform": platform,
                                                 "id": item_id,
-                                                "price": source_item.get("price", 0),
+                                                "price": targets_item.get("price", 0),
                                                 "qty": qty,
                                             }
                                         ]
 
                                 break
 
-                            elif no_match and source_item["sku"] not in target_skus:
-                                if source_item["sku"] not in non_matching_ids:
+                            elif no_match and targets_item["sku"] not in target_skus:
+                                if targets_item["sku"] not in non_matching_ids:
 
-                                    non_matching_ids[source_item["sku"]] = [
+                                    non_matching_ids[targets_item["sku"]] = [
                                         {
                                             "platform": platform,
-                                            "data": source_item["data"],
+                                            "data": targets_item["data"],
                                         }
                                     ]
 
                     else:
 
-                        if source_item["sku"] in matching_ids:
+                        if "data" in targets_item:
+
+                            qty = int(targets_item['data']["quantity"])                            
+                            item_id = targets_item['data']["id"]
+
+                        else:
+
+                            qty = int(targets_item["qty"])
+                            item_id = targets_item["id"]
+
+                        if targets_item["sku"] in matching_ids:
 
                             if every_product:
 
-                                matching_ids[source_item["sku"]].append(
+                                matching_ids[targets_item["sku"]].append(
                                     {"platform": platform,
-                                        "data": source_item["data"]}
+                                        "data": targets_item["data"]}
                                 )
                             else:
 
-                                matching_ids[source_item["sku"]].append(
+                                matching_ids[targets_item["sku"]].append(
                                     {
                                         "platform": platform,
                                         "id": item_id,
-                                        "price": source_item.get("price", 0),
+                                        "price": targets_item.get("price", 0),
                                         "qty": qty,
                                     }
                                 )
@@ -306,17 +283,17 @@ def filter_data_list(data = '', source = False, target = '', every_product: bool
 
                             if every_product:
 
-                                matching_ids[source_item["sku"]] = [
+                                matching_ids[targets_item["sku"]] = [
                                     {"platform": platform,
-                                        "data": source_item["data"]}
+                                        "data": targets_item["data"]}
                                 ]
                             else:
 
-                                matching_ids[source_item["sku"]] = [
+                                matching_ids[targets_item["sku"]] = [
                                     {
                                         "platform": platform,
                                         "id": item_id,
-                                        "price": source_item.get("price", 0),
+                                        "price": targets_item.get("price", 0),
                                         "qty": qty,
                                     }
                                 ]
@@ -386,19 +363,25 @@ def filter_data_list(data = '', source = False, target = '', every_product: bool
 
         else:
 
-            for item_key, item_val in matching_ids.items():
+            if source:
 
-                products = item_val
+                changed_values = matching_ids
 
-                if len(products) > 1:
+            else:
 
-                    changed_values.append(products[0]["data"])
+                for item_key, item_val in matching_ids.items():
 
-                else:
+                    products = item_val
 
-                    changed_values = matching_ids
+                    if len(products) > 1:
 
-                    break
+                        changed_values.append(products[0]["data"])
+
+                    else:
+
+                        changed_values = matching_ids
+
+                        break
 
     return changed_values
 
@@ -420,7 +403,7 @@ def execute_updates(source=None, targets=None, options=None):
         "wordpress": update_wordpress_products,
     }
 
-    logger.info("Updates starting")
+    logger.info("Starting updates...")
 
     post_data = process_update_data(source, targets, options)
 
@@ -455,22 +438,24 @@ def execute_updates(source=None, targets=None, options=None):
                 logger.info("Update in progress...")
 
                 if options:
-
                     for platform, func in platform_to_function.items():
+                        if isinstance(targets, list):
+                            for target_platform in targets:
+                                if platform == target_platform:
 
-                        for target_platform in targets:
+                                    func(products=post_data,
+                                         options=options, source=source)
+                                    
+                        else:
+                            if platform == targets:
 
-                            if platform == target_platform:
-
-                                func(products=post_data,
-                                     options=options, source=source)
+                                    func(products=post_data,
+                                         options=options, source=source)
 
                 else:
 
                     for post in post_data:
-
                         for platform, func in platform_to_function.items():
-
                             if platform == post["platform"]:
 
                                 func(post)

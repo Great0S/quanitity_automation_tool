@@ -137,7 +137,7 @@ def get_trendyol_stock_data(every_product: bool = False, local: bool = False, Fi
 
         decoded_data = prepare_data(request_data(uri_addon, "GET", {}))
 
-    logger.info('Trendyol products data request is successful. Response: OK')
+    logger.info(f"Fetched {len(all_products)} products")
 
     if every_product:
 
@@ -216,7 +216,7 @@ def post_trendyol_data(product):
 
         post_response.raise_for_status()
 
-        logger.error(f"""Request for trendyol product {
+        logger.error(f"""Request for product {
                product['sku']} is unsuccessful | Response: {
                    post_response.text}""")
 
