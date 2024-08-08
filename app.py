@@ -52,10 +52,8 @@ def get_data(
 
         target = targets if isinstance(targets, list) else [targets]
 
-        source_platform, source_codes = filter_data(
-            every_product, local, [source])
-        target_platforms, target_codes = filter_data(
-            every_product, local, target)
+        source_platform, source_codes = filter_data(every_product, local, [source])
+        target_platforms, target_codes = filter_data(every_product, local, target)
         all_codes = list(set(target_codes + source_codes))
 
         # We add the source platform data to the target platforms so they stay on one list
@@ -77,25 +75,25 @@ def get_data(
 
         pass
 
-    elif match:
+    # elif match:
 
-        all_codes = {source: source_codes, targets: target_codes}
+    #     all_codes = {source: source_codes, targets: target_codes}
 
-    else:
+    # else:
 
-        all_codes = list(
-            set(
-                [item["sku"] for item in data_content["n11_data"]]
-                + [item["sku"] for item in data_content["trendyol_data"]]
-                + [item["sku"] for item in data_content["amazon_data"]]
-                + [item["sku"] for item in data_content["hepsiburada_data"]]
-                + [item["sku"] for item in data_content["pazarama_data"]]
-                + [item["sku"] for item in data_content["wordpress_data"]]
-                + [item["sku"] for item in data_content["pttavm_data"]]
-            )
-        )
+    #     all_codes = list(
+    #         set(
+    #             [item["sku"] for item in data_content["n11_data"]]
+    #             + [item["sku"] for item in data_content["trendyol_data"]]
+    #             + [item["sku"] for item in data_content["amazon_data"]]
+    #             + [item["sku"] for item in data_content["hepsiburada_data"]]
+    #             + [item["sku"] for item in data_content["pazarama_data"]]
+    #             + [item["sku"] for item in data_content["wordpress_data"]]
+    #             + [item["sku"] for item in data_content["pttavm_data"]]
+    #         )
+    #     )
 
-    return data_content, all_codes
+    return data_content, []
 
 
 def filter_data(every_product, local, targets):
@@ -122,7 +120,7 @@ def filter_data(every_product, local, targets):
         for platform, function in platform_to_function.items():
 
             if re.search(platform, name):
-
+                
                 data_content[f"{name}_data"] = function(every_product)
 
     for _, item in data_content.items():
@@ -203,13 +201,22 @@ def filter_data_list(data = '', source = False, target = '', every_product: bool
 
                 for source_item in data[f"{platform}_data"]:
 
+                    if "data" in source_item:
+
+                        qty = int(source_item['data']["quantity"])
+                        item_id = source_item['data']["id"]
+                    
+                    else:
+
+                        qty = source_item["qty"]
+                        item_id = source_item["id"]
+
+
                     if source:
 
                         if no_match:
 
-                            target_skus = list(
-                                item["sku"] for item in data[f"{target}_data"]
-                            )
+                            target_skus = list(item["sku"] for item in data[f"{target}_data"])
                             platform = target
 
                         for target_item in data[f"{platform}_data"]:
@@ -234,9 +241,9 @@ def filter_data_list(data = '', source = False, target = '', every_product: bool
                                         matching_ids[target_item["sku"]].append(
                                             {
                                                 "platform": platform,
-                                                "id": source_item["id"],
+                                                "id": item_id,
                                                 "price": source_item.get("price", 0),
-                                                "qty": source_item["qty"],
+                                                "qty": qty,
                                             }
                                         )
 
@@ -256,9 +263,9 @@ def filter_data_list(data = '', source = False, target = '', every_product: bool
                                         matching_ids[target_item["sku"]] = [
                                             {
                                                 "platform": platform,
-                                                "id": source_item["id"],
+                                                "id": item_id,
                                                 "price": source_item.get("price", 0),
-                                                "qty": source_item["qty"],
+                                                "qty": qty,
                                             }
                                         ]
 
@@ -289,9 +296,9 @@ def filter_data_list(data = '', source = False, target = '', every_product: bool
                                 matching_ids[source_item["sku"]].append(
                                     {
                                         "platform": platform,
-                                        "id": source_item["id"],
+                                        "id": item_id,
                                         "price": source_item.get("price", 0),
-                                        "qty": source_item["qty"],
+                                        "qty": qty,
                                     }
                                 )
 
@@ -308,9 +315,9 @@ def filter_data_list(data = '', source = False, target = '', every_product: bool
                                 matching_ids[source_item["sku"]] = [
                                     {
                                         "platform": platform,
-                                        "id": source_item["id"],
+                                        "id": item_id,
                                         "price": source_item.get("price", 0),
-                                        "qty": source_item["qty"],
+                                        "qty": qty,
                                     }
                                 ]
 

@@ -437,6 +437,11 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
     report_items_document = io.StringIO(report_string)
     report_reader = csv.DictReader(report_items_document, delimiter='\t')
     report_items_data = list(report_reader)
+    products = {i['seller-sku']: {'data': {'id': i['product-id'], 'listing-id': i['listing-id'], 'quantity': i['quantity'], }} 
+                for i in report_items_data 
+                for k, v in i.items() 
+                if k == 'quantity' 
+                and not re.search(r'\_fba', i['seller-sku'])}
     items_skus = [item['seller-sku']
                   for item in report_items_data if not re.search(r'\_fba', item['seller-sku'])]
 
@@ -480,16 +485,14 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
                     
                     combined_dict = {**identifiers, **summaries, **attributes, **images}
 
-                    products.append({'sku': sku[0], 'data': combined_dict})
+                    products[sku[0]]['data'].update(combined_dict)
 
-            time.sleep(0.5)
+            time.sleep(1)
 
+    products = [{'sku': k, 'data': f} for k, v in products.items() for c, f in v.items()]
     logger.info('Amazon products data request is successful. Response: OK')
 
     return products
-
-
-spapi_getlistings(True)
 
 
 def filter_order_data(orders_list, order, result, items):
