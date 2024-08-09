@@ -180,7 +180,7 @@ class HpApi:
             if options != "full":
 
                 update_data = self.prepare_product_data(
-                    items=products, op=options, source=source
+                    items=products, op='update', source=source
                 )
                 listing_details = {}
                 listing_items = []
@@ -212,7 +212,7 @@ class HpApi:
 
                 while len(listing_items) > 0:
 
-                    batch_size = min(len(listing_items), 100)
+                    batch_size = min(len(listing_items), 50)
                     listing_details["merchantId"] = self.store_id
                     listing_details["items"] = listing_items[:batch_size]
                     listing_items = listing_items[batch_size:]
@@ -337,8 +337,6 @@ class HpApi:
         Returns:
             list: A list of product data.
         """
-
-        self.logger.info("Fetching product data from HepsiBurada")
 
         listings_list = []
 
@@ -503,8 +501,9 @@ class HpApi:
             for cat_data in categories:
 
                 item_data = categories[cat_data]
+                category = re.sub(r"(\bPaspas\b|\bPaspaslar\b)", "", cat_data, re.IGNORECASE).strip()
 
-                if re.search(cat_data, product):
+                if re.search(category, product):
 
                     self.category_target = item_data["categoryId"]
                     attrs = (
@@ -569,14 +568,11 @@ class HpApi:
 
                 self.category_attrs["hbsku"] = item_data_list[1][1]["data"]["hepsiburadaSku"]
 
-            self.category_attrs["merchantSku"] = self.data.get(
-                "stockCode", None)
-            self.category_attrs["VaryantGroupID"] = self.data.get(
-                "productMainId", None)
+            self.category_attrs["merchantSku"] = self.data.get("stockCode", None)
+            self.category_attrs["VaryantGroupID"] = self.data.get("productMainId", None)
             self.category_attrs["Barcode"] = self.data.get("barcode", None)
             self.category_attrs["UrunAdi"] = self.data.get("title", None)
-            self.category_attrs["UrunAciklamasi"] = self.data.get(
-                "description", None)
+            self.category_attrs["UrunAciklamasi"] = self.data.get("description", None)
             self.category_attrs["Marka"] = self.data.get("brand", "Myfloor")
             self.category_attrs["GarantiSuresi"] = 24
             self.category_attrs["kg"] = "1"
