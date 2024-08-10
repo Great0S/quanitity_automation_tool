@@ -6,6 +6,7 @@
 
 import logging
 import re
+import os
 from tui import ProductManagerApp
 from rich.logging import RichHandler
 from rich.prompt import Prompt
@@ -504,6 +505,13 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA
 
 
 def process(data_dict: dict = None):
+
+    # Clear screen command depending on the OS
+    
+    if os.name == 'nt':  # For Windows
+        os.system('cls')
+    else:  # For Linux and macOS
+        os.system('clear')
 
     if data_dict:
 

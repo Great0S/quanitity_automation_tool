@@ -1,10 +1,9 @@
 import logging
 import requests
 import json
-
+import time
 
 logger = logging.getLogger(__name__)
-
 
 def get_access_token():
 
@@ -32,7 +31,6 @@ def get_access_token():
         logger.error(f'Access token request has failed || Reason: {
                      response.text}')
 
-
 def request_data(method='GET', uri='', params=None, payload=None):
     """
     This Python function sends a request to the Pazarama API with specified method, URI, parameters, and
@@ -42,27 +40,33 @@ def request_data(method='GET', uri='', params=None, payload=None):
     url = f"https://isortagimapi.pazarama.com/{uri}?"
 
     access_token = get_access_token()
+    payload_dump = json.dumps(payload, ensure_ascii=False)
 
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {access_token}'
     }
 
-    response = requests.request(
-        method, url, headers=headers, params=params, data=payload)
+    while True:
 
-    if response.status_code == 200:
+        response = requests.request(
+            method, url, headers=headers, params=params, data=payload_dump)
 
-        response_data = json.loads(response.text)
+        if response.status_code == 200:
 
-        return response_data
+            response_data = json.loads(response.text)
 
-    else:
+            return response_data
+        
+        if response.status_code == 429:
 
-        logger.error(f'Request has failed || Status code: {response.status_code} || Reason: {response.text}')
+            time.sleep(1)
 
-        return None
+        else:
 
+            logger.error(f'Request has failed for product {payload['items'][0]['code']} || Status code: {response.status_code} || Reason: {response.reason}')
+
+            return None
 
 def getPazarama_productsList(everyProduct: bool = False, local: bool = False):
     """
@@ -71,22 +75,21 @@ def getPazarama_productsList(everyProduct: bool = False, local: bool = False):
 
     """
 
-    products = []
+    products_items = []
 
     params = {
         'Approved': 'true',
         'Size': 250
     }
 
-    products_list = request_data(uri='product/products', params=params)['data']
+    products_list, elapsed_time = request_processing(uri='product/products', params=params)
+    products = products_list['data']
 
-    if products_list:
-
-        for product in products_list:
-
+    if products:
+        for product in products:
             if not everyProduct:
 
-                products.append(
+                products_items.append(
                     {'id': product['code'],
                      'sku': product['stockCode'],
                      'qty': product['stockCount'],
@@ -94,15 +97,14 @@ def getPazarama_productsList(everyProduct: bool = False, local: bool = False):
                      })
             else:
 
-                products.append(
+                products_items.append(
                     {'sku': product['stockCode'],
                      'data': product
                      })
 
-        logger.info(f'Pazarama fetched {len(products)} products')
+        logger.info(f'Pazarama fetched {len(products_items)} products in {elapsed_time:.2f} seconds.')
 
-        return products
-
+        return products_items
 
 def pazarama_updateRequest(product):
     """
@@ -119,26 +121,32 @@ def pazarama_updateRequest(product):
 
     qty = product['qty']
 
-    update_payload = json.dumps({
-        "items": [
-            {
+    update_payload = {
+        "items": [{
                 "code": product_id,
                 "stockCount": int(qty)
-            }
-        ]
-    }, ensure_ascii=False)
-
-    update_request = request_data(
-        'POST', 'product/updateStock', payload=update_payload)
+            }]}
+   
+    update_request, elapsed_time = request_processing('product/updateStock-v2', update_payload, 'POST')
 
     if update_request:
 
         if update_request['success'] == True:
 
-            logger.info(f"""Product with code: {
-                product["sku"]}, New value: [green]{product["qty"]}[/green]""")
+            logger.info(f"""Product with code: {product["sku"]}, New value: {product["qty"]}, Elapsed time: {elapsed_time:.2f} seconds.""")
 
         else:
 
-            logger.error(f'Product with code: {sku} failed to update || Reason: {
-                         update_request['data'][0]['error']}')
+            logger.error(f'Product with code: {sku} failed to update || Reason: {update_request['data'][0]['error']} || Elapsed time: {elapsed_time:.2f} seconds.')
+
+def request_processing(uri: str, payload: dict = {}, params: dict = {}, method: str = 'GET'):
+
+    start_time = time.time()
+    request = request_data(method = method,
+                           uri = uri,
+                           params = params,
+                           payload=payload)
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+
+    return request, elapsed_time
