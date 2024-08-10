@@ -37,22 +37,6 @@ def request_data(method='GET', uri='', params=None, payload=None):
     """
     This Python function sends a request to the Pazarama API with specified method, URI, parameters, and
     payload, handling authentication and returning the response data if successful.
-
-    :param method: The `method` parameter in the `request_data` function specifies the HTTP method to be
-    used for the request. By default, it is set to 'GET', but it can be overridden by providing a
-    different HTTP method such as 'POST', 'PUT', 'DELETE', etc, defaults to GET (optional)
-    :param uri: The `uri` parameter in the `request_data` function represents the endpoint or path of
-    the API that you want to send the request to. It is a string that specifies the resource you are
-    interacting with on the server. For example, if you want to retrieve user data, the `uri`
-    :param params: The `params` parameter in the `request_data` function is used to pass any query
-    parameters that need to be included in the request URL. These parameters are typically used for
-    filtering, sorting, or specifying additional information for the API endpoint. They are added to the
-    URL as key-value pairs in the
-    :param payload: The `payload` parameter in the `request_data` function is used to pass data that
-    will be sent in the request body. It is typically used for sending data in POST, PUT, or PATCH
-    requests. The `payload` parameter should be a dictionary or a list of tuples containing the data to
-    :return: The function `request_data` returns the response data if the status code is 200 (OK). If
-    the status code is not 200, it prints an error message and returns `None`.
     """
 
     url = f"https://isortagimapi.pazarama.com/{uri}?"
@@ -115,7 +99,7 @@ def getPazarama_productsList(everyProduct: bool = False, local: bool = False):
                      'data': product
                      })
 
-        logger.info('Products data request is successful. Response: OK')
+        logger.info(f'Pazarama fetched {len(products)} products')
 
         return products
 

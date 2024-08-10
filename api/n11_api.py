@@ -181,12 +181,11 @@ def get_n11_stock_data(every_product: bool = False, local: bool = False):
 
         logger.error("Error: ", api_call.text)
 
-    logger.info(f"""Products data request is successful. Response: {
-        api_call.reason}""")
-
     if every_product:
         raw_elements = all_products
 
+    logger.info(f"""N11 fetched {len(raw_elements)} products""")   
+    
     return raw_elements
 
 

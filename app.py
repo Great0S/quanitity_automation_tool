@@ -257,7 +257,7 @@ def filter_data_list(data = '', source = False, target = '', every_product: bool
 
                         else:
 
-                            qty = int(targets_item["qty"])
+                            qty = int(targets_item.get("qty", 0))
                             item_id = targets_item["id"]
 
                         if targets_item["sku"] in matching_ids:

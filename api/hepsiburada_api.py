@@ -365,7 +365,7 @@ class HpApi:
                     listings_list.append(
                         {"sku": data["merchantSku"], "data": data})
 
-            self.logger.info(f"Fetched {len(listings_list)} products")
+            self.logger.info(f"HepsiBurada fetched {len(listings_list)} products")
 
             return listings_list
 

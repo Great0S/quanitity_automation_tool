@@ -490,7 +490,7 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
             time.sleep(1)
 
     products = [{'sku': k, 'data': f} for k, v in products.items() for c, f in v.items()]
-    logger.info('Amazon products data request is successful. Response: OK')
+    logger.info(f'Amazon fetched {len(products)} products')
 
     return products
 

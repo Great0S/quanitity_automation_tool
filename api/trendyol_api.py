@@ -137,11 +137,11 @@ def get_trendyol_stock_data(every_product: bool = False, local: bool = False, Fi
 
         decoded_data = prepare_data(request_data(uri_addon, "GET", {}))
 
-    logger.info(f"Fetched {len(all_products)} products")
-
     if every_product:
 
         products = all_products
+
+    logger.info(f"Trendyol fetched {len(products)} products")   
 
     return products
 

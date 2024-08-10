@@ -58,6 +58,12 @@ def get_wordpress_products(everyproduct: bool = False, local: bool = False):
 
     for item in products:
 
+        qty = 0
+
+        if item['stock_quantity']:
+
+            qty = item['stock_quantity']
+
         if everyproduct:
 
             filtered_products.append({'sku': item['sku'],
@@ -67,10 +73,9 @@ def get_wordpress_products(everyproduct: bool = False, local: bool = False):
             filtered_products.append({'id': item['id'],
                                       'sku': item['sku'],
                                       'price': float(item['price']),
-                                      'qty': item.get('stock_quantity', 0),
-                                      "stock_check": item['stock_status']})
+                                      'qty': qty})
 
-    logger.info("Wordpress products data request is successful. Response: OK")
+    logger.info(f"Wordpress fetched {len(filtered_products)} products")
 
     return filtered_products
 

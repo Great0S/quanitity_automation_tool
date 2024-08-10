@@ -110,8 +110,7 @@ def getpttavm_procuctskdata(everyproduct: bool = False, local: bool = False):
                 products.append({'id': product['a:UrunKodu'],
                                  'data': product})
 
-        logger.info(f"""Products data request is successful. Response: {
-               api_call.reason}""")
+        logger.info(f"""PTTAVM fetched {len(products)} products""")
 
         return products
 
