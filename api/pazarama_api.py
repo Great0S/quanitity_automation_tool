@@ -127,7 +127,7 @@ def pazarama_updateRequest(product):
                 "stockCount": int(qty)
             }]}
    
-    update_request, elapsed_time = request_processing('product/updateStock-v2', update_payload, 'POST')
+    update_request, elapsed_time = request_processing(uri='product/updateStock-v2', payload=update_payload, method='POST')
 
     if update_request:
 
