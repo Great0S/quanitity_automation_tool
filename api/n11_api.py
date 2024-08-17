@@ -7,605 +7,667 @@ import time
 import requests
 import xmltodict
 from zeep import Client, Settings, xsd
+from zeep.exceptions import Error
+from typing import Any, Tuple, Optional, List, Dict, Union
 
 
-logger = logging.getLogger(__name__)
+class N11API:
 
-# Setting api value
-API_KEY = os.getenv('N11_KEY')
-API_SECRET = os.getenv('N11_SECRET')
-URL = "https://api.n11.com/ws"
-headers = {
-    'Content-Type': 'text/xml; charset=utf-8'
-}
-auth = {
-    "appKey": API_KEY,
-    "appSecret": API_SECRET,
-}
+    def __init__(self):
+        # URLS
+        self.base_url = "https://api.n11.com/ws"
+        self.headers = {'Content-Type': 'text/xml; charset=utf-8'}
 
+        # Auth 
+        self.api_key = os.getenv('N11_KEY')
+        self.api_secret = os.getenv('N11_SECRET')
+        self.auth = {"appKey": self.api_key,"appSecret": self.api_secret}
+        
+        self.logger = logging.getLogger(__name__)
 
-def get_client(Service: str = 'ProductService'):
+    def __create_client(self, Service: str = 'ProductService', url: str = 'https://api.n11.com/ws') -> Client:
+        """
+            Create a SOAP client for the given service.
 
-    wsdl_url = f"{URL}/{Service}.wsdl"
-    settings = Settings(strict=False, xml_huge_tree=True,
-                        xsd_ignore_sequence_order=True)
-    client = Client(wsdl=wsdl_url, settings=settings)
+            Args:
+                service (str): The name of the service. Defaults to 'ProductService'.
+                url (str): The base URL for the WSDL. Defaults to 'http://example.com'.
 
-    return client
+            Returns:
+                Client: A Zeep client object for the specified service.
+        """
 
+        wsdl_url = f"{url}/{Service}.wsdl"
+        settings = Settings(strict=False, 
+                            xml_huge_tree=True,
+                            xsd_ignore_sequence_order=True)
+        try:
 
-def assign_vars(raw_xml, response_namespace, list_name, error_message=False, namespace_id='ns3'):
-    """
-    The function `assign_vars` parses XML response data, extracts specific elements 
-    based on provided namespace and list name, and returns a list of items and total
-    pages if the list exists, otherwise returns None.
-    """
+            client = Client(wsdl=wsdl_url, settings=settings)
+            return client
 
-    # XML raw data trimming
-    revised_response = (
-        raw_xml.replace(
-            """<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body>""",
-            "")).replace("""</SOAP-ENV:Body></SOAP-ENV:Envelope>""", "")
+        except Error as e:
 
-    # Parse the XML response into a dictionary using xmltodict library.
-    response_json = xmltodict.parse(revised_response)
+            print(f"An error occurred: {e}")
+            return None
 
-    # Access the response elements using the response_namespace and list_name variables.
-    if f"{namespace_id}:{response_namespace}" in response_json:
-        response_data = response_json[f"{namespace_id}:{response_namespace}"]
-    else:
-        response_data = response_json['SOAP-ENV:Envelope']['SOAP-ENV:Body'][f"{
-            namespace_id}:{response_namespace}"]
+    def __assign_vars(raw_xml: str, 
+                response_namespace: str, 
+                list_name: str, 
+                error_message: bool = False, 
+                namespace_id: str = 'ns3') -> Optional[Tuple[Any, Any]]:
+        """
+        Parse the raw XML response and extract the desired elements.
 
-    # Check if the list_name exists in the response data and has at least one element.
-    # If so, return the list of items and the total number of pages.
-    # Otherwise, return None.
-    if list_name in response_data and not error_message:
+        Args:
+            raw_xml (str): The raw XML response as a string.
+            response_namespace (str): The namespace of the response element.
+            list_name (str): The name of the list element to extract.
+            error_message (bool): Flag to indicate if error messages should be returned.    Defaults to False.
+            namespace_id (str): The namespace identifier. Defaults to 'ns3'.
 
-        if response_data[list_name]:
+        Returns:
+            Optional[Tuple[Any, Any]]: A tuple containing the list of items and the total   number of pages, or None.
+        """
 
-            items_list = next(iter(response_data[list_name].values()))
-            items_total_pages = response_data['pagingData']['pageCount']
+        try:
+            # XML raw data trimming
+            revised_response = (
+                raw_xml.replace(
+                    """<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/  envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body>""",
+                    "")).replace("""</SOAP-ENV:Body></SOAP-ENV:Envelope>""", "")
 
-            return items_list, items_total_pages
+            # Parse the XML response into a dictionary using xmltodict library.
+            response_json = xmltodict.parse(revised_response)
 
-        return None, None
+            # Access the response elements using the response_namespace and list_name   variables.
+            response_data = response_json.get(f"{namespace_id}:{response_namespace}", 
+                                              response_json['SOAP-ENV:Envelope']    ['SOAP-ENV:Body'].get(f"{namespace_id}: {response_namespace}"))
 
-    if error_message:
+            if response_data:
+                if list_name in response_data and not error_message:
 
-        return response_data
+                    items_list = next(iter(response_data[list_name].values()))
+                    items_total_pages = response_data['pagingData']['pageCount']
+                    return items_list, items_total_pages
 
-    return None, None
+                if error_message:
 
+                    return response_data
 
-def get_n11_stock_data(every_product: bool = False, local: bool = False):
-    """
-    The function `get_n11_stock_data` sends a SOAP request to the N11 API 
-    to retrieve a list of products and their stock information.
-    """
+            return None, None
 
-    payload = f"""
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
-    <soapenv:Header/>
-    <soapenv:Body>
-        <sch:GetProductListRequest>
-            <auth>
-                <appKey>{API_KEY}</appKey>
-                <appSecret>{API_SECRET}</appSecret>
-            </auth>
-            <pagingData>
-                <currentPage>0</currentPage>
-                <pageSize>100</pageSize>
-            </pagingData>
-        </sch:GetProductListRequest>
-    </soapenv:Body>
-</soapenv:Envelope>
-"""
+        except Exception as e:
 
-    link = URL + "/ProductService/"
+            print(f"An error occurred: {e}")
+            return None, None
 
-    # This is used to send a SOAP request to the N11 API to retrieve a list of products.
-    api_call = requests.post(link, headers=headers, data=payload, timeout=30)
-    current_page = 0
-    all_products = []
+    def __process_products(self, products_list: List[Dict], every_product: bool, raw_elements: List[Dict], all_products: List[Dict]):
+        """
+        Process the list of products and append to the respective lists.
 
-    # Status code of 200 means that the request was successful
-    # and the server returned the expected response.
-    if api_call.status_code == 200:
+        :param products_list: List of products fetched from the API.
+        :param every_product: Flag to determine if full product data should be appended.
+        :param raw_elements: List to store simplified product data.
+        :param all_products: List to store full product data.
+        """
+        for product in products_list:
 
-        products_list, products_total_pages = assign_vars(
-            api_call.text, "GetProductListResponse", "products")
-        raw_elements = []
+            product_code = product.get("productSellerCode")
+            product_price = product.get("displayPrice")
+            stock_items = product.get("stockItems", {}).get("stockItem")
 
-        # Process all pages found
-        while current_page < int(products_total_pages):
+            if every_product:
 
-            if products_list is not None:
-
-                # Process the product data
-                for product in products_list:
-
-                    product_id = product.get("id")
-                    product_code = product.get("productSellerCode")
-                    product_price = product.get("displayPrice")
-
-                    if every_product:
-
-                        all_products.append(
-                            {'sku': product_code, 'data': product})
-
-                    else:
-
-                        if "stockItems" in product and isinstance(product['stockItems']['stockItem'],
-                                                                  list):
-
-                            for stock_item in product['stockItems']['stockItem']:
-                                if stock_item['sellerStockCode'] == product_code:
-
-                                    product_qty = int(stock_item["quantity"])
-                                    break
-
-                        elif "stockItems" in product:
-
-                            product_qty = int(
-                                product['stockItems']['stockItem']['quantity'])
-
-                        else:
-
-                            product_qty = None
-
-                        raw_elements.append({
-                            "id": product_id,
-                            "sku": product_code,
-                            "qty": product_qty,
-                            "price": product_price,
-                        })
+                all_products.append({'sku': product_code, 'data': product})
 
             else:
 
-                logger.error("No products found in the response.")
+                product_qty = extract_quantity(stock_items, product_code)
+                raw_elements.append({
+                    "id": product.get("id"),
+                    "sku": product_code,
+                    "qty": product_qty,
+                    "price": product_price,
+                })
 
-            current_page += 1
-            payload_dump = payload.replace(
-                "<currentPage>0</currentPage>",
-                f"<currentPage>{str(current_page)}</currentPage>",
-            )
+    def __extract_quantity(stock_items: Union[List[Dict], Dict], product_code: str) ->    Optional[int]:
+        """
+        Extract the quantity from stock items.
 
-            api_call_loop = requests.post(
-                URL, headers=headers, data=payload_dump, timeout=30)
+        :param stock_items: Stock item(s) of a product, can be a list or dict.
+        :param product_code: Seller's product code.
+        :return: The stock quantity as an integer, or None if not available.
+        """
+        if isinstance(stock_items, list):
+            for stock_item in stock_items:
+                if stock_item.get('sellerStockCode') == product_code:
 
-            products_list, _ = assign_vars(
-                api_call_loop.text, "GetProductListResponse", "products")
+                    return int(stock_item.get("quantity", 0))
 
-    else:
+        elif stock_items:
 
-        logger.error("Error: ", api_call.text)
+            return int(stock_items.get("quantity", 0))
 
-    if every_product:
-        raw_elements = all_products
+        return None
 
-    logger.info(f"""N11 fetched {len(raw_elements)} products""")   
-    
-    return raw_elements
+    def __fetch_local_data(self) -> List[Dict]:
+        """
+        Placeholder function for fetching local data.
+        """
+        # Implement logic for fetching cached/local data if needed
+        self.logger.info("Fetching local data is not yet implemented.")
+        return []
 
+    def __flatten_dict(self, data, prefix=""):
+        """
+        Recursively flatten a nested dictionary.
 
-def get_n11_detailed_order_list(link):
-    """
-    The function `get_n11_detailed_order_list` sends a SOAP request to the 
-    N11 API to retrieve a list of detailed orders and processes the response
-    to extract relevant information.
-    """
+        :param data: The dictionary to flatten.
+        :param prefix: The prefix to apply to each flattened key.
+        :return: A flattened dictionary.
+        """
+        flattened = {}
 
-    payload = f"""
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
-    <soapenv:Header/>
-    <soapenv:Body>
-        <sch:DetailedOrderListRequest>
-            <auth>
-                <appKey>{API_KEY}</appKey>
-                <appSecret>{API_SECRET}</appSecret>
-            </auth>
-            <searchData>
-                <productId></productId>
-                <status>Completed</status>
-                <buyerName></buyerName>
-                <orderNumber></orderNumber>
-                <productSellerCode></productSellerCode>
-                <recipient></recipient>
-                <sameDayDelivery></sameDayDelivery>
-                <period>
-                    <startDate></startDate>
-                    <endDate></endDate>
-                </period>
-                <sortForUpdateDate>true</sortForUpdateDate>
-            </searchData>
-            <pagingData>
-                <currentPage>0</currentPage>
-                <pageSize>100</pageSize>
-            </pagingData>
-        </sch:DetailedOrderListRequest>
-    </soapenv:Body>
-</soapenv:Envelope>
-"""
-    orders_url = f"{link}/orderService/"
+        for key, value in data.items():
 
-    # This is used to send a SOAP request to the N11 API to retrieve a list of products.
-    api_call = requests.post(
-        orders_url, headers=headers, data=payload, timeout=30)
-    current_page = 0
+            new_prefix = f"{prefix}_{key}" if prefix else key
 
-    # Status code of 200 means that the request was successful and the
-    # server returned the expected response.
-    if api_call.status_code == 200:
-        orders_list, orders_total_pages = assign_vars(
-            api_call, "DetailedOrderListResponse", "orderList")
+            if isinstance(value, dict):
+                # Recursively flatten nested dictionaries
+                flattened.update(self.flatten_dict(value, new_prefix))
+
+            elif isinstance(value, list):
+                # Flatten lists and handle each item recursively
+                for i, item in enumerate(value, start=1):
+
+                    flattened.update(self.flatten_dict({f"{new_prefix}{i}": item}))
+            else:
+                # Directly add non-dict and non-list values
+                flattened[new_prefix] = value
+
+        return flattened
+
+    def __looper(self, link, payload_dump, namespace, list_name, max_retries=10, backoff_factor=2):
+        """
+        Continuously makes API calls until a successful response is received or the retry   limit is reached.
+
+        :param link: The URL to send the request to.
+        :param payload_dump: The payload data to send in the request.
+        :param namespace: The namespace to search for in the response.
+        :param list_name: The name of the list to extract from the response.
+        :param max_retries: The maximum number of retry attempts. Default is 10.
+        :param backoff_factor: The backoff factor for retry delays (exponential growth).    Default is 2 seconds.
+
+        :return: A tuple containing the orders list and the total orders.
+        """
+        retries = 0
+        wait_time = 1
+
+        while retries < max_retries:
+            try:
+
+                api_call_loop = requests.post(link, headers=self.headers, data=payload_dump,     timeout=30)
+
+                # Check if the response is successful using a regex
+                if re.search("success", api_call_loop.text, re.IGNORECASE):
+
+                    orders_list, orders_total = self.assign_vars(api_call_loop.text, namespace,  list_name)
+                    return orders_list, orders_total
+
+            except requests.exceptions.RequestException as e:
+
+                self.logger.error(f"Request failed: {e}")
+
+            retries += 1
+            self.logger.warning(f"Retrying... attempt {retries} of {max_retries}")
+            time.sleep(wait_time)
+            wait_time *= backoff_factor  # Exponential backoff
+
+        # If the loop finishes without success
+        self.logger.error("Max retries reached without success.")
+        return None, None
+
+    def __save_to_csv(self, data, filename="data"):
+        """
+        Saves a list of dictionaries to a CSV file with the specified filename.
+
+        :param data: A list of dictionaries to save to the CSV file.
+        :param filename: The base name of the output file (without extension). Default is   'data'.
+        :return: None
+        """
+        if not data:
+
+            self.logger.warning("No data provided to save.")
+            return
+
+        # Generate a default filename if none is provided
+        filename = filename if filename else "data"
+
+        # Ensure the filename is safe and valid
+        filename = os.path.splitext(filename)[0]  # Remove any existing extension
+        csv_filename = f"{filename}_data_list.csv"
+
+        try:
+            # Collect all keys across dictionaries to ensure the CSV has a consistent   header
+            keys = set()
+
+            for item in data:
+
+                keys.update(item.keys())
+
+            # Open the file and write the data to CSV
+            with open(csv_filename, "w", newline='', encoding="utf-8") as csvfile:
+
+                file_writer = csv.DictWriter(csvfile, fieldnames=sorted(keys))
+                file_writer.writeheader()
+
+                for item in data:
+
+                    file_writer.writerow(item)
+
+            self.logger.info(f"Data successfully saved to {csv_filename}")
+
+        except IOError as e:
+
+            self.logger.error(f"Failed to write to {csv_filename}: {e}")
+
+    def _get_detailed_order_list(self, link):
+        """
+        The function `get_n11_detailed_order_list` sends a SOAP request to the 
+        N11 API to retrieve a list of detailed orders and processes the response
+        to extract relevant information.
+        """
+
+        payload = f"""
+            <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"xmlns:sch="http://www.n11.com/ws/schemas">
+                <soapenv:Header/>
+                <soapenv:Body>
+                    <sch:DetailedOrderListRequest>
+                        <auth>
+                            <appKey>{self.api_key}</appKey>
+                            <appSecret>{self.api_secret}</appSecret>
+                        </auth>
+                        <searchData>
+                            <productId></productId>
+                            <status>Completed</status>
+                            <buyerName></buyerName>
+                            <orderNumber></orderNumber>
+                            <productSellerCode></productSellerCode>
+                            <recipient></recipient>
+                            <sameDayDelivery></sameDayDelivery>
+                            <period>
+                                <startDate></startDate>
+                                <endDate></endDate>
+                            </period>
+                            <sortForUpdateDate>true</sortForUpdateDate>
+                        </searchData>
+                        <pagingData>
+                            <currentPage>0</currentPage>
+                            <pageSize>100</pageSize>
+                        </pagingData>
+                    </sch:DetailedOrderListRequest>
+                </soapenv:Body>
+            </soapenv:Envelope>
+            """
+        orders_url = f"{link}/orderService/"
+
+        # This is used to send a SOAP request to the N11 API to retrieve a list of  products.
+        api_call = requests.post(orders_url, 
+                                 headers=self.headers, 
+                                 data=payload, 
+                                 timeout=30)
+        current_page = 0
+
+        # Status code of 200 means that the request was successful and the
+        # server returned the expected response.
+        if api_call.status_code == 200:
+
+            orders_list, orders_total_pages = self.assign_vars(
+                api_call, "DetailedOrderListResponse", "orderList")
+            
+            raw_elements = []
+
+            # Process all pages found
+            if orders_list is not None:
+                while current_page < int(orders_total_pages):
+
+                    for order in orders_list:
+                        flattened_order = self.flatten_dict(order, "")
+                        raw_elements.append(flattened_order)
+
+                    current_page += 1
+                    payload_dump = payload.replace(
+                        "<currentPage>0</currentPage>",
+                        f"<currentPage>{str(current_page)}</currentPage>",
+                    )
+                    orders_list, _ = self.looper(orders_url, 
+                                            payload_dump, 
+                                            "DetailedOrderListResponse", 
+                                            "orderList")
+
+            else:
+
+                self.logger.error("No orders found in the response.")
+        else:
+
+            self.logger.error("Error:", api_call.text)
+
+        if raw_elements:
+
+            self.logger.info("Detailed orders list extraction is Successful. || Response:", api_call.reason)
+        else:
+            pass
+        return raw_elements
+
+    def _get_categories(self, save: bool = False):
+
+        client = self.get_client('CategoryService')
+        complete_list = {}
+
+        TopLevelCategories = client.service.GetTopLevelCategories(auth=self.auth)
+        categories_list = [{'id': x['id'], 
+                            'name': x['name'], 
+                            'subs': []}
+                            for x in TopLevelCategories['categoryList']['category']]
+
+        for item in categories_list:
+
+            complete_list[item['name']] = item
+            categoryId = item['id']
+
+            SubCategories = client.service.GetSubCategories(auth=self.auth, 
+                                                            categoryId=categoryId,
+                                                            lastModifiedDate=xsd.SkipValue)
+
+            if SubCategories['category']:
+
+                SubCategories_list = [{'subCategory_id': x['id'], 
+                                       'subCategory_name': x ['name'], 'sub_sub_category': [], 
+                                       'attrs': []} 
+                                       for x in SubCategories['category'][0]['subCategoryList']['subCategory']]
+
+                for sub_item in SubCategories_list:
+
+                    complete_list[item['name']]['subs'].append(sub_item)
+                    categoryId = sub_item['subCategory_id']
+                    SubSubCategories = client.service.GetSubCategories(auth=self.auth,
+                                                                       categoryId=categoryId, 
+                                                                       lastModifiedDate=xsd.SkipValue)
+
+                    if SubSubCategories['category']:
+
+                        SubSubCategories_list = [{'SubsubCategory_id': x['id'],
+                                                  'SubsubCategory_name': x['name'], 'attrs': []} 
+                                                  for x in SubSubCategories['category'][0]['subCategoryList']  ['subCategory']]
+
+                        for sub_sub_item in SubSubCategories_list:
+
+                            complete_list[item['name']]['subs'][SubCategories_list.index(sub_item)]['sub_sub_category'].append(sub_sub_item)
+                            categoryId = sub_sub_item['SubsubCategory_id']
+
+                            self.get_category_attrs(categoryId, 
+                                                    complete_list, 
+                                                    item, 
+                                                    SubCategories_list.index   (sub_item))
+
+                    self.get_category_attrs(categoryId)
+
+    def _get_category_attrs(self, categoryId, item_list, item, index):
+
+        client = self.__get_client('CategoryService')
+        CategoryAttributes = client.service.GetCategoryAttributes(auth=self.auth,
+                                                                  categoryId=categoryId,
+                                                                  pagingData=1)
+
+        if CategoryAttributes['category']:
+
+            sub_categories_attr_list = [{'attr_name': x['name']}
+                                        for x in CategoryAttributes['category'] ['attributeList']['attribute']]
+
+            for attr in sub_categories_attr_list:
+
+                item_list[item['name']]['subs'][index]['attrs'].append(
+                    attr['attr_name'])
+
+    def get_proucts(self,
+                    every_product: bool = False,
+                    local: bool = False,
+                    page_size: int = 100,
+                    timeout: int = 30
+                    ) -> List[Dict[str, Union[str, int, Optional[float]]]]:
+        """
+        Fetch stock data from N11 API, either returning every product's detailed data
+        or simplified stock and price information.
+
+        :param every_product: Whether to return full data for every product.
+        :param local: If True, use local data (placeholder for future implementation).
+        :param page_size: Number of products per page.
+        :param timeout: Request timeout in seconds.
+        :return: A list of products with SKU, stock quantity, and price information.
+        """
+        if local:
+            
+            return fetch_local_data()
+
+        payload_template = """
+        <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
+            <soapenv:Header/>
+            <soapenv:Body>
+                <sch:GetProductListRequest>
+                    <auth>
+                        <appKey>{api_key}</appKey>
+                        <appSecret>{api_secret}</appSecret>
+                    </auth>
+                    <pagingData>
+                        <currentPage>{current_page}</currentPage>
+                        <pageSize>{page_size}</pageSize>
+                    </pagingData>
+                </sch:GetProductListRequest>
+            </soapenv:Body>
+        </soapenv:Envelope>
+        """
+
+        link = self.base_url + "/ProductService/"
+        current_page = 0
+        all_products = []
         raw_elements = []
 
-        # Process all pages found
-        if orders_list is not None:
-            while current_page < int(orders_total_pages):
+        # Status code of 200 means that the request was successful
+        # and the server returned the expected response.
+        while True:
+            # Prepare the payload with the current page and page size
+            payload = payload_template.format(api_key=self.api_key, api_secret=self.api_secret, current_page=current_page, page_size=page_size)
 
-                for order in orders_list:
-                    flattened_order = flatten_dict(order, "")
-                    raw_elements.append(flattened_order)
+            try:
 
-                current_page += 1
-                payload_dump = payload.replace(
-                    "<currentPage>0</currentPage>",
-                    f"<currentPage>{str(current_page)}</currentPage>",
-                )
-                orders_list, _ = looper(
-                    orders_url, payload_dump, "DetailedOrderListResponse", "orderList")
+                response = requests.post(link, headers=self.headers, data=payload, timeout=timeout)
+                response.raise_for_status()  # Raises an exception for 4xx/5xx status codes
 
-        else:
-            logger.error("No orders found in the response.")
-    else:
-        logger.error("Error:", api_call.text)
+            except requests.exceptions.RequestException as e:
 
-    if raw_elements:
-        logger.info("Detailed orders list extraction is Successful. || Response:",
-                    api_call.reason)
-    else:
-        pass
-    return raw_elements
+                self.logger.error(f"Request failed: {e}")
 
+                return []
 
-def flatten_dict(data, prefix=""):
-    """
-    The `flatten_dict` function recursively flattens a nested dictionary 
-    into a single-level dictionary with keys concatenated based on the original structure.
-    """
+            # Parse the response and extract products
+            products_list, total_pages = assign_vars(response.text, "GetProductListResponse", "products")
 
-    item = {}
+            if products_list is None:
 
-    for item_key, item_value in data.items():
+                self.logger.error("No products found in the response.")
+                break
 
-        if isinstance(item_value, dict):
-            for sub_key, sub_value in item_value.items():
+            process_products(products_list, every_product, raw_elements, all_products)
 
-                if isinstance(sub_value, dict):
+            current_page += 1
 
-                    data_val = flatten_dict(
-                        sub_value, f"{prefix}_{sub_key}" if prefix else sub_key)
-                    item.update(data_val)
+            if current_page >= int(total_pages):
 
-                elif isinstance(sub_value, list):
+                break
 
-                    count = 1
+        self.logger.info(f"N11 fetched {len(raw_elements)} products")
+        return all_products if every_product else raw_elements
 
-                    while count < len(sub_value):
+    def add_proucts(self, data: Union[List[Dict], Dict]) -> None:
+        
+        current_date = date.today()
+        formatted_date = current_date.strftime("%d/%m/%Y")
 
-                        for data_item in sub_value:
-                            if isinstance(data_item, dict):
+        for item in data:
 
-                                data_val = flatten_dict(
-                                    data_item, f"{prefix}_{sub_key}{count}"
-                                    if prefix else f"{sub_key}{count}")
-                                item.update(data_val)
+            item_data = data[item][0]['data']
+            groupCode = re.sub(r'\d+', '', item_data['productMainId'])
+            attrs = {}
 
-                            else:
+            for attr in item_data['attributes']:
+                attr_name = ['Renk', 'Şekil', 'Boyut/Ebat',
+                             'Taban', 'Hav Yüksekliği']
 
-                                if prefix:
-                                    item[f"""{prefix}_{sub_key}{
-                                        count}"""] = data_item
+                for item in attr_name:
+                    if re.search(attr['attributeName'], item):
 
-                                else:
-                                    item[f"{sub_key}{count}"] = data_item
+                        attrs[attr['attributeName']] = attr['attributeValue']
 
-                            count += 1
+            image_elements = []
+            for i, image_url in enumerate(item_data['images'], start=1):
+
+                image_elements.append(f"""<image>
+                                      <url>{image_url['url']}</url>
+                                      <order>{i}</order>
+                                      </image>""")
+
+            # Join all <image> elements into a single string
+            images_string = "".join(image_elements)
+
+            request_data = {
+                "auth": {
+                    "appKey": self.api_key,
+                    "appSecret": self.api_secret,
+                },
+                "product": {
+                    "productSellerCode": item_data['productMainId'],
+                    "maxPurchaseQuantity": 5000,
+                    "title": item_data['title'],
+                    "description": re.sub(r'[\?]', '', item_data['description']),
+                    "category": {"id": 1001621},
+                    "price": item_data['listPrice'],
+                    "domestic": True,
+                    "currencyType": 1,
+                    "images": [],
+                    "approvalStatus": 1,
+                    "attributes": {
+                        "attribute": [
+                            {"name": "Renk", "value": attrs.get('Renk', '')},
+                            {"name": "Marka", "value": item_data['brand']},
+                            #  {"name": "Şekil", "value": ""},
+                            #  {"name": "Ölçüler", "value": ""},
+                            #  {"name": "Taban Özelliği", "value": ""},
+                            #  {"name": "Hav Yüksekliği", "value": ""}
+                        ]
+                    },
+                    "productionDate": formatted_date,
+                    "expirationDate": "",
+                    "productCondition": 1,
+                    "preparingDay": 3,
+                    "discount": {"startDate": "", "endDate": "", "type": 1, "value": int(item_data['listPrice']) - int(item_data['salePrice'])},
+                    "shipmentTemplate": "Kargo",
+                    "stockItems": {
+                        "stockItem": [
+                            {
+                                "gtin": item_data['barcode'],
+                                "quantity": item_data['quantity'],
+                                "sellerStockCode": item_data['productMainId'],
+                                "optionPrice": item_data['listPrice'],
+                                "n11CatalogId": "",
+                                "attributes": [],
+                                "images":
+                                    image_elements,
+                            }
+                        ]
+                    },
+                    "groupAttribute": "Adet",
+                    "groupItemCode": groupCode,
+                    "itemName": "",
+                    "sellerNote": "",
+                    "unitInfo": {
+                        "unitWeight": 0,
+                        "unitType": 0,
+                    },
+                },
+            }
+
+            client = get_client()
+            response = client.service.SaveProduct(**request_data)
+
+            if response.status_code == 200:
+
+                if re.search('errorMessage', response.text) or re.search('failure', response.text):
+
+                    # error_message = assign_vars(
+                    #     post_response, 'SaveProductResponse', '', True)
+
+                    self.logger.error(f"""Request failure for product  {data['sku']} | Response: {response['result']['errorMessage']}""")
 
                 else:
 
-                    if prefix:
-                        item[f"{prefix}_{sub_key}"] = sub_value
+                    self.logger.error(f"""New product with code: {data["sku"]}""")
 
-                    else:
-                        item[f"{sub_key}"] = sub_value
+            elif response.status_code == 429:
 
-        else:
-
-            if prefix:
-                item[f"{prefix}_{item_key}"] = item_value
-
-            else:
-                item[f"{item_key}"] = item_value
-    return item
-
-
-def looper(link, payload_dump, namespace, list_name):
-    """
-    The function `looper` continuously makes API calls until a successful response is received, then
-    assigns variables based on the response.
-    """
-    while True:
-        api_call_loop = requests.post(
-            link, headers=headers, data=payload_dump, timeout=30)
-        if re.search("success", api_call_loop.text):
-            orders_list, orders_total = assign_vars(
-                api_call_loop.text, namespace, list_name)
-
-            return orders_list, orders_total
-        time.sleep(1)
-
-
-def save_to_csv(data, filename=""):
-    """
-    The function `save_to_csv` takes a list of dictionaries and saves it to a CSV file with the
-    specified filename.
-    """
-    if data:
-        keys = set()
-        for item in data:
-            keys.update(item.keys())
-
-        with open(f"{filename}_data_list.csv", "w", newline='', encoding="utf-8") as csvfile:
-            file_writer = csv.DictWriter(csvfile, fieldnames=sorted(keys))
-            file_writer.writeheader()
-            for d in data:
-                file_writer.writerow(d)
-
-
-def post_n11_data(data):
-    """
-    The `post_n11_data` function sends a SOAP request to 
-    update the stock quantity of a product on the
-    N11 platform and handles the response accordingly.
-    """
-
-    # The `post_payload` variable is a string that contains an XML request payload for updating the
-    # stock quantity of a product on the N11 platform.
-    post_payload = f"""
-                        <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
-                          <soapenv:Header/>
-                          <soapenv:Body>
-                            <sch:UpdateStockByStockSellerCodeRequest>
-                              <auth>
-                                <appKey>{API_KEY}</appKey>
-                                <appSecret>{API_SECRET}</appSecret>
-                              </auth>
-                              <stockItems>
-                                <stockItem>
-                                  <sellerStockCode>{data['sku']}</sellerStockCode>
-                                  <quantity>{data['qty']}</quantity>
-                                </stockItem>
-                              </stockItems>
-                            </sch:UpdateStockByStockSellerCodeRequest>
-                          </soapenv:Body>
-                        </soapenv:Envelope>
-                        """
-
-    post_response = requests.request(
-        "POST", URL, headers=headers, data=post_payload, timeout=30)
-
-    if post_response.status_code == 200:
-
-        if re.search('errorMessage',
-                     post_response.text) or re.search('failure',
-                                                      post_response.text):
-
-            error_message = assign_vars(
-                post_response.text, 'UpdateStockByStockSellerCodeResponse', '', True)
-
-            logger.error(f"""Request failure for product {
-                data['sku']} | Response: {error_message['result']['errorMessage']}""")
-
-        else:
-
-            logger.info(f"""Product with code: {
-                data["sku"]}, New value: {data["qty"]}""")
-    elif post_response.status_code == 429:
-
-        time.sleep(15)
-
-    else:
-
-        post_response.raise_for_status()
-        logger.error(
-            f"""Request for product {
-                data['sku']} is unsuccessful | Response: {post_response.text}""")
-
-
-def create_n11_data(data):
-    """
-    The `create_n11_data` function sends a SOAP request to 
-    create a product on the
-    N11 platform and handles the response accordingly.
-    """
-
-    current_date = date.today()
-    formatted_date = current_date.strftime("%d/%m/%Y")
-
-    for item in data:
-
-        item_data = data[item][0]['data']
-        groupCode = re.sub(r'\d+', '', item_data['productMainId'])
-        attrs = {}
-
-        for attr in item_data['attributes']:
-            attr_name = ['Renk', 'Şekil', 'Boyut/Ebat',
-                         'Taban', 'Hav Yüksekliği']
-
-            for item in attr_name:
-                if re.search(attr['attributeName'], item):
-
-                    attrs[attr['attributeName']] = attr['attributeValue']
-
-        image_elements = []
-        for i, image_url in enumerate(item_data['images'], start=1):
-            image_elements.append(f"""<image>
-                    <url>{image_url['url']}</url>
-                    <order>{i}</order>
-                </image>""")
-
-        # Join all <image> elements into a single string
-        images_string = "".join(image_elements)
-
-        request_data = {
-            "auth": {
-                "appKey": API_KEY,
-                "appSecret": API_SECRET,
-            },
-            "product": {
-                "productSellerCode": item_data['productMainId'],
-                "maxPurchaseQuantity": 5000,
-                "title": item_data['title'],
-                "description": re.sub(r'[\?]', '', item_data['description']),
-                "category": {"id": 1001621},
-                "price": item_data['listPrice'],
-                "domestic": True,
-                "currencyType": 1,
-                "images": [],
-                "approvalStatus": 1,
-                "attributes": {
-                    "attribute": [
-                        {"name": "Renk", "value": attrs.get('Renk', '')},
-                        {"name": "Marka", "value": item_data['brand']},
-                        #  {"name": "Şekil", "value": ""},
-                        #  {"name": "Ölçüler", "value": ""},
-                        #  {"name": "Taban Özelliği", "value": ""},
-                        #  {"name": "Hav Yüksekliği", "value": ""}
-                    ]
-                },
-                "productionDate": formatted_date,
-                "expirationDate": "",
-                "productCondition": 1,
-                "preparingDay": 3,
-                "discount": {"startDate": "", "endDate": "", "type": 1, "value": int(item_data['listPrice']) - int(item_data['salePrice'])},
-                "shipmentTemplate": "Kargo",
-                "stockItems": {
-                    "stockItem": [
-                        {
-                            "gtin": item_data['barcode'],
-                            "quantity": item_data['quantity'],
-                            "sellerStockCode": item_data['productMainId'],
-                            "optionPrice": item_data['listPrice'],
-                            "n11CatalogId": "",
-                            "attributes": [],
-                            "images":
-                                image_elements,
-                        }
-                    ]
-                },
-                "groupAttribute": "Adet",
-                "groupItemCode": groupCode,
-                "itemName": "",
-                "sellerNote": "",
-                "unitInfo": {
-                    "unitWeight": 0,
-                    "unitType": 0,
-                },
-            },
-        }
-
-        client = get_client()
-        response = client.service.SaveProduct(**request_data)
-
-        if response.status_code == 200:
-
-            if re.search('errorMessage',
-                         response.text) or re.search('failure',
-                                                     response.text):
-
-                # error_message = assign_vars(
-                #     post_response, 'SaveProductResponse', '', True)
-
-                logger.error(f"""Request failure for product  {
-                    data['sku']} | Response: {response['result']['errorMessage']}""")
+                time.sleep(15)
 
             else:
 
-                logger.error(f"""New product with code: {
-                    data["sku"]}""")
-        elif response.status_code == 429:
+                response.raise_for_status()
+                self.logger.error(f"""Request for product {data['sku']} is unsuccessful | Response: {response.text}""")
+
+    def update_proucts(self, data: Dict) -> None:
+       
+        post_payload = f"""
+                            <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
+                              <soapenv:Header/>
+                              <soapenv:Body>
+                                <sch:UpdateStockByStockSellerCodeRequest>
+                                  <auth>
+                                    <appKey>{self.api_key}</appKey>
+                                    <appSecret>{self.api_secret}</appSecret>
+                                  </auth>
+                                  <stockItems>
+                                    <stockItem>
+                                      <sellerStockCode>{data['sku']}</sellerStockCode>
+                                      <quantity>{data['qty']}</quantity>
+                                    </stockItem>
+                                  </stockItems>
+                                </sch:UpdateStockByStockSellerCodeRequest>
+                              </soapenv:Body>
+                            </soapenv:Envelope>
+                            """
+
+        post_response = requests.request(
+            "POST", 
+            self.base_url, 
+            headers=self.headers, 
+            data=post_payload, 
+            timeout=30)
+
+        if post_response.status_code == 200:
+
+            if re.search('errorMessage', post_response.text) or re.search('failure', post_response.text):
+
+                error_message = assign_vars(post_response.text, 'UpdateStockByStockSellerCodeResponse', '', True)
+                self.logger.error(f"""Request failure for product {data['sku']} | Response: {error_message['result']['errorMessage']}""")
+
+            else:
+
+                self.logger.info(f"""Product with code: {data["sku"]}, New value: {data["qty"]}""")
+
+        elif post_response.status_code == 429:
 
             time.sleep(15)
 
         else:
 
-            response.raise_for_status()
-            logger.error(
-                f"""Request for product {
-                    data['sku']} is unsuccessful | Response: {response.text}""")
-
-
-def get_n11_categories(save: bool = False):
-
-    client = get_client('CategoryService')
-    complete_list = {}
-
-    TopLevelCategories = client.service.GetTopLevelCategories(auth=auth)
-    categories_list = [{'id': x['id'], 'name': x['name'], 'subs': []}
-                       for x in TopLevelCategories['categoryList']['category']]
-
-    for item in categories_list:
-
-        complete_list[item['name']] = item
-        categoryId = item['id']
-
-        SubCategories = client.service.GetSubCategories(
-            auth=auth, categoryId=categoryId, lastModifiedDate=xsd.SkipValue)
-
-        if SubCategories['category']:
-
-            SubCategories_list = [{'subCategory_id': x['id'], 'subCategory_name': x['name'], 'sub_sub_category': [
-            ], 'attrs': []} for x in SubCategories['category'][0]['subCategoryList']['subCategory']]
-
-            for sub_item in SubCategories_list:
-
-                complete_list[item['name']]['subs'].append(sub_item)
-                categoryId = sub_item['subCategory_id']
-
-                SubSubCategories = client.service.GetSubCategories(
-                    auth=auth, categoryId=categoryId, lastModifiedDate=xsd.SkipValue)
-
-                if SubSubCategories['category']:
-
-                    SubSubCategories_list = [{'SubsubCategory_id': x['id'], 'SubsubCategory_name': x['name'], 'attrs': [
-                    ]} for x in SubSubCategories['category'][0]['subCategoryList']['subCategory']]
-
-                    for sub_sub_item in SubSubCategories_list:
-
-                        complete_list[item['name']]['subs'][SubCategories_list.index(
-                            sub_item)]['sub_sub_category'].append(sub_sub_item)
-                        categoryId = sub_sub_item['SubsubCategory_id']
-
-                        get_category_attrs(
-                            categoryId, complete_list, item, SubCategories_list.index(sub_item))
-
-                get_category_attrs(categoryId)
-
-
-def get_category_attrs(categoryId, item_list, item, index):
-
-    client = get_client('CategoryService')
-    CategoryAttributes = client.service.GetCategoryAttributes(
-        auth=auth, categoryId=categoryId, pagingData=1)
-
-    if CategoryAttributes['category']:
-        sub_categories_attr_list = [{'attr_name': x['name']}
-                                    for x in CategoryAttributes['category']['attributeList']['attribute']]
-
-        for attr in sub_categories_attr_list:
-            item_list[item['name']]['subs'][index]['attrs'].append(
-                attr['attr_name'])
+            post_response.raise_for_status()
+            self.logger.error(f"""Request for product {data['sku']} is unsuccessful | Response: {post_response.text}""")
 
