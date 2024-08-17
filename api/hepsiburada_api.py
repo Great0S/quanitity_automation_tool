@@ -12,7 +12,7 @@ from circuitbreaker import CircuitBreaker
 products = []
 
 
-class HpApi:
+class Hb_API:
 
     def __init__(self):
 

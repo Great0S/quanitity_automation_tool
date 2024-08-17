@@ -15,7 +15,7 @@ from api.amazon_seller_api import (
     spapi_getlistings,
     spapi_update_listing,
 )
-from api.hepsiburada_api import HpApi
+from api.hepsiburada_api import Hb_API
 from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
 from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
@@ -32,7 +32,7 @@ logging.basicConfig(
     format="%(message)s",
     handlers=[RichHandler(rich_tracebacks=True)])
 logger = logging.getLogger(__name__)
-hpapi = HpApi()
+hpapi = Hb_API()
 
 
 def get_data(
