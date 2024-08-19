@@ -25,7 +25,7 @@ class N11API:
         
         self.logger = logging.getLogger(__name__)
 
-    def __create_client(self, Service: str = 'ProductService', url: str = 'https://api.n11.com/ws') -> Client:
+    def __create_client__(self, Service: str = 'ProductService', url: str = 'https://api.n11.com/ws') -> Client:
         """
             Create a SOAP client for the given service.
 
@@ -51,9 +51,10 @@ class N11API:
             print(f"An error occurred: {e}")
             return None
 
-    def __assign_vars(raw_xml: str, 
-                response_namespace: str, 
-                list_name: str, 
+    def __assign_vars__(self,
+                        raw_xml: str = '', 
+                response_namespace: str = '', 
+                list_name: str = '', 
                 error_message: bool = False, 
                 namespace_id: str = 'ns3') -> Optional[Tuple[Any, Any]]:
         """
@@ -63,26 +64,24 @@ class N11API:
             raw_xml (str): The raw XML response as a string.
             response_namespace (str): The namespace of the response element.
             list_name (str): The name of the list element to extract.
-            error_message (bool): Flag to indicate if error messages should be returned.    Defaults to False.
+            error_message (bool): Flag to indicate if error messages should be returned. Defaults to False.
             namespace_id (str): The namespace identifier. Defaults to 'ns3'.
 
         Returns:
-            Optional[Tuple[Any, Any]]: A tuple containing the list of items and the total   number of pages, or None.
+            Optional[Tuple[Any, Any]]: A tuple containing the list of items and the total number of pages, or None.
         """
 
         try:
             # XML raw data trimming
             revised_response = (
-                raw_xml.replace(
-                    """<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/  envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body>""",
-                    "")).replace("""</SOAP-ENV:Body></SOAP-ENV:Envelope>""", "")
+                raw_xml.replace("""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body>""","")).replace("""</SOAP-ENV:Body></SOAP-ENV:Envelope>""", "")
 
             # Parse the XML response into a dictionary using xmltodict library.
             response_json = xmltodict.parse(revised_response)
 
             # Access the response elements using the response_namespace and list_name   variables.
-            response_data = response_json.get(f"{namespace_id}:{response_namespace}", 
-                                              response_json['SOAP-ENV:Envelope']    ['SOAP-ENV:Body'].get(f"{namespace_id}: {response_namespace}"))
+            response_data = response_json.get(f"{namespace_id}:{response_namespace}")
+                                            #   response_json['SOAP-ENV:Envelope']['SOAP-ENV:Body'].get(f"{namespace_id}: {response_namespace}"))
 
             if response_data:
                 if list_name in response_data and not error_message:
@@ -102,7 +101,7 @@ class N11API:
             print(f"An error occurred: {e}")
             return None, None
 
-    def __process_products(self, products_list: List[Dict], every_product: bool, raw_elements: List[Dict], all_products: List[Dict]):
+    def __process_products__(self, products_list: List[Dict], every_product: bool, raw_elements: List[Dict], all_products: List[Dict]):
         """
         Process the list of products and append to the respective lists.
 
@@ -123,15 +122,17 @@ class N11API:
 
             else:
 
-                product_qty = extract_quantity(stock_items, product_code)
+                product_qty = self.__extract_quantity__(stock_items=stock_items, product_code=product_code)
                 raw_elements.append({
                     "id": product.get("id"),
                     "sku": product_code,
                     "qty": product_qty,
                     "price": product_price,
                 })
+            
+        return raw_elements, all_products
 
-    def __extract_quantity(stock_items: Union[List[Dict], Dict], product_code: str) ->    Optional[int]:
+    def __extract_quantity__(self, stock_items: Union[List[Dict], Dict], product_code: str) ->    Optional[int]:
         """
         Extract the quantity from stock items.
 
@@ -151,7 +152,7 @@ class N11API:
 
         return None
 
-    def __fetch_local_data(self) -> List[Dict]:
+    def __fetch_local_data__(self) -> List[Dict]:
         """
         Placeholder function for fetching local data.
         """
@@ -159,7 +160,7 @@ class N11API:
         self.logger.info("Fetching local data is not yet implemented.")
         return []
 
-    def __flatten_dict(self, data, prefix=""):
+    def __flatten_dict__(self, data, prefix=""):
         """
         Recursively flatten a nested dictionary.
 
@@ -175,13 +176,13 @@ class N11API:
 
             if isinstance(value, dict):
                 # Recursively flatten nested dictionaries
-                flattened.update(self.flatten_dict(value, new_prefix))
+                flattened.update(self.__flatten_dict__(value, new_prefix))
 
             elif isinstance(value, list):
                 # Flatten lists and handle each item recursively
                 for i, item in enumerate(value, start=1):
 
-                    flattened.update(self.flatten_dict({f"{new_prefix}{i}": item}))
+                    flattened.update(self.__flatten_dict__({f"{new_prefix}{i}": item}))
             else:
                 # Directly add non-dict and non-list values
                 flattened[new_prefix] = value
@@ -360,7 +361,7 @@ class N11API:
             pass
         return raw_elements
 
-    def _get_categories(self, save: bool = False):
+    def __get_categories(self, save: bool = False):
 
         client = self.get_client('CategoryService')
         complete_list = {}
@@ -413,7 +414,7 @@ class N11API:
 
                     self.get_category_attrs(categoryId)
 
-    def _get_category_attrs(self, categoryId, item_list, item, index):
+    def _get_category_attrs_(self, categoryId, item_list, item, index):
 
         client = self.__get_client('CategoryService')
         CategoryAttributes = client.service.GetCategoryAttributes(auth=self.auth,
@@ -448,7 +449,7 @@ class N11API:
         """
         if local:
             
-            return fetch_local_data()
+            return self.__fetch_local_data__()
 
         payload_template = """
         <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
@@ -491,14 +492,14 @@ class N11API:
                 return []
 
             # Parse the response and extract products
-            products_list, total_pages = assign_vars(response.text, "GetProductListResponse", "products")
+            products_list, total_pages = self.__assign_vars__(raw_xml=response.text, response_namespace="GetProductListResponse", list_name="products")
 
             if products_list is None:
 
                 self.logger.error("No products found in the response.")
                 break
 
-            process_products(products_list, every_product, raw_elements, all_products)
+            raw_elements, all_products = self.__process_products__(products_list, every_product, raw_elements, all_products)
 
             current_page += 1
 
@@ -597,7 +598,7 @@ class N11API:
                 },
             }
 
-            client = get_client()
+            client = self.__create_client__()
             response = client.service.SaveProduct(**request_data)
 
             if response.status_code == 200:
@@ -655,7 +656,7 @@ class N11API:
 
             if re.search('errorMessage', post_response.text) or re.search('failure', post_response.text):
 
-                error_message = assign_vars(post_response.text, 'UpdateStockByStockSellerCodeResponse', '', True)
+                error_message = self.__assign_vars__(raw_xml=post_response.text, response_namespace='UpdateStockByStockSellerCodeResponse', list_name='', error_message=True)
                 self.logger.error(f"""Request failure for product {data['sku']} | Response: {error_message['result']['errorMessage']}""")
 
             else:

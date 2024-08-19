@@ -19,7 +19,7 @@ from api.hepsiburada_api import Hb_API
 from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
 from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
-from api.n11_api import create_n11_data, get_n11_stock_data, post_n11_data
+from api.n11_api import N11API
 from api.wordpress_api import (
     create_wordpress_products,
     get_wordpress_products,
@@ -33,6 +33,7 @@ logging.basicConfig(
     handlers=[RichHandler(rich_tracebacks=True)])
 logger = logging.getLogger(__name__)
 hpapi = Hb_API()
+n11api = N11API()
 
 
 def get_data(
@@ -64,7 +65,7 @@ def get_data(
 
     data_content = {
         "trendyol_data": get_trendyol_stock_data(every_product),
-        "n11_data": get_n11_stock_data(every_product),
+        "n11_data": n11api.get_proucts(every_product),
         "amazon_data": spapi_getlistings(every_product),
         "hepsiburada_data": hpapi.get_listings(every_product),
         "pazarama_data": getPazarama_productsList(every_product),
@@ -107,7 +108,7 @@ def filter_data(every_product, local, targets):
     data_content = {}
     codes = []
     platform_to_function = {
-        "n11": get_n11_stock_data,
+        "n11": n11api.get_proucts,
         "hepsiburada": hpapi.get_listings,
         "amazon": spapi_getlistings,
         "pttavm": getpttavm_procuctskdata,
@@ -395,7 +396,7 @@ def execute_updates(source=None, targets=None, options=None):
     """
 
     platform_to_function = {
-        "n11": post_n11_data,
+        "n11": n11api.update_proucts,
         "hepsiburada": hpapi.update_listing,
         "amazon": spapi_update_listing,
         "pttavm": pttavm_updatedata,
@@ -472,7 +473,7 @@ def execute_updates(source=None, targets=None, options=None):
 def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA=False):
 
     platform_to_function = {
-        "n11": create_n11_data,
+        "n11": n11api.add_products,
         "hepsiburada": hpapi.create_listing,
         "amazon": spapi_add_listing,
         "pttavm": pttavm_updatedata,
