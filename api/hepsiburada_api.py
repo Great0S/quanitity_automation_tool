@@ -1,5 +1,6 @@
 """ importing required libs for the script """
 
+import base64
 import logging
 import os
 import random
@@ -23,15 +24,23 @@ class Hb_API:
         self.style = ""
         self.category_attrs = {}
         self.category_target = ""
+
+        user_pass = f"{os.getenv('HEPSIBURADAMERCHENETID')}:{os.getenv('HEPSIBURADAPASSWORD')}"
+        user_pass_bytes = user_pass.encode('utf-8')
+        base64_bytes = base64.b64encode(user_pass_bytes)
+        self.base64_hash = base64_bytes.decode('utf-8')
+
         self.store_id = os.environ.get("HEPSIBURADAMERCHENETID")
-        self.mpop_url = "https://mpop.hepsiburada.com/"
-        self.listing_external_url = f"https://listing-external.hepsiburada.com/Listings/merchantid/{
-            self.store_id}"
-        self.auth_hash = os.environ.get("HEPSIBURADAAUTHHASH")
+        self.username = os.environ.get("HEPSIBURADAUSERNAME")
         self.headers = {
+            "User-Agent": self.username,
             "Content-Type": "application/json",
-            "Authorization": f"Basic {self.auth_hash}",
+            "Authorization": f"Basic {str(self.base64_hash)}",
         }
+
+        self.mpop_url = "https://mpop.hepsiburada.com/"
+        self.listing_external_url = f"https://listing-external.hepsiburada.com/Listings/merchantid/{self.store_id}"
+
         self.logger = logging.getLogger(__name__)
 
     def request_data(
