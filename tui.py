@@ -166,9 +166,11 @@ class ProductManagerApp(App[str]):
 
             if event.pressed.id == "online_storage":
 
-                self.exit(result={'update': {'source': self.source, 'target': self.target, 'options': "copy"}})
+                self.exit(result={'create': {'source': self.source, 'target': self.target, 'options': "copy", 'local_data': False}})
 
-            self.exit(result={'create': {'source': self.source, 'target': self.target, 'options': "", 'local_data': True}})
+            elif event.pressed.id == "offline_storage":
+
+                self.exit(result={'create': {'source': self.source, 'target': self.target, 'options': "", 'local_data': True}})
 
 
         if event.radio_set.id == "update_choice":

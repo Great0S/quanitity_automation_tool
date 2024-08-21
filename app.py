@@ -108,7 +108,7 @@ def filter_data(every_product, local, targets):
     data_content = {}
     codes = []
     platform_to_function = {
-        "n11": n11api.get_proucts,
+        "n11": n11api.get_products,
         "hepsiburada": hpapi.get_listings,
         "amazon": spapi_getlistings,
         "pttavm": getpttavm_procuctskdata,
@@ -134,7 +134,7 @@ def filter_data(every_product, local, targets):
     return data_content, codes
 
 
-def process_update_data(source=None, targets=None, options=None):
+def process_update_data(source=None, use_source = False, targets=None, options=None):
     """
     The function `process_update_data` retrieves data, processes
     stock updates from different platforms, and returns the
@@ -160,7 +160,7 @@ def process_update_data(source=None, targets=None, options=None):
     # to store data during the processing of stock
     # data from N11 and Trendyol APIs.
     platform_updates = filter_data_list(
-        data=data_lists, source=source, target=targets, every_product=all_data
+        data=data_lists, source=source, use_source = False, target=targets, every_product=all_data
     )
 
     logger.info(f"""Product updates count is {len(platform_updates)}""")
@@ -168,7 +168,7 @@ def process_update_data(source=None, targets=None, options=None):
     return platform_updates
 
 
-def filter_data_list(data = '', source = False, target = '', every_product: bool = False, no_match = False):
+def filter_data_list(data = '', source = '', use_source = False, target = '', every_product: bool = False, no_match = False):
     """
     The function `filter_data_list` compares quantity values
     for items across different platforms and returns a list of
@@ -186,209 +186,127 @@ def filter_data_list(data = '', source = False, target = '', every_product: bool
         "wordpress",
         "pttavm",
     ]
+    matching_items = {}
+    non_matching_items = {}
 
-    matching_ids = {}
-    non_matching_ids = {}
-    # Initialize a set to store all SKUs from the source platform
 
     if no_match:
 
-        source = True
+        use_source = True
 
     for platform in platforms:
-        if platform != source:
-            if f"{platform}_data" in data:
-                for targets_item in data[f"{platform}_data"]:
-                    if source:
-                        if no_match:
+        if platform != source and f"{platform}_data" in data:
+                target_skus = list(item["sku"] for item in data[f"{target}_data"])
+                for target_item in data[f"{platform}_data"]:                    
+                    if use_source:
+                        source = list(data.keys())[1]
+                        for source_item in data[source]:
+                            if no_match:                                
+                                platform = target
+                                target_item_sku = target_item["sku"]
 
-                            target_skus = list(item["sku"] for item in data[f"{target}_data"])
-                            platform = target
-
-                        for source_item in data[f"{source}_data"]:
-                            if source_item["sku"] == targets_item["sku"]:
-                                if no_match:
-
-                                    break
-                               
-                                else:
-                                    if every_product:
-
-                                        matching_ids[source_item["sku"]] = [
-                                            {
-                                                "platform": source,
-                                                "data": source_item["data"],
-                                            },
-                                            {
-                                                "platform": platform,
-                                                "data": targets_item["data"],
-                                            }
-                                        ]
-
-                                    else:
-
-                                        qty = targets_item["qty"]
-                                        item_id = targets_item["id"]
-                                        matching_ids[source_item["sku"]] = [
-                                            {
-                                                "platform": platform,
-                                                "id": item_id,
-                                                "price": targets_item.get("price", 0),
-                                                "qty": qty,
-                                            }
-                                        ]
-
-                                break
-
-                            elif no_match and targets_item["sku"] not in target_skus:
-                                if targets_item["sku"] not in non_matching_ids:
-
-                                    non_matching_ids[targets_item["sku"]] = [
-                                        {
-                                            "platform": platform,
-                                            "data": targets_item["data"],
-                                        }
-                                    ]
-
-                    else:
-
-                        if "data" in targets_item:
-
-                            qty = int(targets_item['data']["quantity"])                            
-                            item_id = targets_item['data']["id"]
-
-                        else:
-
-                            qty = int(targets_item.get("qty", 0))
-                            item_id = targets_item["id"]
-
-                        if targets_item["sku"] in matching_ids:
-
-                            if every_product:
-
-                                matching_ids[targets_item["sku"]].append(
-                                    {"platform": platform,
-                                        "data": targets_item["data"]}
-                                )
-                            else:
-
-                                matching_ids[targets_item["sku"]].append(
-                                    {
-                                        "platform": platform,
-                                        "id": item_id,
-                                        "price": targets_item.get("price", 0),
-                                        "qty": qty,
-                                    }
-                                )
-
-                        else:
-
-                            if every_product:
-
-                                matching_ids[targets_item["sku"]] = [
-                                    {"platform": platform,
-                                        "data": targets_item["data"]}
-                                ]
-                            else:
-
-                                matching_ids[targets_item["sku"]] = [
-                                    {
-                                        "platform": platform,
-                                        "id": item_id,
-                                        "price": targets_item.get("price", 0),
-                                        "qty": qty,
-                                    }
-                                ]
-
-    if non_matching_ids:
-
-        matching_ids = non_matching_ids
-
-    if matching_ids:
-
-        if not every_product:
-
-            for item_key, item_val in matching_ids.items():
-
-                products = item_val
-
-                if len(products) > 1:
-
-                    if source:
-
-                        source_val = item_val[0]
-
-                    else:
-
-                        filtered_products = [
-                            product
-                            for product in products
-                            if product["qty"] is not None
-                        ]
-                        source_val = min(filtered_products,
-                                         key=lambda x: x["qty"])
-
-                        if source_val["qty"] == 0:
-
-                            pass
-
-                    for product in products:
-
-                        if product == source_val:
-
-                            continue
-
-                        if item_key == "EVA1":
-
-                            pass
-
-                        if source_val["qty"] == product["qty"]:
-
-                            if source_val["price"] == product["price"]:
+                                if target_item_sku not in target_skus and target_item_sku not in non_matching_items:
+                                    non_matching_items[target_item_sku] = [{"platform": platform, "data": target_item["data"]}]
 
                                 continue
 
-                            continue
+                            if source_item["sku"] == target_item["sku"]: 
+                                                                   
+                                    add_to_matching_items(matching_items, target_item, source_item, platform, every_product)
+                                    break                    
 
-                        changed_values.append(
-                            {
-                                "id": product["id"],
-                                "sku": item_key,
-                                "price": source_val.get("price", 0),
-                                "qty": str(source_val["qty"]),
-                                "platform": product["platform"],
-                            }
-                        )
-                else:
+                    else:
 
-                    continue
+                        add_items_without_source(matching_items, target_item, platform, every_product)
+
+    if non_matching_items:
+
+        matching_items = non_matching_items
+
+    if matching_items:
+
+        if not every_product:
+
+            generate_changed_values(matching_items, use_source)
 
         else:
 
-            if source:
+            if use_source:
 
-                changed_values = matching_ids
+                changed_values = matching_items
 
             else:
 
-                for item_key, item_val in matching_ids.items():
+                for item_key, item_val in matching_items.items():
 
                     products = item_val
 
                     if len(products) > 1:
 
-                        changed_values.append(products[0]["data"])
+                        changed_values.extend([product["data"] for product in products])
 
                     else:
 
-                        changed_values = matching_ids
-
+                        changed_values = matching_items
                         break
 
     return changed_values
 
+def generate_changed_values(matching_items, use_source):
+    """Helper function to generate changed values from matching_items."""
+    changed_values = []
 
-def execute_updates(source=None, targets=None, options=None):
+    for sku, products in matching_items.items():
+        
+        if len(products) > 1:
+            if use_source:
+                source_val = products[0]
+            else:
+                filtered_products = [p for p in products if p["qty"] is not None]
+                source_val = min(filtered_products, key=lambda x: x["qty"])
+
+            for product in products:
+                if product != source_val and  source_val["qty"] != product["qty"]:
+
+                    changed_values.append({
+                        "id": product["id"],
+                        "sku": sku,
+                        "price": source_val.get("price", 0),
+                        "qty": str(source_val["qty"]),
+                        "platform": product["platform"],
+                    })
+    
+    return changed_values
+
+def add_items_without_source(every_product, matching_items, platform, target_item):
+    """Helper function to add items without considering the source."""
+    
+    qty = int(target_item.get('data', {}).get("quantity", 0)) if "data" in target_item else target_item.get("qty", 0)
+    item_id = target_item.get('data', {}).get("id", target_item.get("id"))
+    price = target_item.get("price", 0)
+
+    if target_item["sku"] in matching_items:
+        if every_product:
+            matching_items[target_item["sku"]].append({"platform": platform, "data": target_item["data"]})
+        else:
+            matching_items[target_item["sku"]].append({"platform": platform, "id": item_id, "price": price, "qty": qty})
+    else:
+        if every_product:
+            matching_items[target_item["sku"]] = [{"platform": platform, "data": target_item["data"]}]
+        else:
+            matching_items[target_item["sku"]] = [{"platform": platform, "id": item_id, "price": price, "qty": qty}]
+
+def add_to_matching_items(matching_items, source_item, target_item, platform, every_product):
+    """Helper function to add matching items to the matching_items dictionary."""
+    if every_product:
+        matching_items[source_item["sku"]] = [
+                                            {"platform": platform, "data": target_item["data"]},
+                                            {"platform": source_item["platform"], "data": source_item["data"]}
+                                            ]
+    else:        
+        matching_items[source_item["sku"]] = [{"platform": platform, "id": target_item.get("id", None), "price": target_item.get("price", 0), "qty": target_item.get("qty", 0)}]
+
+def execute_updates(source = None, use_source = False, targets = None, options = None):
     """
     The function `execute_updates` processes update data
     for different platforms and calls corresponding
@@ -396,7 +314,7 @@ def execute_updates(source=None, targets=None, options=None):
     """
 
     platform_to_function = {
-        "n11": n11api.update_proucts,
+        "n11": n11api.update_products,
         "hepsiburada": hpapi.update_listing,
         "amazon": spapi_update_listing,
         "pttavm": pttavm_updatedata,
@@ -507,8 +425,7 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA
 
 def process(data_dict: dict = None):
 
-    # Clear screen command depending on the OS
-    
+    # Clear screen command depending on the OS    
     if os.name == 'nt':  # For Windows
         os.system('cls')
     else:  # For Linux and macOS
