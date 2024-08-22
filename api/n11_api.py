@@ -14,6 +14,10 @@ from typing import Any, Tuple, Optional, List, Dict, Union
 class N11API:
 
     def __init__(self):
+
+        # Vars
+        self.categories_list = {}
+
         # URLS
         self.base_url = "https://api.n11.com/ws"
         self.headers = {'Content-Type': 'text/xml; charset=utf-8'}
@@ -48,7 +52,7 @@ class N11API:
 
         except Error as e:
 
-            print(f"An error occurred: {e}")
+            self.logger.error(f"An error occurred while creating the SOAP client: {e}")
             return None
 
     def __assign_vars__(self,
@@ -110,11 +114,11 @@ class N11API:
         :param raw_elements: List to store simplified product data.
         :param all_products: List to store full product data.
         """
-        for product in products_list:
+        for product in products_list.product:
 
-            product_code = product.get("productSellerCode")
-            product_price = product.get("displayPrice")
-            stock_items = product.get("stockItems", {}).get("stockItem")
+            product_code = product["productSellerCode"]
+            product_price = product["displayPrice"]
+            stock_items = product["stockItems"]["stockItem"]
 
             if every_product:
 
@@ -124,7 +128,7 @@ class N11API:
 
                 product_qty = self.__extract_quantity__(stock_items=stock_items, product_code=product_code)
                 raw_elements.append({
-                    "id": product.get("id"),
+                    "id": product["id"],
                     "sku": product_code,
                     "qty": product_qty,
                     "price": product_price,
@@ -364,7 +368,6 @@ class N11API:
     def __get_categories(self, save: bool = False):
 
         client = self.__create_client__('CategoryService')
-        complete_list = {}
 
         top_level_categories  = client.service.GetTopLevelCategories(auth=self.auth)
         top_categories = [{'id': x['id'], 
@@ -374,48 +377,55 @@ class N11API:
 
         for category  in top_categories:
 
-            category_name = category['name']
-            category_id = category['id']
-            complete_list[category_name] = category            
+            self.categories_list[category['name']] = category
+            category_id = category['id']           
 
-            sub_categories = self.get_sub_categories(client, category_id)
+            temp_data = self.sub_categories_recursive(client, category_id, category['name'])
 
-            if sub_categories['category']:
+            if temp_data:
+                self.categories_list[category['name']]['sub_category'] = temp_data
 
-                SubCategories_list = [{'subCategory_id': x['id'], 
-                                       'subCategory_name': x ['name'], 'sub_sub_category': [], 
-                                       'attrs': []} 
-                                       for x in sub_categories['category'][0]['subCategoryList']['subCategory']]
 
-                for sub_category in SubCategories_list:
+    def sub_categories_recursive(self, client, category_id, main_category, sub_category_name = None, index=0):
 
-                    complete_list[category['name']]['sub_category'].append(sub_category)
-                    categoryId = sub_category['subCategory_id']
-                    SubSubCategories = client.service.GetSubCategories(auth=self.auth,
-                                                                       categoryId=categoryId, 
-                                                                       lastModifiedDate=xsd.SkipValue)
+        sub_categories_response = self.get_sub_categories(client, category_id)
 
-                    if SubSubCategories['category']:
+        if sub_categories_response.result.status == 'success' and sub_categories_response.category[0].subCategoryList:
 
-                        SubSubCategories_list = [{'SubsubCategory_id': x['id'],
-                                                  'SubsubCategory_name': x['name'], 'attrs': []} 
-                                                  for x in SubSubCategories['category'][0]['subCategoryList']['subCategory']]
+            sub_categories = sub_categories_response.category[0].subCategoryList.subCategory
+            sub_category_list = [{'sub_category_id': x['id'], 
+                              'sub_category_name': x['name'], 
+                              'sub_category': [],  # Prepare space for the next level of sub-categories
+                              'attrs': []} 
+                             for x in sub_categories]
 
-                        for sub_sub_category in SubSubCategories_list:
+            for sub_category in sub_category_list:
 
-                            complete_list[category['name']]['sub_category'][SubCategories_list.index(sub_category)]['sub_sub_category'].append(sub_sub_category)
-                            categoryId = sub_sub_category['SubsubCategory_id']
+                sub_category_id = sub_category['sub_category_id']
 
-                            self._get_category_attrs_(categoryId,
-                                                      "sub_sub_category",
-                                                      complete_list,
-                                                      category,
-                                                      SubCategories_list.index(sub_category),
-                                                      SubSubCategories_list.index(sub_sub_category),)
+                # Get attributes for the current sub-category
+                attrs = self._get_category_attrs_(sub_category_id)
 
-                    self._get_category_attrs_(categoryId, "sub_category")
+                if not sub_category_name:
 
-            return complete_list
+                    self.categories_list[main_category]['sub_category'].append(sub_category)
+                    self.categories_list[main_category]['attrs'] = attrs
+
+                else:
+
+                    self.categories_list[main_category]['sub_category'][index]['sub_category'].append(sub_category)
+                    self.categories_list[main_category]['sub_category'][index]['attrs'] = attrs
+                    
+
+                # Recursively fetch and add the next level of sub-categories
+                self.sub_categories_recursive(client=client, 
+                                              category_id=sub_category_id, 
+                                              main_category=main_category, 
+                                              sub_category_name=sub_category['sub_category_name'], 
+                                              index=sub_category_list.index(sub_category))
+        
+        else:
+            pass
 
     def get_sub_categories(self, client, categoryId: int):
         """
@@ -428,32 +438,41 @@ class N11API:
         Returns:
             list: A list of sub-category dictionaries.
         """
-        sub_categories_response  = client.service.GetSubCategories(auth=self.auth, 
+        try:
+            sub_categories_response  = client.service.GetSubCategories(auth=self.auth, 
                                                             categoryId=categoryId,
                                                             lastModifiedDate=xsd.SkipValue)
                                                         
-        return sub_categories_response
-
-
-           
-    def _get_category_attrs_(self, categoryId: int, category_type: str, complete_list: dict = None, item: dict = None, index: int = None, sub_index: int = None):
-
+            return sub_categories_response
+        except ConnectionError:
+            time.sleep(2)
+            return self.get_sub_categories(client, categoryId)
+       
+    def _get_category_attrs_(self, categoryId: int):
+        """
+        Fetch and add attributes to the given sub-category level.
+    
+        Args:
+            categoryId (int): The category ID.
+            category_type (str): Type of category (e.g., "sub_category").
+            data_list (list): List of categories to append attributes.
+            index (int): Index of the category in the list.
+    
+        Returns:
+            None
+        """
         client = self.__create_client__('CategoryService')
         CategoryAttributes = client.service.GetCategoryAttributes(auth=self.auth,
                                                                   categoryId=categoryId,
                                                                   pagingData=1)
 
-        if CategoryAttributes['category']:
-
-            sub_categories_attr_list = [{'attr_name': x['name']}
-                                        for x in CategoryAttributes['category']['attributeList']['attribute']]
-            if category_type == "sub_category":
-
-                    complete_list[item['name']]['sub_category'][index]['attrs'].extend(attr['attr_name'] for attr in sub_categories_attr_list)
-
-            elif category_type == "sub_sub_category":
-
-                    complete_list[item['name']]['sub_category'][index][category_type][sub_index]['attrs'].extend(attr['attr_name'] for attr in sub_categories_attr_list)
+        if CategoryAttributes.result.status == 'success' and 'attributeList' in CategoryAttributes['category']:
+            attributes = [{'attr_name': x['name'], 
+                          'attr_id': x['id'],
+                          'attr_value': [y['name'] for y in x.valueList.value]}
+                          for x in CategoryAttributes.category.attributeList.attribute]
+            
+            return attributes
 
     def get_products(self,
                     every_product: bool = False,
@@ -475,50 +494,34 @@ class N11API:
             
             return self.__fetch_local_data__()
 
-        payload_template = """
-        <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
-            <soapenv:Header/>
-            <soapenv:Body>
-                <sch:GetProductListRequest>
-                    <auth>
-                        <appKey>{api_key}</appKey>
-                        <appSecret>{api_secret}</appSecret>
-                    </auth>
-                    <pagingData>
-                        <currentPage>{current_page}</currentPage>
-                        <pageSize>{page_size}</pageSize>
-                    </pagingData>
-                </sch:GetProductListRequest>
-            </soapenv:Body>
-        </soapenv:Envelope>
-        """
+        client = self.__create_client__()
+        if client is None:
+            return []
 
-        link = self.base_url + "/ProductService/"
         current_page = 0
         all_products = []
         raw_elements = []
 
-        # Status code of 200 means that the request was successful
-        # and the server returned the expected response.
         while True:
-            # Prepare the payload with the current page and page size
-            payload = payload_template.format(api_key=self.api_key, api_secret=self.api_secret, current_page=current_page, page_size=page_size)
-
+            
             try:
+                # Make the SOAP request for the current page
+                response = client.service.GetProductList(
+                    auth={'appKey': self.api_key, 'appSecret': self.api_secret},
+                    pagingData={'currentPage': current_page, 'pageSize': page_size}
+                    )
 
-                response = requests.post(link, headers=self.headers, data=payload, timeout=timeout)
-                response.raise_for_status()  # Raises an exception for 4xx/5xx status codes
+            except Error as e:
 
-            except requests.exceptions.RequestException as e:
-
-                self.logger.error(f"Request failed: {e}")
-
+                self.logger.error(f"SOAP request failed: {e}")
                 return []
 
             # Parse the response and extract products
-            products_list, total_pages = self.__assign_vars__(raw_xml=response.text, response_namespace="GetProductListResponse", list_name="products")
+            products_list = response.products
+            total_pages = response.pagingData.pageCount
 
-            if products_list is None:
+
+            if not products_list:
 
                 self.logger.error("No products found in the response.")
                 break
@@ -544,6 +547,7 @@ class N11API:
         else:
 
             self.logger.error("No products found in the response.")
+            return []
 
     def add_products(self, data: Union[List[Dict], Dict]) -> None:
         
