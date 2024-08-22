@@ -65,7 +65,7 @@ def get_data(
 
     data_content = {
         "trendyol_data": get_trendyol_stock_data(every_product),
-        "n11_data": n11api.get_proucts(every_product),
+        "n11_data": n11api.get_products(every_product),
         "amazon_data": spapi_getlistings(every_product),
         "hepsiburada_data": hpapi.get_listings(every_product),
         "pazarama_data": getPazarama_productsList(every_product),
@@ -196,9 +196,11 @@ def filter_data_list(data = '', source = '', use_source = False, target = '', ev
 
     for platform in platforms:
         if platform != source and f"{platform}_data" in data:
-                target_skus = list(item["sku"] for item in data[f"{target}_data"])
-                for target_item in data[f"{platform}_data"]:                    
-                    if use_source:
+                if use_source:
+
+                    target_skus = list(item["sku"] for item in data[f"{target}_data"])
+                    for target_item in data[f"{platform}_data"]:                   
+                    
                         source = list(data.keys())[1]
                         for source_item in data[source]:
                             if no_match:                                
@@ -215,9 +217,10 @@ def filter_data_list(data = '', source = '', use_source = False, target = '', ev
                                     add_to_matching_items(matching_items, target_item, source_item, platform, every_product)
                                     break                    
 
-                    else:
-
-                        add_items_without_source(matching_items, target_item, platform, every_product)
+                else:
+                    for target_item in data[f"{platform}_data"]:
+                    
+                        add_items_without_source(every_product, matching_items, platform, target_item)
 
     if non_matching_items:
 
@@ -227,7 +230,7 @@ def filter_data_list(data = '', source = '', use_source = False, target = '', ev
 
         if not every_product:
 
-            generate_changed_values(matching_items, use_source)
+            changed_values = generate_changed_values(matching_items, use_source)
 
         else:
 
@@ -262,11 +265,10 @@ def generate_changed_values(matching_items, use_source):
             if use_source:
                 source_val = products[0]
             else:
-                filtered_products = [p for p in products if p["qty"] is not None]
-                source_val = min(filtered_products, key=lambda x: x["qty"])
+                source_val = min(products, key=lambda x: x["qty"])
 
             for product in products:
-                if product != source_val and  source_val["qty"] != product["qty"]:
+                if source_val["qty"] != product["qty"]:
 
                     changed_values.append({
                         "id": product["id"],
