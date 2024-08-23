@@ -160,7 +160,7 @@ def process_update_data(source=None, use_source = False, targets=None, options=N
     # to store data during the processing of stock
     # data from N11 and Trendyol APIs.
     platform_updates = filter_data_list(
-        data=data_lists, source=source, use_source = False, target=targets, every_product=all_data
+        data=data_lists, source=source, use_source = use_source, target=targets, every_product=all_data
     )
 
     logger.info(f"""Product updates count is {len(platform_updates)}""")
@@ -201,8 +201,8 @@ def filter_data_list(data = '', source = '', use_source = False, target = '', ev
                     target_skus = list(item["sku"] for item in data[f"{target}_data"])
                     for target_item in data[f"{platform}_data"]:                   
                     
-                        source = list(data.keys())[1]
-                        for source_item in data[source]:
+                        # source = list(data.keys())[1]
+                        for source_item in data[f"{source}_data"]:
                             if no_match:                                
                                 platform = target
                                 target_item_sku = target_item["sku"]
@@ -213,8 +213,10 @@ def filter_data_list(data = '', source = '', use_source = False, target = '', ev
                                 continue
 
                             if source_item["sku"] == target_item["sku"]: 
+                                    
+                                    params = {'source_platform': source, 'target_platform': platform, 'source_item': source_item, 'target_item': target_item}
                                                                    
-                                    add_to_matching_items(matching_items, target_item, source_item, platform, every_product)
+                                    add_to_matching_items(matching_items, params, every_product)
                                     break                    
 
                 else:
@@ -299,15 +301,21 @@ def add_items_without_source(every_product, matching_items, platform, target_ite
         else:
             matching_items[target_item["sku"]] = [{"platform": platform, "id": item_id, "price": price, "qty": qty}]
 
-def add_to_matching_items(matching_items, source_item, target_item, platform, every_product):
+def add_to_matching_items(matching_items, params, every_product):
     """Helper function to add matching items to the matching_items dictionary."""
+
+    source_item = params['source_item']
+    target_item = params['target_item']
+    target = params['target_platform']
+    source = params['source_platform']
+
     if every_product:
         matching_items[source_item["sku"]] = [
-                                            {"platform": platform, "data": target_item["data"]},
-                                            {"platform": source_item["platform"], "data": source_item["data"]}
+                                            {"platform": target, "data": target_item["data"]},
+                                            {"platform": source, "data": source_item["data"]}
                                             ]
     else:        
-        matching_items[source_item["sku"]] = [{"platform": platform, "id": target_item.get("id", None), "price": target_item.get("price", 0), "qty": target_item.get("qty", 0)}]
+        matching_items[source_item["sku"]] = [{"platform": target, "id": target_item.get("id", None), "price": target_item.get("price", 0), "qty": target_item.get("qty", 0)}]
 
 def execute_updates(source = None, use_source = False, targets = None, options = None):
     """
@@ -328,7 +336,7 @@ def execute_updates(source = None, use_source = False, targets = None, options =
 
     logger.info("Starting updates...")
 
-    post_data = process_update_data(source, targets, options)
+    post_data = process_update_data(source=source, use_source=use_source, targets=targets, options=options)
 
     if post_data:
 
@@ -446,6 +454,7 @@ def process(data_dict: dict = None):
 
                     execute_updates(source=data_dict['update']['source'], 
                                     targets=data_dict['update']['target'], 
+                                    use_source= True if data_dict['update']['options'] else False, 
                                     options=data_dict['update']['options'])
                     break
 

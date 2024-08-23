@@ -218,14 +218,17 @@ class Hb_API:
 
                 self.headers["Accept"] = "application/json;charset=UTF-8"
                 self.headers.pop("Content-Type")
+                retry = False
 
                 while len(listing_items) > 0:
 
-                    batch_size = min(len(listing_items), 50)
-                    listing_details["merchantId"] = self.store_id
-                    listing_details["items"] = listing_items[:batch_size]
-                    listing_items = listing_items[batch_size:]
-                    item_count += 1
+                    if not retry:
+
+                        batch_size = min(len(listing_items), 50)
+                        listing_details["merchantId"] = self.store_id
+                        listing_details["items"] = listing_items[:batch_size]
+                        listing_items = listing_items[batch_size:]
+                        item_count += 1
 
                     with open("integrator-ticket-upload.json", "w", encoding="utf-8") as json_file:
 
@@ -258,8 +261,7 @@ class Hb_API:
 
                                 check_status_request = self.request_data(
                                     subdomain=self.mpop_url,
-                                    url_addons=f"""/ticket-api/api/integrator/status/{
-                                        update_state_id}""",
+                                    url_addons=f"""/ticket-api/api/integrator/status/{update_state_id}""",
                                     request_type="GET",
                                     payload_content=[],
                                 )
@@ -270,12 +272,20 @@ class Hb_API:
 
                                     if check_status['success'] == False:
 
-                                        self.logger.error(f"""Update file uploaded successfuly but request success is {
-                                                          check_status['success']} | Reason: {check_status['message']}""")
+                                        
+                                        retry = True
+                                        delay = min(3 * (2 ** item_count), 32)
+                                        delay = delay / 2 + random.uniform(0, delay / 2)
+
+                                        self.logger.error(f"""{item_count} out of updates chunks uploaded with {
+                                                          check_status['success']} success | Reason: {check_status['message']} || Retrying in {delay} seconds...""")
+                                        
+                                        time.sleep(delay)
                                         break
 
-                                    self.logger.info(f"""Status of update file uploaded success is {
-                                                     check_status['success']} | Reason: {check_status['message']}""")
+                                    self.logger.info(f"""{item_count} out of updates chunks uploaded with {
+                                                     check_status['success']} success | Reason: {check_status['message']}""")
+                                    retry = False
                                     break
 
                         else:
@@ -348,41 +358,59 @@ class Hb_API:
         """
 
         listings_list = []
+        page = 1
+        totalPages = 0
 
-        try:
+        while page != 0:
 
-            data_request_raw = self.request_data(
-                subdomain=self.listing_external_url,
-                url_addons=f"?limit=1000",
-                request_type="GET",
-                payload_content=[],
-            )
-            formatted_data = json.loads(data_request_raw.text)
+            try:
 
-            for data in formatted_data["listings"]:
-                if not everyproduct:
+                if totalPages == page:
 
-                    listings_list.append(
-                        {
-                            "id": data["hepsiburadaSku"],
-                            "sku": data["merchantSku"],
-                            "qty": data["availableStock"],
-                            "price": data["price"],
-                        }
-                    )
-                else:
-                    listings_list.append(
-                        {"sku": data["merchantSku"], "data": data})
+                    page = 0
+                    break    
+
+                data_request_raw = self.request_data(
+                    subdomain=self.mpop_url + f"product/api/products/all-products-of-merchant/{self.store_id}/",
+                    url_addons=f"?size=100&page={page}",
+                    request_type="GET",
+                    payload_content=[],
+                )
+                formatted_data = json.loads(data_request_raw.text)
+                totalPages = formatted_data['totalPages']
+
+                for data in formatted_data["data"]:
+                    for attr in data['baseAttributes']:
+                        if attr['name'] == 'stock':
+                            if not everyproduct:
+                            
+                                listings_list.append(
+                                    {
+                                        "id": data["hepsiburadaSku"],
+                                        "sku": data["merchantSku"],
+                                        "qty": attr['value'],
+                                        "price": data["price"],
+                                    }
+                                )
+                            else:
+
+                                listings_list.append({"sku": data["merchantSku"], "data": data})                    
+
+                page += 1         
+
+            except Exception as e:
+
+                self.logger.error(f"Error fetching product data: {e}")
+
+        if listings_list:
 
             self.logger.info(f"HepsiBurada fetched {len(listings_list)} products")
-
             return listings_list
-
-        except Exception as e:
-
-            self.logger.error(f"Error fetching product data: {e}")
+        
+        else:
 
             return []
+
 
     def prepare_product_data(self, items: dict, source: str = "", op: str = "") -> list:
         """
@@ -495,15 +523,18 @@ class Hb_API:
 
                 source = item_data_list[1][0]["platform"]
 
-            if item_data_list[1][0]["platform"] == source:
+            if item_data_list[1][1]["platform"] == source:
 
-                self.data = item_data_list[1][0]["data"]
+                self.data = item_data_list[1][1]["data"]
 
             if not self.data:
 
                 continue
+            
+            images = [item['url'] for item in self.data["images"]]
+            if set(images).issubset(item_data_list[1][0]['data']['images']):
+                continue
 
-            images = self.data["images"]
             source_category = self.data["categoryName"]
             product = self.data["title"]
 
@@ -544,7 +575,7 @@ class Hb_API:
 
             for i in enumerate(images):
 
-                self.category_attrs[f"Image{i[0]+1}"] = i[1]["url"]
+                self.category_attrs[f"Image{i[0]+1}"] = i[1]
                 if i[0] == 5:
 
                     pass
@@ -575,7 +606,7 @@ class Hb_API:
 
             if op == 'update':
 
-                self.category_attrs["hbsku"] = item_data_list[1][1]["data"]["hepsiburadaSku"]
+                self.category_attrs["hbsku"] = item_data_list[1][0]["data"]["hbSku"]
 
             self.category_attrs["merchantSku"] = self.data.get("stockCode", None)
             self.category_attrs["VaryantGroupID"] = self.data.get("productMainId", None)
