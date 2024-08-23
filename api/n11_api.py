@@ -117,7 +117,7 @@ class N11API:
         for product in products_list.product:
 
             product_code = product["productSellerCode"]
-            product_price = product["displayPrice"]
+            product_price = float(product["displayPrice"])
             stock_items = product["stockItems"]["stockItem"]
 
             if every_product:
@@ -127,6 +127,9 @@ class N11API:
             else:
 
                 product_qty = self.__extract_quantity__(stock_items=stock_items, product_code=product_code)
+                if product_qty is None:
+                    product_qty = 0
+
                 raw_elements.append({
                     "id": product["id"],
                     "sku": product_code,
@@ -146,13 +149,13 @@ class N11API:
         """
         if isinstance(stock_items, list):
             for stock_item in stock_items:
-                if stock_item.get('sellerStockCode') == product_code:
+                if stock_item['sellerStockCode'] == product_code:
 
-                    return int(stock_item.get("quantity", 0))
+                    return int(stock_item["quantity"])
 
         elif stock_items:
 
-            return int(stock_items.get("quantity", 0))
+            return int(stock_items["quantity"])
 
         return None
 
@@ -523,8 +526,8 @@ class N11API:
 
             if not products_list:
 
-                self.logger.error("No products found in the response.")
-                break
+                time.sleep(1)
+                continue
 
             raw_elements, all_products = self.__process_products__(products_list, every_product, raw_elements, all_products)
 

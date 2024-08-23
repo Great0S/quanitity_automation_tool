@@ -262,6 +262,7 @@ def generate_changed_values(matching_items, use_source):
     for sku, products in matching_items.items():
         
         if len(products) > 1:
+            
             if use_source:
                 source_val = products[0]
             else:
