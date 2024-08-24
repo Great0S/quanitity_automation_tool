@@ -270,8 +270,13 @@ def generate_changed_values(matching_items, use_source):
             else:
                 source_val = min(products, key=lambda x: x["qty"])
 
+            
+
             for product in products:
                 if source_val["qty"] != product["qty"]:
+                    if source_val['qty'] == 0:
+
+                        pass
 
                     changed_values.append({
                         "id": product["id"],

@@ -358,6 +358,15 @@ class Hb_API:
         """
 
         listings_list = []
+        # To get current updated stocks numbers 
+        listings_request_raw = self.request_data(
+                    subdomain=self.listing_external_url ,
+                    url_addons=f"?limit=1000",
+                    request_type="GET",
+                    payload_content=[],
+                )
+        listings_data = json.loads(listings_request_raw.text)
+
         page = 1
         totalPages = 0
 
@@ -380,20 +389,21 @@ class Hb_API:
                 totalPages = formatted_data['totalPages']
 
                 for data in formatted_data["data"]:
-                    for attr in data['baseAttributes']:
-                        if attr['name'] == 'stock':
+                    for listing in listings_data['listings']:
+                        if listing['merchantSku'] == data["merchantSku"]:
                             if not everyproduct:
                             
                                 listings_list.append(
                                     {
-                                        "id": data["hepsiburadaSku"],
+                                        "id": data["hbSku"],
                                         "sku": data["merchantSku"],
-                                        "qty": attr['value'],
-                                        "price": data["price"],
+                                        "qty": listing.get('availableStock', 0),
+                                        "price": float(data["price"].replace(",", ".") if data["price"].isnumeric() else 0),
                                     }
                                 )
                             else:
 
+                                data['stock'] = listing.get('availableStock', 0)
                                 listings_list.append({"sku": data["merchantSku"], "data": data})                    
 
                 page += 1         
@@ -410,7 +420,6 @@ class Hb_API:
         else:
 
             return []
-
 
     def prepare_product_data(self, items: dict, source: str = "", op: str = "") -> list:
         """
