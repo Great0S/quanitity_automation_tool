@@ -28,8 +28,7 @@ def get_access_token():
 
     else:
 
-        logger.error(f'Access token request has failed || Reason: {
-                     response.text}')
+        logger.error(f'Access token request has failed || Reason: {response.text}')
 
 def request_data(method='GET', uri='', params=None, payload=None):
     """
@@ -64,7 +63,7 @@ def request_data(method='GET', uri='', params=None, payload=None):
 
         else:
 
-            logger.error(f'Request has failed for product {payload['items'][0]['code']} || Status code: {response.status_code} || Reason: {response.reason}')
+            logger.error(f'Request has failed for product {payload["items"][0]["code"]} || Status code: {response.status_code} || Reason: {response.reason}')
 
             return None
 
@@ -137,7 +136,7 @@ def pazarama_updateRequest(product):
 
         else:
 
-            logger.error(f'Product with code: {sku} failed to update || Reason: {update_request['data'][0]['error']} || Elapsed time: {elapsed_time:.2f} seconds.')
+            logger.error(f'Product with code: {sku} failed to update || Reason: {update_request["data"][0]["error"]} || Elapsed time: {elapsed_time:.2f} seconds.')
 
 def request_processing(uri: str, payload: dict = {}, params: dict = {}, method: str = 'GET'):
 

@@ -10,21 +10,15 @@ import os
 from tui import ProductManagerApp
 from rich.logging import RichHandler
 from rich.prompt import Prompt
-from api.amazon_seller_api import (
-    spapi_add_listing,
-    spapi_getlistings,
-    spapi_update_listing,
-)
+from api.amazon_seller_api import spapi_add_listing,spapi_getlistings,spapi_update_listing
+
 from api.hepsiburada_api import Hb_API
 from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
 from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
 from api.n11_api import N11API
-from api.wordpress_api import (
-    create_wordpress_products,
-    get_wordpress_products,
-    update_wordpress_products,
-)
+from api.wordpress_api import create_wordpress_products,get_wordpress_products,update_wordpress_products
+
 
 # Configure logging
 logging.basicConfig(

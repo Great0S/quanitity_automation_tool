@@ -359,8 +359,7 @@ def spapi_get_orders():
 
                 spapi_getorderitems(30, orders_dict)
 
-                logger.info(f"Processed {count} orders || Orders left: {
-                            len(orders_dict) - count}")
+                logger.info(f"Processed {count} orders || Orders left: {len(orders_dict) - count}")
 
                 request_count = 0
 
@@ -473,13 +472,13 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
                     
                     summaries = item['summaries'][0]
 
-                    identifiers = {f'{k}{item['identifiers'][0]['identifiers'].index(i)}': v
+                    identifiers = {f"""{k}{item['identifiers'][0]['identifiers'].index(i)}""": v
                                    for i in item['identifiers'][0]['identifiers']
                                    for k, v in i.  items()}
                     
                     attributes = item['attributes']
 
-                    images = {f'link{item['images'][0]['images'].index(i)}': i['link'] 
+                    images = {f"""link{item['images'][0]['images'].index(i)}""": i['link'] 
                               for i in item['images'][0]['images'] 
                               for k, v in i.items() if v == 'MAIN'}
                     
@@ -647,8 +646,7 @@ def spapi_add_listing(data):
 
             else:
 
-                product_images[f"other_product_image_locator_{
-                    i[0]}"] = [{"media_location": i[1]['url']}]
+                product_images[f"other_product_image_locator_{i[0]}"] = [{"media_location": i[1]['url']}]
 
         for atrr in source_product_attrs:
 
@@ -711,8 +709,7 @@ def spapi_add_listing(data):
 
             if product_attrs:
 
-                file_path = f'amazon_{
-                    product_attrs.payload['productType']}_attrs.json'
+                file_path = f'amazon_{product_attrs.payload["productType"]}_attrs.json'
 
                 if os.path.isfile(file_path):
 
