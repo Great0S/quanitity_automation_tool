@@ -59,12 +59,12 @@ def get_data(
 
     data_content = {
         "trendyol_data": get_trendyol_stock_data(every_product),
-        "n11_data": n11api.get_products(every_product),
-        "amazon_data": spapi_getlistings(every_product),
+        "n11_data": n11api.get_products(every_product),        
         "hepsiburada_data": hpapi.get_listings(every_product),
         "pazarama_data": getPazarama_productsList(every_product),
         "wordpress_data": get_wordpress_products(every_product),
         "pttavm_data": getpttavm_procuctskdata(every_product),
+        "amazon_data": spapi_getlistings(every_product)
     }
 
     if every_product:

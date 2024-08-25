@@ -31,8 +31,7 @@ def products_request():
                 products.append(product)
 
             count += 1
-            products_request_raw = wcapi.get(
-                'products', params={"per_page": 100, "page": count})
+            products_request_raw = wcapi.get('products', params={"per_page": 100, "page": count})
             products_request = products_request_raw.json()
 
             if len(products_request) == 100:
@@ -159,8 +158,7 @@ def create_wordpress_products(data):
 
                     continue
 
-                attrs += f"{attr['attributeName']
-                            }: {attr['attributeValue'] + '\n'}"
+                attrs += f"{attr['attributeName']}: {attr['attributeValue']}\n"
 
             images = [{'src': x['url'], 'name': item_data['title'],
                        'alt': item_data['title']} for x in item_data['images']]
@@ -201,9 +199,7 @@ def create_wordpress_products(data):
 
                 error = json.loads(create_product_request.text)
 
-                logger.error(f"""New product request failed for {item_data['stockCode']}!, message: {
-                    error['code']}, Details: {
-                        error['message']}""")
+                logger.error(f"""New product request failed for {item_data['stockCode']}!, message: {error['code']}, Details: {error['message']}""")
 
             else:
 

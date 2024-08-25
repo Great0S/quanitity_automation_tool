@@ -23,26 +23,14 @@ def request_data(url_addons, request_type, payload_content):
     """
     The function `request_data` sends a request to a specified URL with specified headers, request type,
     and payload content.
-
-    :param url_addons: The `url_addons` parameter is a string that represents any additional path or
-    query parameters that need to be added to the base URL. It is appended to the base URL to form the
-    complete URL for the API request
-    :param request_type: The `request_type` parameter is the type of HTTP request to be made. It can be
-    one of the following: "GET", "POST", "PUT", "DELETE", etc
-    :param payload_content: The payload_content parameter is the data that you want to send in the
-    request. It can be in various formats such as JSON, XML, or form data. The content of the payload
-    will depend on the specific API you are working with and the data it expects
-    :return: the response object from the API request.
     """
     payload = payload_content
 
-    url = f"https://api.trendyol.com/sapigw/suppliers/{
-        store_id}/products{url_addons}"
+    url = f"https://api.trendyol.com/sapigw/suppliers/{store_id}/products{url_addons}"
 
     while True:
 
-        api_request = requests.request(
-            request_type, url, headers=headers, data=payload, timeout=3000)
+        api_request = requests.request(request_type, url, headers=headers, data=payload, timeout=3000)
 
         if api_request.status_code == 200:
 
@@ -76,11 +64,6 @@ def get_trendyol_stock_data(every_product: bool = False, local: bool = False, Fi
     """
     The function `get_data` retrieves products data from multiple pages and appends it to a list.
 
-    :param page: The `page` parameter is used to specify the page number of the data to retrieve. It is
-    used in the URL to fetch data from different pages
-    :param products: The `products` parameter is a list that will store the extracted data. Each item in
-    the list will be a dictionary with two keys: "barcode" and "quantity". The "barcode" key will store
-    the product's barcode, and the "quantity" key will store the quantity of the product
     """
     page = 0
 
@@ -150,10 +133,6 @@ def post_trendyol_data(product):
     """
     The function `post_data` sends a POST request to a specified URL with a payload containing a list of
     products.
-
-    :param products: The "products" parameter is a list of items that you want to post to the server.
-    Each item in the list should be a dictionary containing the necessary information for the server to
-    process
     """
     uri_addon = "/price-and-inventory"
 
@@ -172,8 +151,7 @@ def post_trendyol_data(product):
 
         if re.search('failure', post_response.text):
 
-            logger.error(f"Request failure for product {
-                   product['code']} | Response: {post_response.text}")
+            logger.error(f"Request failure for product {product['code']} | Response: {post_response.text}")
 
         else:
 
@@ -181,8 +159,7 @@ def post_trendyol_data(product):
 
             while True:
 
-                batchid_request_raw = request_data(
-                    f'/batch-requests/{batch_requestid}', "GET", [])
+                batchid_request_raw = request_data(f'/batch-requests/{batch_requestid}', "GET", [])
 
                 batchid_request = json.loads(batchid_request_raw.text)
 
@@ -192,8 +169,7 @@ def post_trendyol_data(product):
 
                     if request_status == 'SUCCESS':
 
-                        logger.info(f'Product with code: {
-                               product["sku"]}, New value: {product["qty"]}')
+                        logger.info(f'Product with code: {product["sku"]}, New value: {product["qty"]}')
 
                         break
 
