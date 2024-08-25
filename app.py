@@ -67,28 +67,6 @@ def get_data(
         "amazon_data": spapi_getlistings(every_product)
     }
 
-    if every_product:
-
-        pass
-
-    # elif match:
-
-    #     all_codes = {source: source_codes, targets: target_codes}
-
-    # else:
-
-    #     all_codes = list(
-    #         set(
-    #             [item["sku"] for item in data_content["n11_data"]]
-    #             + [item["sku"] for item in data_content["trendyol_data"]]
-    #             + [item["sku"] for item in data_content["amazon_data"]]
-    #             + [item["sku"] for item in data_content["hepsiburada_data"]]
-    #             + [item["sku"] for item in data_content["pazarama_data"]]
-    #             + [item["sku"] for item in data_content["wordpress_data"]]
-    #             + [item["sku"] for item in data_content["pttavm_data"]]
-    #         )
-    #     )
-
     return data_content, []
 
 
