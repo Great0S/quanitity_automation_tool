@@ -7,11 +7,13 @@
 import logging
 import re
 import os
+from datetime import datetime, timezone
+from dateutil.relativedelta import relativedelta
 from tui import ProductManagerApp
 from rich.logging import RichHandler
 from rich.prompt import Prompt
-from api.amazon_seller_api import spapi_add_listing,spapi_getlistings,spapi_update_listing
 
+from api.amazon_seller_api import spapi_add_listing,spapi_getlistings,spapi_update_listing
 from api.hepsiburada_api import Hb_API
 from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
 from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
@@ -131,16 +133,29 @@ def process_update_data(source=None, use_source = False, targets=None, options=N
     # Initializing empty lists. These lists will be used
     # to store data during the processing of stock
     # data from N11 and Trendyol APIs.
-    platform_updates = filter_data_list(
+    platform_updates = filter_quantity_data(
         data=data_lists, source=source, use_source = use_source, target=targets, every_product=all_data
     )
+    # Filter platform_updates by createdTime and updatedTime from source
+    if use_source:
+
+        for item in platform_updates:
+
+            source_data = platform_updates[item][1]['data']
+            product_createdTime = datetime.fromtimestamp(source_data['createDateTime'] / 1000, tz=timezone.utc).strftime('%Y-%m-%d')
+            product_updatedTime = datetime.fromtimestamp(source_data['lastUpdateDate'] / 1000, tz=timezone.utc).strftime('%Y-%m-%d')
+            platform_updates[item][1]['createDateTime'] = product_createdTime
+            platform_updates[item][1]['lastUpdateDate'] = product_updatedTime
+
 
     logger.info(f"""Product updates count is {len(platform_updates)}""")
+
+
 
     return platform_updates
 
 
-def filter_data_list(data = '', source = '', use_source = False, target = '', every_product: bool = False, no_match = False):
+def filter_quantity_data(data = '', source = '', use_source = False, target = '', every_product: bool = False, no_match = False):
     """
     The function `filter_data_list` compares quantity values
     for items across different platforms and returns a list of
@@ -314,6 +329,8 @@ def execute_updates(source = None, use_source = False, targets = None, options =
     logger.info("Starting updates...")
 
     post_data = process_update_data(source=source, use_source=use_source, targets=targets, options=options)
+    one_month_back = None
+    custom_date_input = None
 
     if post_data:
 
@@ -324,24 +341,41 @@ def execute_updates(source = None, use_source = False, targets = None, options =
             for update in post_data:
 
                 logger.info(
-                    f"""{count}. Product with sku {update['sku']} from {
-                        update['platform']} has a new stock! || New stock: {update['qty']}"""
+                    f"""{count}. Product with sku {update['sku']} from {update['platform']} has a new stock! || New stock: {update['qty']}"""
                 )
 
                 count += 1
 
         while True:
 
-            user_input = Prompt.ask(
-                "Do you want to continue? (y/n): ", choices=["y", "n"])
-
-            if user_input.lower() == "n":
+            logger.info(f"1. Update by date \n2. Update by sku\n3. Exit")
+            user_input = Prompt.ask("Choose from the above options to continue?: ", choices=["1", "2", "3"])
+            
+            if user_input.lower() == "3":
 
                 logger.info("Exiting the program.")
 
                 break
 
-            elif user_input.lower() == "y":
+            elif user_input.lower() in ["1","2"]:
+
+                logger.info(f"1. Update by month from now \n2. Custom date\n3. Exit")
+                date_input = Prompt.ask("Choose a date from the above options to continue?: ", choices=["1", "2", "3"])
+
+                if date_input.lower() == "3":
+
+                    logger.info("Exiting the program.")
+                    break
+
+                elif date_input.lower() == "1":
+
+                    current_date = datetime.now()
+                    one_month_back = current_date - relativedelta(months=1)
+
+                elif date_input.lower() == "2":
+
+                    custom_date_input = Prompt.ask("Please enter the required date with format Year-Month: ex. 2023-01")
+                    custom_date_input = datetime.strptime(custom_date_input, "%Y-%m-%d")
 
                 logger.info("Update in progress...")
 
@@ -356,6 +390,20 @@ def execute_updates(source = None, use_source = False, targets = None, options =
                                     
                         else:
                             if platform == targets:
+                                    items_by_date = {}
+                                    for post in post_data:
+                                        
+                                        source_item_lastUpdateDate = datetime.strptime(post_data[post][1]['lastUpdateDate'], "%Y-%m-%d")
+
+                                        if one_month_back and one_month_back <= source_item_lastUpdateDate:
+                                            items_by_date[post] = post_data[post]
+                                        
+                                        elif custom_date_input and custom_date_input <= source_item_lastUpdateDate:
+                                            items_by_date[post] = post_data[post]
+                                        
+                                    if items_by_date:
+
+                                        post_data = items_by_date
 
                                     func(products=post_data,
                                          options=options, source=source)
@@ -374,7 +422,6 @@ def execute_updates(source = None, use_source = False, targets = None, options =
 
                 logger.error(
                     "Invalid Prompt.ask. Please enter 'y' for yes or 'n' for no.")
-
 
 def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA=False):
 
@@ -396,7 +443,7 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA
         match=True,
     )
 
-    filtered_data = filter_data_list(
+    filtered_data = filter_quantity_data(
         data=data_lists,
         every_product=True,
         no_match=True,
@@ -409,7 +456,6 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA
         platform_to_function[TARGET_PLATFORM](data=filtered_data)
 
     logger.info("Done")
-
 
 def process(data_dict: dict = None):
 

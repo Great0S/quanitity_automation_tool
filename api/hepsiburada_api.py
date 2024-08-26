@@ -191,6 +191,8 @@ class Hb_API:
                 update_data = self.prepare_product_data(
                     items=products, op='update', source=source
                 )
+                self.logger.info(f"Already updated items count is {len(products) - len(update_data)}")
+
                 listing_details = {}
                 listing_items = []
                 for update_item in update_data:
@@ -218,6 +220,8 @@ class Hb_API:
 
                 self.headers["Accept"] = "application/json;charset=UTF-8"
                 self.headers.pop("Content-Type")
+                # self.headers['Content-type'] = "application/json"
+
                 retry = False
 
                 while len(listing_items) > 0:
@@ -230,23 +234,24 @@ class Hb_API:
                         listing_items = listing_items[batch_size:]
                         item_count += 1
 
-                    with open("integrator-ticket-upload.json", "w", encoding="utf-8") as json_file:
+                        with open("integrator-ticket-upload.json", "w", encoding="utf-8") as json_file:
 
-                        json.dump(listing_details, json_file)
+                            json.dump(listing_details, json_file)
 
+                    with open("integrator-ticket-upload.json", "rb") as json_file:
                         files = {
                             "file": (
                                 "integrator-ticket-upload.json",
-                                open("integrator-ticket-upload.json", "rb"),
+                                json_file,
                                 "application/json",
                             )
                         }
-
-                    update_request_raw = requests.post(
-                        url=self.mpop_url + f"""ticket-api/api/integrator/import""",
-                        files=files,
-                        headers=self.headers
-                    )
+                        url = self.mpop_url + f"""ticket-api/api/integrator/import"""
+                        update_request_raw = requests.post(
+                            url=url,
+                            files=files,
+                            headers=self.headers
+                        )
 
                     if update_request_raw:
 
@@ -542,7 +547,10 @@ class Hb_API:
             
             images = [item['url'] for item in self.data["images"]]
             if set(images).issubset(item_data_list[1][0]['data']['images']):
+                
                 continue
+
+            
 
             source_category = self.data["categoryName"]
             product = self.data["title"]
