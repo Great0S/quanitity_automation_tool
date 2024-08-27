@@ -191,7 +191,6 @@ class Hb_API:
                 update_data = self.prepare_product_data(
                     items=products, op='update', source=source
                 )
-                self.logger.info(f"Already updated items count is {len(products) - len(update_data)}")
 
                 listing_details = {}
                 listing_items = []

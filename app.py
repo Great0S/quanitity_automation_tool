@@ -374,8 +374,10 @@ def execute_updates(source = None, use_source = False, targets = None, options =
 
                 elif date_input.lower() == "2":
 
-                    custom_date_input = Prompt.ask("Please enter the required date with format Year-Month: ex. 2023-01")
-                    custom_date_input = datetime.strptime(custom_date_input, "%Y-%m-%d")
+                    start_date_input = Prompt.ask("Please enter the start date with format Year-Month: ex. 2023-01")
+                    start_date_input = datetime.strptime(start_date_input, "%Y-%m-%d")
+                    end_date_input = Prompt.ask("Please enter the end date with format Year-Month: ex. 2023-01")
+                    end_date_input = datetime.strptime(end_date_input, "%Y-%m-%d")
 
                 logger.info("Update in progress...")
 
@@ -398,7 +400,7 @@ def execute_updates(source = None, use_source = False, targets = None, options =
                                         if one_month_back and one_month_back <= source_item_lastUpdateDate:
                                             items_by_date[post] = post_data[post]
                                         
-                                        elif custom_date_input and custom_date_input <= source_item_lastUpdateDate:
+                                        elif start_date_input and start_date_input <= source_item_lastUpdateDate and end_date_input >= source_item_lastUpdateDate:
                                             items_by_date[post] = post_data[post]
                                         
                                     if items_by_date:
