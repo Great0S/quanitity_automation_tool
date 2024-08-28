@@ -170,7 +170,7 @@ class ProductManagerApp(App[str]):
 
             elif event.pressed.id == "offline_storage":
 
-                self.exit(result={'create': {'source': self.source, 'target': self.target, 'options': "", 'local_data': True}})
+                self.exit(result={'create': {'source': self.source, 'target': self.target, 'options': None, 'local_data': True}})
 
 
         if event.radio_set.id == "update_choice":
@@ -185,7 +185,7 @@ class ProductManagerApp(App[str]):
                 self.query_one(Log).write_line(
                     "No specific platform update selected.")
                 
-                self.exit(result={'update': {'source': '', 'target': '', 'options': ""}})
+                self.exit(result={'update': {'source': None, 'target': None, 'options': None}})
 
         if event.radio_set.id == "specific_update_op_choice":
 

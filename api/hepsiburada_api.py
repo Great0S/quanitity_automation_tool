@@ -122,7 +122,7 @@ class Hb_API:
 
         if data:
 
-            ready_data = self.prepare_product_data(items=data)
+            ready_data = self.prepare_product_data(items=data, op='create')
 
             with open("integrator.json", "w", encoding="utf-8") as json_file:
 
@@ -526,30 +526,25 @@ class Hb_API:
 
         for item_data_list in sorted_items:
 
-            if len(item_data_list[1]) > 2:
-                if item_data_list[1][0]["platform"] == source:
+            if len(item_data_list[1]) >= 2:
+                for i in range(len(item_data_list[1])):
+                    if item_data_list[1][i]["platform"] == source:
 
-                    self.data = item_data_list[1][0]["data"]
-                    del item_data_list[1][1]
+                        self.data = item_data_list[1][i]["data"]
+                        break
 
-            if not source:
+            else:
 
-                source = item_data_list[1][0]["platform"]
+                self.data = item_data_list[1][0]["data"]
 
-            if item_data_list[1][1]["platform"] == source:
-
-                self.data = item_data_list[1][1]["data"]
-
-            if not self.data:
-
-                continue
-            
             images = [item['url'] for item in self.data["images"]]
-            if set(images).issubset(item_data_list[1][0]['data']['images']):
-                
-                continue
-
             
+            if op == 'update':
+
+                self.category_attrs["hbsku"] = item_data_list[1][1]["data"]["hbSku"]
+                if set(images).issubset(item_data_list[1][1]['data']['images']):
+                
+                    continue
 
             source_category = self.data["categoryName"]
             product = self.data["title"]
@@ -592,9 +587,6 @@ class Hb_API:
             for i in enumerate(images):
 
                 self.category_attrs[f"Image{i[0]+1}"] = i[1]
-                if i[0] == 5:
-
-                    pass
 
             source_product_attrs = self.data["attributes"]
 
@@ -620,9 +612,7 @@ class Hb_API:
 
                     self.shape = "Dikdörtgen"
 
-            if op == 'update':
-
-                self.category_attrs["hbsku"] = item_data_list[1][0]["data"]["hbSku"]
+            
 
             self.category_attrs["merchantSku"] = self.data.get("stockCode", None)
             self.category_attrs["VaryantGroupID"] = self.data.get("productMainId", None)
@@ -646,13 +636,13 @@ class Hb_API:
                 self.category_attrs["renk_variant_property"] = self.color
                 self.category_attrs["secenek_variant_property"] = ""
 
-            elif re.search("Maket Bıçağ", self.data["title"]):
+            elif re.search("Bıçağ", self.data["title"]):
 
                 self.category_attrs["adet_variant_property"] = 1
                 self.category_attrs["ebatlar_variant_property"] = self.size
 
             elif re.search(
-                r"Koko|Kauçuk|Nem Alıcı Paspas|Kapı önü Paspası|Halı|Tatami|Kıvırcık|Comfort|Hijyen|Halı Paspas|Halıfleks Paspas",
+                r"Koko|Kauçuk|Nem Alıcı Paspas|Kapı önü Paspası|Halı|Tatami|Kıvırcık|Comfort|Hijyen|Halı Paspas|Halıfleks Paspas|Kedi",
                 self.data["title"],
             ):
 

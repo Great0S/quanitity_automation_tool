@@ -416,7 +416,7 @@ class N11API:
 
                 else:
 
-                    self.categories_list[main_category]['sub_category'][index]['sub_category'].append(sub_category)
+                    self.categories_list[main_category]['sub_category'][0]['sub_category'].append(sub_category)
                     self.categories_list[main_category]['sub_category'][index]['attrs'] = attrs
                     
 
@@ -470,9 +470,14 @@ class N11API:
                                                                   pagingData=1)
 
         if CategoryAttributes.result.status == 'success' and 'attributeList' in CategoryAttributes['category']:
+            if CategoryAttributes.category.attributeList.attribute[0].valueList:
+                values = [y['name'] for y in CategoryAttributes.category.attributeList.attribute[0].valueList.value]
+            else:
+                values = []
+
             attributes = [{'attr_name': x['name'], 
                           'attr_id': x['id'],
-                          'attr_value': [y['name'] for y in x.valueList.value]}
+                          'attr_value': values}
                           for x in CategoryAttributes.category.attributeList.attribute]
             
             return attributes
@@ -556,7 +561,7 @@ class N11API:
         
         current_date = date.today()
         formatted_date = current_date.strftime("%d/%m/%Y")
-        categories = self.__get_categories()
+        # categories = self.__get_categories()
 
         for item in data:
 
