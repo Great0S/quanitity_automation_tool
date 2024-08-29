@@ -388,7 +388,6 @@ class N11API:
             if temp_data:
                 self.categories_list[category['name']]['sub_category'] = temp_data
 
-
     def sub_categories_recursive(self, client, category_id, main_category, sub_category_name = None, index=0):
 
         sub_categories_response = self.get_sub_categories(client, category_id)

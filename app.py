@@ -447,8 +447,8 @@ class App(Enum):
             "hepsiburada_data": hpapi.get_listings(every_product),
             "pazarama_data": getPazarama_productsList(every_product),
             "wordpress_data": get_wordpress_products(every_product),
-            # "pttavm_data": getpttavm_procuctskdata(every_product),
-            # "amazon_data": spapi_getlistings(every_product),
+            "pttavm_data": getpttavm_procuctskdata(every_product),
+            "amazon_data": spapi_getlistings(every_product),
             }
 
         return data_content, []
@@ -585,13 +585,14 @@ class App(Enum):
         try:
             if isinstance(post_data, list):
                 for post in post_data:
+                    if platform.value == post['platform']:
 
-                    func(post)
+                        func(post)
             else:
+                if platform.value == post_data['platform']:
+                    func(post_data)
 
-                func(post_data)
-
-            logger.info(f"Successfully updated {len(post_data)} products on {platform.name}.")
+            # logger.info(f"Successfully updated {len(post_data)} products on {platform.name}.")
         except Exception as e:
             logger.error(f"Failed to update products on {platform.name}. Error: {e}")
 
