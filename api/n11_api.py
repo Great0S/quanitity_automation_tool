@@ -672,7 +672,8 @@ class N11API:
         # categories = self.__get_categories()
         client = self.__create_client__()
         operations_structure_template = self.get_operations_structure("SaveProduct")
-        operations_structure = operations_structure_template.copy()
+        operations_structure = {}
+        operations_structure["product"] = {}
         operations_structure["auth"] = {
             "appKey": self.api_key,
             "appSecret": self.api_secret,
@@ -693,20 +694,13 @@ class N11API:
                         attrs[attr["attributeName"]] = attr["attributeValue"]
 
             image_elements = []
+            
             for i, image_url in enumerate(item_data["images"], start=1):
 
-                image_elements.append(
-                    f"""<image>
-                                      <url>{image_url['url']}</url>
-                                      <order>{i}</order>
-                                      </image>"""
-                )
-
-            # Join all <image> elements into a single string
-            images_string = "".join(image_elements)
+                image_elements.append({"image": {"url": image_url["url"], "order": i}})
 
             operations_structure["product"]["productSellerCode"] = item_data[
-                "productMainId"
+                "stockCode"
             ]
             operations_structure["product"]["title"] = item_data["title"]
             operations_structure["product"]["description"] = re.sub(
@@ -714,17 +708,15 @@ class N11API:
             )
             operations_structure["product"]["domestic"] = True
             operations_structure["product"]["category"] = {"id": 1001621}
-            operations_structure["product"]["specialProductInfoList"] = (
-                [{"specialProductInfo": {"value": "", "name": ""}}],
-            )
+            # operations_structure["product"]["specialProductInfoList"] = [{"specialProductInfo": {"key": "", "value": ""}}]
             operations_structure["product"]["price"] = item_data["listPrice"]
             operations_structure["product"]["currencyType"] = 1
-            operations_structure["product"]["images"] = []
+            operations_structure["product"]["images"] = image_elements
             operations_structure["product"]["maxPurchaseQuantity"] = 5000
             operations_structure["product"]["approvalStatus"] = 1
             operations_structure["product"]["groupAttribute"] = "Adet"
             operations_structure["product"]["groupItemCode"] = groupCode
-            operations_structure["product"]["itemName"] = ""
+            operations_structure["product"]["itemName"] = item_data["title"]
             operations_structure["product"]["attributes"] = {
                 "attribute": [
                     {
@@ -735,48 +727,57 @@ class N11API:
                         "name": "Marka",
                         "value": item_data["brand"],
                     },
-                    {"name": "Şekil", "value": ""},
-                    {"name": "Taban Özelliği", "value": ""},
-                    {"name": "Hav Yüksekliği", "value": ""},
+                    {"name": "Şekil", "value": attrs.get("Şekil", "")},
+                    {"name": "Taban Özelliği", "value": attrs.get("Taban", "")},
+                    {
+                        "name": "Hav Yüksekliği",
+                        "value": attrs.get("Hav Yüksekliği", ""),
+                    },
                 ]
             }
             operations_structure["product"]["productionDate"] = formatted_date
             operations_structure["product"]["expirationDate"] = ""
-            operations_structure["product"]["productCondition"] = "New"
+            operations_structure["product"]["productCondition"] = "1"
             operations_structure["product"]["preparingDay"] = 3
             operations_structure["product"]["discount"] = {
                 "startDate": "",
                 "endDate": "",
-                "type": "Percentage",
+                "type": "1",
                 "value": str(int(item_data["listPrice"]) - int(item_data["salePrice"])),
             }
             operations_structure["product"]["shipmentTemplate"] = "Kargo"
-            operations_structure["product"]["stockItems"] = {
-                "stockItem": [
-                    {
-                        "bundle": False,
-                        "mpn": "",
-                        "gtin": item_data["barcode"],
-                        "n11CatalogId": 0,
-                        "oem": "",
-                        "quantity": item_data["quantity"],
-                        "sellerStockCode": str(item_data["productMainId"]),
-                        "attributes": [{"name": "Ölçüler", "value": ""}],
-                        "optionPrice": item_data["listPrice"],
-                        "images": image_elements,
-                    }
-                ]
-            }
-            operations_structure["product"]["unitInfo"] = {
-                "unitWeight": 0,
-                "unitType": 0,
-            }
+            operations_structure["product"]["stockItems"] = [
+                {
+                    "stockItem": [
+                        {
+                            "bundle": False,
+                            # "mpn": "",
+                            "gtin": item_data["barcode"],
+                            "n11CatalogId": 1001621,
+                            # "oem": "",
+                            "quantity": item_data["quantity"],
+                            "sellerStockCode": str(item_data["stockCode"]),
+                            "attributes": {
+                                "attribute": [
+                                    {
+                                        "name": "Ölçüler",
+                                        "value": attrs.get("Boyut/Ebat", ""),
+                                    }
+                                ]
+                            },
+                            "optionPrice": item_data["listPrice"],
+                            "images": image_elements,
+                        }
+                    ]
+                }
+            ]
+            operations_structure["product"]["unitInfo"] = {"unitWeight": 0,"unitType": 0}
             operations_structure["product"]["maxPurchaseQuantity"] = 5000
             operations_structure["product"]["sellerNote"] = ""
 
             response = client.service.SaveProduct(**operations_structure)
 
-            if response.status_code == 200:
+            if response.result.status == 'success':
 
                 if re.search("errorMessage", response.text) or re.search(
                     "failure", response.text
@@ -793,7 +794,7 @@ class N11API:
 
                     self.logger.error(f"""New product with code: {data["sku"]}""")
 
-            elif response.status_code == 429:
+            elif response.result.status == 'failure':
 
                 time.sleep(15)
 
@@ -862,3 +863,12 @@ class N11API:
             self.logger.error(
                 f"""Request for product {data['sku']} is unsuccessful | Response: {post_response.text}"""
             )
+
+dasa = {'approved': True, 'archived': False, 'attributes': [{'attributeId': 47, 'attributeName': 'Renk', 'attributeValue': 'Renkli Kırmızı'}, {'attributeId': 348, 'attributeName': 'Web Color', 'attributeValue': 'Çok Renkli', 'attributeValueId': 686230}, {'attributeId': 34, 'attributeName': 'Tip', 'attributeValue': 'Paspas', 'attributeValueId': 1198347}, {'attributeId': 338, 'attributeName': 'Beden', 'attributeValue': 'Tek Ebat', 'attributeValueId': 6821}], 'barcode': 'KKYP4565RENKMZ', 'brand': 'Stepmat', 'brandId': 1436016, 'categoryName': 'Kedi Tuvaleti', 'createDateTime': 1723477166000, 'description': '\n <div>\n  <div>\n   Ürünümüz 2 Katmanlıdır. \n   <br>\n  </div> \n  <div> \n   <br>\n  </div> \n  <ul> \n   <li>Yüzeyinde; 45 cm x 65 cm ebatta, 2.800 adet x 7mm büyüklükte delik bulunmaktadır. <br> </li> \n   <li>Bu sayede kum tanecikleri çift katmanlı paspasımızın alt tabakasına geçerek, üst tabakanın kolaylıkla temizliği sağlanmak üzere imal edilmiştir.&nbsp; <br> </li> \n   <li>Alt tarafı, non woven kumaş, kaymaz, su geçirmez kumaş ile kapatılarak, bir kenarı açık bırakılmıştır bu sayede içinde biriken kumlar kolayca boşaltılabilmektedir; <br> </li> \n   <li>Yüksek kaliteli malzemelerle üretilmiş ve dijital baskı teknolojisiyle tasarlanarak üzerine desenler verilmiştir. <br> </li> \n   <li>Kaymaz alt yüzeyi sayesinde sabit bir konumda kalır ve kaymezlık sağlar.&nbsp; <br> </li> \n   <li>Kedinizin yuvasının önünde hijyenik ortam sağlar, tuvalet ihtiyacını giderebileceği sağlıklı, konforlu ortam haline getirir.&nbsp;&nbsp; <br> </li> \n   <li>Yüzeyin Kolay temizlenebilir olması sebebiyle pratik kullanım sağlar.&nbsp; <br> </li> \n   <li>Mekanınızda yavrunuzun, ihtiyacını gidereceği yerde kumların etrafa dağılmasını önler. <br> </li> \n   <li>Birinci Sınıf Dayanıklı malzemesi ile uzun ömürlü kullanıma yönelik tasarlanmıştır. <br> </li> \n  </ul> \n  <div> \n   <br>\n  </div> \n  <div> \n   <br>\n  </div> \n  <div>\n   Myfloor – Stepmat Paspas Fabrikası olarak İyi günlerde kullanmanızı&nbsp;dileriz \n   <br>\n  </div>\n </div>\n', 'dimensionalWeight': 0, 'hasActiveCampaign': True, 'id': '0820ac9255788de5720f7a7b39478133', 'images': [
+    {'url': 'https://cdn.dsmcdn.com/ty1478/product/media/images/prod/QC/20240812/19/e3cef413-cf0c-336f-b53f-487526759dee/1_org_zoom.jpg', 'order': 1}, 
+    {'url': 'https://cdn.dsmcdn.com/ty1478/product/media/images/prod/QC/20240812/19/e3cef413-cf0c-336f-b53f-487526759dee/1_org_zoom.jpg', 'order': 2}, 
+    {'url': 'https://cdn.dsmcdn.com/ty1478/product/media/images/prod/QC/20240812/19/e3cef413-cf0c-336f-b53f-487526759dee/1_org_zoom.jpg', 'order': 3}, 
+    {'url': 'https://cdn.dsmcdn.com/ty1478/product/media/images/prod/QC/20240812/19/e3cef413-cf0c-336f-b53f-487526759dee/1_org_zoom.jpg', 'order': 4}, 
+    {'url': 'https://cdn.dsmcdn.com/ty1478/product/media/images/prod/QC/20240812/19/e3cef413-cf0c-336f-b53f-487526759dee/1_org_zoom.jpg', 'order': 5}], 'lastUpdateDate': 1724653208000, 'listPrice': 199, 'locked': False, 'onSale': True, 'pimCategoryId': 1286, 'platformListingId': '3f721801381bf885c042504ffdf90933', 'productCode': 1146152334, 'productContentId': 849645447, 'productMainId': 'KKYP', 'quantity': 43, 'salePrice': 199, 'stockCode': 'KKYP4565RENKMZ', 'stockUnitType': 'Adet', 'supplierId': 120101, 'title': 'Kedi Kum Paspası - Kedi Yuvası Paspası', 'vatRate': 10, 'rejected': False, 'rejectReasonDetails': [], 'blacklisted': False, 'hasHtmlContent': True, 'productUrl': 'https://www.trendyol.com/stepmat/kedi-kum-paspasi-kedi-yuvasi-paspasi-p-849645447?merchantId=120101&filterOverPriceListings=false'}
+dad = N11API()
+dad.add_products(data={'KKYP4565RENKMZ':[{'platform': 'n11', 'data': dasa}]})
