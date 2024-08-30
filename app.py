@@ -13,6 +13,7 @@ from dateutil.relativedelta import relativedelta
 from tui import ProductManagerApp
 from rich.logging import RichHandler
 from rich.prompt import Prompt
+from typing import Dict, List, Any
 
 from api.amazon_seller_api import (
     spapi_add_listing,
@@ -247,14 +248,13 @@ def filter_items_data(
 
         if not every_product:
 
-            changed_values = generate_changed_values(
-                matching_items, use_source)
+            changed_values = generate_changed_values(matching_items, use_source)
 
         else:
 
             if use_source:
 
-                changed_values = matching_items
+                changed_values = get_product_variants(matching_items)
 
             else:
 
@@ -274,6 +274,33 @@ def filter_items_data(
 
     return changed_values
 
+def get_product_variants(matching_items: Dict[Any, List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Groups items by their productMainId and returns a dictionary with productMainId as keys.
+
+    Args:
+        matching_items (Dict[Any, List[Dict[str, Any]]]): A dictionary where keys are item identifiers
+            and values are lists containing item data.
+
+    Returns:
+        Dict[str, List[Dict[str, Any]]]: A dictionary where each key is a productMainId and the value
+            is a list of dictionaries containing platform and data information for that productMainId.
+    """
+    group_codes = {}
+
+    for item in matching_items:
+        item_data = matching_items[item][0]
+        group_code = item_data['data']['productMainId']
+
+        if item_data['data']['quantity'] == 0:
+            continue
+       
+        if group_code in group_codes:
+            group_codes[group_code].append({"platform": item_data['platform'], "data": item_data['data']})
+        else:
+            group_codes[group_code] = [{"platform": item_data['platform'], "data": item_data['data']}]
+    
+    return group_codes
 
 def get_non_matching_items(data, source, target):
     """Helper function to get non matching items."""
@@ -296,7 +323,6 @@ def get_non_matching_items(data, source, target):
     else:
 
         return non_matching_items
-
 
 def generate_changed_values(matching_items, use_source):
     """Helper function to generate changed values from matching_items."""
@@ -330,7 +356,6 @@ def generate_changed_values(matching_items, use_source):
 
     return changed_values
 
-
 def add_items_without_source(every_product, matching_items, platform, target_item):
     """Helper function to add items without considering the source."""
 
@@ -360,7 +385,6 @@ def add_items_without_source(every_product, matching_items, platform, target_ite
             matching_items[target_item["sku"]] = [
                 {"platform": platform, "id": item_id, "price": price, "qty": qty}
             ]
-
 
 def add_to_matching_items(matching_items, params, every_product):
     """Helper function to add matching items to the matching_items dictionary."""

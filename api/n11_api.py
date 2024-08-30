@@ -694,37 +694,58 @@ class N11API:
         for item in data:
 
             item_data = data[item][0]["data"]
-            groupCode = re.sub(r"\d+", "", item_data["productMainId"])
+            item_sku = item_data['stockCode']
+
             attrs = {}
-            discount = str(float(item_data["listPrice"]) - float(item_data["salePrice"]))
-
-            for attr in item_data["attributes"]:
-                attr_name = ["Renk", "Şekil", "Boyut/Ebat",
-                             "Taban", "Hav Yüksekliği"]
-
-                for item in attr_name:
-                    if re.search(attr["attributeName"], item):
-
-                        attrs[attr["attributeName"]] = attr["attributeValue"]
-
+            stockItem = []
             image_elements = []
+            groupAtrr = ""
+            groupCode = ""
+            discount_type = ""
+            discount = ""
 
-            for i, image_url in enumerate(item_data["images"], start=1):
+            # if item_data['listPrice'] != item_data['salePrice']:
 
-                image_elements.append(
-                    {"image": {"url": image_url["url"], "order": i}})
+            #     discount_type = "1"
+            #     discount = str(
+            #     float(item_data["listPrice"]) - float(item_data["salePrice"]))
+
+            if len(data[item]) > 1:
+
+                groupAtrr = "Renk"
+                groupCode = data[item][1]["data"]["productMainId"]
+
+                for group_item in data[item]:
+
+                    group_item_data = group_item["data"]
+                    attrs = self.get_attrs(group_item_data)
+                    image_elements = self.get_images(group_item_data)
+
+                    stockItem.append(self.get_stock_items(
+                        attrs, image_elements, group_item_data))
+
+            attrs = self.get_attrs(item_data)
+            image_elements = self.get_images(item_data)
+            if not stockItem:
+
+                stockItem.append(self.get_stock_items(
+                    attrs, image_elements, item_data))
+                
+            if item_sku == "EKOANTDKG":
+                pass
 
             operations_structure["product"]["productSellerCode"] = item_data["stockCode"]
             operations_structure["product"]["title"] = item_data["title"]
-            operations_structure["product"]["description"] = re.sub(r"[\?]", "", item_data["description"])
+            operations_structure["product"]["description"] = re.sub(
+                r"[\?]", "", item_data["description"])
             operations_structure["product"]["domestic"] = True
             operations_structure["product"]["category"] = {"id": 1000722}
-            operations_structure["product"]["price"] = item_data["listPrice"]
+            operations_structure["product"]["price"] = item_data['salePrice']
             operations_structure["product"]["currencyType"] = 1
             operations_structure["product"]["images"] = image_elements
-            operations_structure["product"]["maxPurchaseQuantity"] = 5000  # Remove the second occurrence
-            operations_structure["product"]["groupAttribute"] = ""
-            operations_structure["product"]["groupItemCode"] = ""
+            operations_structure["product"]["maxPurchaseQuantity"] = 5000
+            operations_structure["product"]["groupAttribute"] = groupAtrr
+            operations_structure["product"]["groupItemCode"] = groupCode
             operations_structure["product"]["itemName"] = item_data["title"]
 
             # Attributes
@@ -732,10 +753,14 @@ class N11API:
                 "attribute": [
                     {"name": "Renk", "value": attrs.get("Renk", "")},
                     {"name": "Marka", "value": item_data["brand"]},
-                    {"name": "Şekil", "value": attrs.get("Şekil", "Dikdörtgen")},
-                    {"name": "Taban Özelliği", "value": attrs.get("Taban", "Kaymaz")},
-                    {"name": "Hav Yüksekliği", "value": attrs.get("Hav Yüksekliği", "0.5 MM")},
-                    {"name": "Ölçüler", "value": attrs.get("Boyut/Ebat", "0 x 0")}
+                    {"name": "Şekil", "value": attrs.get(
+                        "Şekil", "Dikdörtgen")},
+                    {"name": "Taban Özelliği",
+                        "value": attrs.get("Taban", "Kaymaz")},
+                    {"name": "Hav Yüksekliği", "value": attrs.get(
+                        "Hav Yüksekliği", "0.5 MM")},
+                    {"name": "Ölçüler", "value": attrs.get(
+                        "Boyut/Ebat", "0 x 0")}
                 ]
             }
 
@@ -746,58 +771,111 @@ class N11API:
             operations_structure["product"]["discount"] = {
                 "startDate": "",
                 "endDate": "",
-                "type": "",
-                "value": "",
+                "type": discount_type,
+                "value": discount,
             }
             operations_structure["product"]["shipmentTemplate"] = "Kargo"
 
             # Stock Items
             operations_structure["product"]["stockItems"] = [
                 {
-                    "stockItem": [
-                        {
-                            "bundle": False,
-                            "gtin": item_data["barcode"],
-                            "n11CatalogId": 1000722,
-                            "quantity": item_data["quantity"],
-                            "sellerStockCode": str(item_data["stockCode"]),
-                            "attributes": {
-                                "attribute": [
-                                    {"name": "Renk", "value": attrs.get("Renk", "")},
-                                ]
-                            },
-                            "optionPrice": item_data["listPrice"],
-                            "images": image_elements,
-                        }
-                    ]
+                    "stockItem": stockItem
                 }
             ]
 
-            operations_structure["product"]["unitInfo"] = {"unitWeight": 0, "unitType": 0}
+            operations_structure["product"]["unitInfo"] = {
+                "unitWeight": 0, "unitType": 0}
             operations_structure["product"]["sellerNote"] = ""
-
 
             response = client.service.SaveProduct(**operations_structure)
 
             if response.result.status == "success":
 
-                self.logger.error(
-                        f"""Product created with {response.result.status} for SKU {data['sku']}"""
-                    )
+                self.logger.info(
+                    f"""Product created with {
+                        response.result.status} for SKU {item_sku}"""
+                )
 
             elif response.result.status == "failure":
 
+                if response.result.errorCode == "SELLER_API.stockItemsCannotBeUpdated":
+
+                    pass
+
+                if response.result.errorCode == "GTIN.n11CatalogIdNotUnique":
+
+                    res = client.service.UpdateProductBasic(**operations_structure)
+                    res.raise_for_status()
+
+
                 self.logger.error(
-                        f"""Product created with {response.result.status} for SKU {data['sku']}"""
-                    )
+                    f"""Product created with {
+                        response.result.status} for SKU {item_sku} | Response: {response.result.errorMessage} | Error code: {response.result.errorCode}"""
+                )
 
             else:
 
                 response.raise_for_status()
                 self.logger.error(
                     f"""Request for product {
-                        data['sku']} is unsuccessful | Response: {response.result}"""
+                        item_sku} is unsuccessful | Response: {response.result}"""
                 )
+
+    def get_stock_items(self, attrs, image_elements, group_item_data):
+
+        Item = []
+        price = group_item_data['salePrice']
+
+        if not group_item_data['salePrice']:
+            price = group_item_data['listPrice']
+
+        if group_item_data['quantity'] == 0:
+
+            return Item
+        
+        Item = {
+            "bundle": False,
+            "gtin": group_item_data["barcode"],
+            "n11CatalogId": 1000722,
+            "quantity": group_item_data["quantity"],
+            "sellerStockCode": str(group_item_data["stockCode"]),
+            "attributes": {
+                "attribute": [
+                    {"name": "Renk", "value": attrs.get(
+                        "Renk", "")},
+                ]
+            },
+            "optionPrice": price,
+            "images": image_elements,
+        }
+        return Item
+
+    def get_attrs(self, attrs_data):
+
+        attrs = {}
+
+        for attr in attrs_data["attributes"]:
+            attr_name = ["Renk",
+                         "Şekil",
+                         "Boyut/Ebat",
+                         "Taban",
+                         "Hav Yüksekliği"]
+
+            for item in attr_name:
+
+                if re.search(attr["attributeName"], item):
+                    attrs[attr["attributeName"]] = attr["attributeValue"]
+
+        return attrs
+
+    def get_images(self, item_data):
+        image_elements = []
+
+        for i, image_url in enumerate(item_data["images"], 1):
+            image_elements.append(
+                {"image": {"url": image_url["url"], "order": i}})
+
+        return image_elements
 
     def update_products(self, data: Dict) -> None:
 
@@ -860,4 +938,3 @@ class N11API:
                 f"""Request for product {data['sku']} is unsuccessful | Response: {
                     post_response.text}"""
             )
-
