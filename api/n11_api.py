@@ -55,7 +55,8 @@ class N11API:
 
         except Error as e:
 
-            self.logger.error(f"An error occurred while creating the SOAP client: {e}")
+            self.logger.error(
+                f"An error occurred while creating the SOAP client: {e}")
             return None
 
     def __assign_vars__(
@@ -93,7 +94,8 @@ class N11API:
             response_json = xmltodict.parse(revised_response)
 
             # Access the response elements using the response_namespace and list_name   variables.
-            response_data = response_json.get(f"{namespace_id}:{response_namespace}")
+            response_data = response_json.get(
+                f"{namespace_id}:{response_namespace}")
             #   response_json['SOAP-ENV:Envelope']['SOAP-ENV:Body'].get(f"{namespace_id}: {response_namespace}"))
 
             if response_data:
@@ -210,7 +212,8 @@ class N11API:
                 # Flatten lists and handle each item recursively
                 for i, item in enumerate(value, start=1):
 
-                    flattened.update(self.__flatten_dict__({f"{new_prefix}{i}": item}))
+                    flattened.update(self.__flatten_dict__(
+                        {f"{new_prefix}{i}": item}))
             else:
                 # Directly add non-dict and non-list values
                 flattened[new_prefix] = value
@@ -255,7 +258,8 @@ class N11API:
                 self.logger.error(f"Request failed: {e}")
 
             retries += 1
-            self.logger.warning(f"Retrying... attempt {retries} of {max_retries}")
+            self.logger.warning(f"Retrying... attempt {
+                                retries} of {max_retries}")
             time.sleep(wait_time)
             wait_time *= backoff_factor  # Exponential backoff
 
@@ -295,7 +299,8 @@ class N11API:
             result = []
             for item_data in element_data.type.elements:
                 item_type_name = type(item_data[1].type).__name__
-                item_default_value = self._get_default_value_for_type(item_type_name)
+                item_default_value = self._get_default_value_for_type(
+                    item_type_name)
                 if item_default_value in [list, dict]:
                     result.append(self.process_element(item_data[1]))
                 else:
@@ -310,7 +315,8 @@ class N11API:
                 item_name = item_data_dict[1].attr_name
                 item_data = item_data_dict[1].type
                 item_type_name = type(item_data).__name__
-                item_default_value = self._get_default_value_for_type(item_type_name)
+                item_default_value = self._get_default_value_for_type(
+                    item_type_name)
 
                 if item_default_value in [list, dict]:
                     result[item_name] = self.process_element(item_data)
@@ -451,7 +457,8 @@ class N11API:
 
         client = self.__create_client__("CategoryService")
 
-        top_level_categories = client.service.GetTopLevelCategories(auth=self.auth)
+        top_level_categories = client.service.GetTopLevelCategories(
+            auth=self.auth)
         top_categories = [
             {"id": x["id"], "name": x["name"], "sub_category": []}
             for x in top_level_categories["categoryList"]["category"]
@@ -467,7 +474,8 @@ class N11API:
             )
 
             if temp_data:
-                self.categories_list[category["name"]]["sub_category"] = temp_data
+                self.categories_list[category["name"]
+                                     ]["sub_category"] = temp_data
 
     def sub_categories_recursive(
         self, client, category_id, main_category, sub_category_name=None, index=0
@@ -582,7 +590,8 @@ class N11API:
                 values = []
 
             attributes = [
-                {"attr_name": x["name"], "attr_id": x["id"], "attr_value": values}
+                {"attr_name": x["name"], "attr_id": x["id"],
+                    "attr_value": values}
                 for x in CategoryAttributes.category.attributeList.attribute
             ]
 
@@ -622,8 +631,10 @@ class N11API:
             try:
                 # Make the SOAP request for the current page
                 response = client.service.GetProductList(
-                    auth={"appKey": self.api_key, "appSecret": self.api_secret},
-                    pagingData={"currentPage": current_page, "pageSize": page_size},
+                    auth={"appKey": self.api_key,
+                          "appSecret": self.api_secret},
+                    pagingData={"currentPage": current_page,
+                                "pageSize": page_size},
                 )
 
             except Error as e:
@@ -671,7 +682,8 @@ class N11API:
         formatted_date = current_date.strftime("%d/%m/%Y")
         # categories = self.__get_categories()
         client = self.__create_client__()
-        operations_structure_template = self.get_operations_structure("SaveProduct")
+        operations_structure_template = self.get_operations_structure(
+            "SaveProduct")
         operations_structure = {}
         operations_structure["product"] = {}
         operations_structure["auth"] = {
@@ -684,9 +696,11 @@ class N11API:
             item_data = data[item][0]["data"]
             groupCode = re.sub(r"\d+", "", item_data["productMainId"])
             attrs = {}
+            discount = str(float(item_data["listPrice"]) - float(item_data["salePrice"]))
 
             for attr in item_data["attributes"]:
-                attr_name = ["Renk", "Şekil", "Boyut/Ebat", "Taban", "Hav Yüksekliği"]
+                attr_name = ["Renk", "Şekil", "Boyut/Ebat",
+                             "Taban", "Hav Yüksekliği"]
 
                 for item in attr_name:
                     if re.search(attr["attributeName"], item):
@@ -694,47 +708,37 @@ class N11API:
                         attrs[attr["attributeName"]] = attr["attributeValue"]
 
             image_elements = []
-            
+
             for i, image_url in enumerate(item_data["images"], start=1):
 
-                image_elements.append({"image": {"url": image_url["url"], "order": i}})
+                image_elements.append(
+                    {"image": {"url": image_url["url"], "order": i}})
 
-            operations_structure["product"]["productSellerCode"] = item_data[
-                "stockCode"
-            ]
+            operations_structure["product"]["productSellerCode"] = item_data["stockCode"]
             operations_structure["product"]["title"] = item_data["title"]
-            operations_structure["product"]["description"] = re.sub(
-                r"[\?]", "", item_data["description"]
-            )
+            operations_structure["product"]["description"] = re.sub(r"[\?]", "", item_data["description"])
             operations_structure["product"]["domestic"] = True
-            operations_structure["product"]["category"] = {"id": 1001621}
-            # operations_structure["product"]["specialProductInfoList"] = [{"specialProductInfo": {"key": "", "value": ""}}]
+            operations_structure["product"]["category"] = {"id": 1000722}
             operations_structure["product"]["price"] = item_data["listPrice"]
             operations_structure["product"]["currencyType"] = 1
             operations_structure["product"]["images"] = image_elements
-            operations_structure["product"]["maxPurchaseQuantity"] = 5000
-            operations_structure["product"]["approvalStatus"] = 1
-            operations_structure["product"]["groupAttribute"] = "Adet"
-            operations_structure["product"]["groupItemCode"] = groupCode
+            operations_structure["product"]["maxPurchaseQuantity"] = 5000  # Remove the second occurrence
+            operations_structure["product"]["groupAttribute"] = ""
+            operations_structure["product"]["groupItemCode"] = ""
             operations_structure["product"]["itemName"] = item_data["title"]
+
+            # Attributes
             operations_structure["product"]["attributes"] = {
                 "attribute": [
-                    {
-                        "name": "Renk",
-                        "value": attrs.get("Renk", ""),
-                    },
-                    {
-                        "name": "Marka",
-                        "value": item_data["brand"],
-                    },
-                    {"name": "Şekil", "value": attrs.get("Şekil", "")},
-                    {"name": "Taban Özelliği", "value": attrs.get("Taban", "")},
-                    {
-                        "name": "Hav Yüksekliği",
-                        "value": attrs.get("Hav Yüksekliği", ""),
-                    },
+                    {"name": "Renk", "value": attrs.get("Renk", "")},
+                    {"name": "Marka", "value": item_data["brand"]},
+                    {"name": "Şekil", "value": attrs.get("Şekil", "Dikdörtgen")},
+                    {"name": "Taban Özelliği", "value": attrs.get("Taban", "Kaymaz")},
+                    {"name": "Hav Yüksekliği", "value": attrs.get("Hav Yüksekliği", "0.5 MM")},
+                    {"name": "Ölçüler", "value": attrs.get("Boyut/Ebat", "0 x 0")}
                 ]
             }
+
             operations_structure["product"]["productionDate"] = formatted_date
             operations_structure["product"]["expirationDate"] = ""
             operations_structure["product"]["productCondition"] = "1"
@@ -742,27 +746,24 @@ class N11API:
             operations_structure["product"]["discount"] = {
                 "startDate": "",
                 "endDate": "",
-                "type": "1",
-                "value": str(int(item_data["listPrice"]) - int(item_data["salePrice"])),
+                "type": "",
+                "value": "",
             }
             operations_structure["product"]["shipmentTemplate"] = "Kargo"
+
+            # Stock Items
             operations_structure["product"]["stockItems"] = [
                 {
                     "stockItem": [
                         {
                             "bundle": False,
-                            # "mpn": "",
                             "gtin": item_data["barcode"],
-                            "n11CatalogId": 1001621,
-                            # "oem": "",
+                            "n11CatalogId": 1000722,
                             "quantity": item_data["quantity"],
                             "sellerStockCode": str(item_data["stockCode"]),
                             "attributes": {
                                 "attribute": [
-                                    {
-                                        "name": "Ölçüler",
-                                        "value": attrs.get("Boyut/Ebat", ""),
-                                    }
+                                    {"name": "Renk", "value": attrs.get("Renk", "")},
                                 ]
                             },
                             "optionPrice": item_data["listPrice"],
@@ -771,38 +772,31 @@ class N11API:
                     ]
                 }
             ]
-            operations_structure["product"]["unitInfo"] = {"unitWeight": 0,"unitType": 0}
-            operations_structure["product"]["maxPurchaseQuantity"] = 5000
+
+            operations_structure["product"]["unitInfo"] = {"unitWeight": 0, "unitType": 0}
             operations_structure["product"]["sellerNote"] = ""
+
 
             response = client.service.SaveProduct(**operations_structure)
 
-            if response.result.status == 'success':
+            if response.result.status == "success":
 
-                if re.search("errorMessage", response.text) or re.search(
-                    "failure", response.text
-                ):
-
-                    # error_message = assign_vars(
-                    #     post_response, 'SaveProductResponse', '', True)
-
-                    self.logger.error(
-                        f"""Request failure for product  {data['sku']} | Response: {response['result']['errorMessage']}"""
+                self.logger.error(
+                        f"""Product created with {response.result.status} for SKU {data['sku']}"""
                     )
 
-                else:
+            elif response.result.status == "failure":
 
-                    self.logger.error(f"""New product with code: {data["sku"]}""")
-
-            elif response.result.status == 'failure':
-
-                time.sleep(15)
+                self.logger.error(
+                        f"""Product created with {response.result.status} for SKU {data['sku']}"""
+                    )
 
             else:
 
                 response.raise_for_status()
                 self.logger.error(
-                    f"""Request for product {data['sku']} is unsuccessful | Response: {response.text}"""
+                    f"""Request for product {
+                        data['sku']} is unsuccessful | Response: {response.result}"""
                 )
 
     def update_products(self, data: Dict) -> None:
@@ -844,13 +838,15 @@ class N11API:
                     error_message=True,
                 )
                 self.logger.error(
-                    f"""Request failure for product {data['sku']} | Response: {error_message['result']['errorMessage']}"""
+                    f"""Request failure for product {data['sku']} | Response: {
+                        error_message['result']['errorMessage']}"""
                 )
 
             else:
 
                 self.logger.info(
-                    f"""Product with code: {data["sku"]}, New value: {data["qty"]}"""
+                    f"""Product with code: {
+                        data["sku"]}, New value: {data["qty"]}"""
                 )
 
         elif post_response.status_code == 429:
@@ -861,14 +857,7 @@ class N11API:
 
             post_response.raise_for_status()
             self.logger.error(
-                f"""Request for product {data['sku']} is unsuccessful | Response: {post_response.text}"""
+                f"""Request for product {data['sku']} is unsuccessful | Response: {
+                    post_response.text}"""
             )
 
-dasa = {'approved': True, 'archived': False, 'attributes': [{'attributeId': 47, 'attributeName': 'Renk', 'attributeValue': 'Renkli Kırmızı'}, {'attributeId': 348, 'attributeName': 'Web Color', 'attributeValue': 'Çok Renkli', 'attributeValueId': 686230}, {'attributeId': 34, 'attributeName': 'Tip', 'attributeValue': 'Paspas', 'attributeValueId': 1198347}, {'attributeId': 338, 'attributeName': 'Beden', 'attributeValue': 'Tek Ebat', 'attributeValueId': 6821}], 'barcode': 'KKYP4565RENKMZ', 'brand': 'Stepmat', 'brandId': 1436016, 'categoryName': 'Kedi Tuvaleti', 'createDateTime': 1723477166000, 'description': '\n <div>\n  <div>\n   Ürünümüz 2 Katmanlıdır. \n   <br>\n  </div> \n  <div> \n   <br>\n  </div> \n  <ul> \n   <li>Yüzeyinde; 45 cm x 65 cm ebatta, 2.800 adet x 7mm büyüklükte delik bulunmaktadır. <br> </li> \n   <li>Bu sayede kum tanecikleri çift katmanlı paspasımızın alt tabakasına geçerek, üst tabakanın kolaylıkla temizliği sağlanmak üzere imal edilmiştir.&nbsp; <br> </li> \n   <li>Alt tarafı, non woven kumaş, kaymaz, su geçirmez kumaş ile kapatılarak, bir kenarı açık bırakılmıştır bu sayede içinde biriken kumlar kolayca boşaltılabilmektedir; <br> </li> \n   <li>Yüksek kaliteli malzemelerle üretilmiş ve dijital baskı teknolojisiyle tasarlanarak üzerine desenler verilmiştir. <br> </li> \n   <li>Kaymaz alt yüzeyi sayesinde sabit bir konumda kalır ve kaymezlık sağlar.&nbsp; <br> </li> \n   <li>Kedinizin yuvasının önünde hijyenik ortam sağlar, tuvalet ihtiyacını giderebileceği sağlıklı, konforlu ortam haline getirir.&nbsp;&nbsp; <br> </li> \n   <li>Yüzeyin Kolay temizlenebilir olması sebebiyle pratik kullanım sağlar.&nbsp; <br> </li> \n   <li>Mekanınızda yavrunuzun, ihtiyacını gidereceği yerde kumların etrafa dağılmasını önler. <br> </li> \n   <li>Birinci Sınıf Dayanıklı malzemesi ile uzun ömürlü kullanıma yönelik tasarlanmıştır. <br> </li> \n  </ul> \n  <div> \n   <br>\n  </div> \n  <div> \n   <br>\n  </div> \n  <div>\n   Myfloor – Stepmat Paspas Fabrikası olarak İyi günlerde kullanmanızı&nbsp;dileriz \n   <br>\n  </div>\n </div>\n', 'dimensionalWeight': 0, 'hasActiveCampaign': True, 'id': '0820ac9255788de5720f7a7b39478133', 'images': [
-    {'url': 'https://cdn.dsmcdn.com/ty1478/product/media/images/prod/QC/20240812/19/e3cef413-cf0c-336f-b53f-487526759dee/1_org_zoom.jpg', 'order': 1}, 
-    {'url': 'https://cdn.dsmcdn.com/ty1478/product/media/images/prod/QC/20240812/19/e3cef413-cf0c-336f-b53f-487526759dee/1_org_zoom.jpg', 'order': 2}, 
-    {'url': 'https://cdn.dsmcdn.com/ty1478/product/media/images/prod/QC/20240812/19/e3cef413-cf0c-336f-b53f-487526759dee/1_org_zoom.jpg', 'order': 3}, 
-    {'url': 'https://cdn.dsmcdn.com/ty1478/product/media/images/prod/QC/20240812/19/e3cef413-cf0c-336f-b53f-487526759dee/1_org_zoom.jpg', 'order': 4}, 
-    {'url': 'https://cdn.dsmcdn.com/ty1478/product/media/images/prod/QC/20240812/19/e3cef413-cf0c-336f-b53f-487526759dee/1_org_zoom.jpg', 'order': 5}], 'lastUpdateDate': 1724653208000, 'listPrice': 199, 'locked': False, 'onSale': True, 'pimCategoryId': 1286, 'platformListingId': '3f721801381bf885c042504ffdf90933', 'productCode': 1146152334, 'productContentId': 849645447, 'productMainId': 'KKYP', 'quantity': 43, 'salePrice': 199, 'stockCode': 'KKYP4565RENKMZ', 'stockUnitType': 'Adet', 'supplierId': 120101, 'title': 'Kedi Kum Paspası - Kedi Yuvası Paspası', 'vatRate': 10, 'rejected': False, 'rejectReasonDetails': [], 'blacklisted': False, 'hasHtmlContent': True, 'productUrl': 'https://www.trendyol.com/stepmat/kedi-kum-paspasi-kedi-yuvasi-paspasi-p-849645447?merchantId=120101&filterOverPriceListings=false'}
-dad = N11API()
-dad.add_products(data={'KKYP4565RENKMZ':[{'platform': 'n11', 'data': dasa}]})
