@@ -220,52 +220,6 @@ class N11API:
 
         return flattened
 
-    def __looper(
-        self, link, payload_dump, namespace, list_name, max_retries=10, backoff_factor=2
-    ):
-        """
-        Continuously makes API calls until a successful response is received or the retry   limit is reached.
-
-        :param link: The URL to send the request to.
-        :param payload_dump: The payload data to send in the request.
-        :param namespace: The namespace to search for in the response.
-        :param list_name: The name of the list to extract from the response.
-        :param max_retries: The maximum number of retry attempts. Default is 10.
-        :param backoff_factor: The backoff factor for retry delays (exponential growth).    Default is 2 seconds.
-
-        :return: A tuple containing the orders list and the total orders.
-        """
-        retries = 0
-        wait_time = 1
-
-        while retries < max_retries:
-            try:
-
-                api_call_loop = requests.post(
-                    link, headers=self.headers, data=payload_dump, timeout=30
-                )
-
-                # Check if the response is successful using a regex
-                if re.search("success", api_call_loop.text, re.IGNORECASE):
-
-                    orders_list, orders_total = self.assign_vars(
-                        api_call_loop.text, namespace, list_name
-                    )
-                    return orders_list, orders_total
-
-            except requests.exceptions.RequestException as e:
-
-                self.logger.error(f"Request failed: {e}")
-
-            retries += 1
-            self.logger.warning(f"Retrying... attempt {retries} of {max_retries}")
-            time.sleep(wait_time)
-            wait_time *= backoff_factor  # Exponential backoff
-
-        # If the loop finishes without success
-        self.logger.error("Max retries reached without success.")
-        return None, None
-
     def get_operations_structure(self, method_name: str):
         elements = self._get_elements(method_name)
         operations_structure = {}
