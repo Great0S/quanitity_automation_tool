@@ -258,8 +258,7 @@ class N11API:
                 self.logger.error(f"Request failed: {e}")
 
             retries += 1
-            self.logger.warning(f"Retrying... attempt {
-                                retries} of {max_retries}")
+            self.logger.warning(f"Retrying... attempt {retries} of {max_retries}")
             time.sleep(wait_time)
             wait_time *= backoff_factor  # Exponential backoff
 
@@ -804,8 +803,21 @@ class N11API:
 
                 if response.result.errorCode == "GTIN.n11CatalogIdNotUnique":
 
-                    res = client.service.UpdateProductBasic(**operations_structure)
-                    res.raise_for_status()
+                    product_dt = {"auth": operations_structure["auth"], "sellerCode": item_sku}
+                    product_id = client.service.GetProductBySellerCode(**product_dt)
+                    if product_id.product:
+                        
+                        product_dat = {"auth": operations_structure["auth"], 
+                                       "productId": product_id,
+                                       "productSellerCode": item_sku,
+                                       "price": operations_structure['product']['price'],
+                                       "productDiscount": operations_structure['product']['discount'],
+                                       "stockItems": stockItem,
+                                       "description": operations_structure['product']['description'],
+                                       }
+                        product_dat_res = client.service.UpdateProductBasic(**product_dat)
+
+                        continue
 
 
                 self.logger.error(
@@ -864,7 +876,7 @@ class N11API:
             for item in attr_name:
 
                 if re.search(attr["attributeName"], item):
-                    attrs[attr["attributeName"]] = attr["attributeValue"]
+                    attrs[attr["attributeName"]] = attr["attributeValue"].replace(" Taban", "")
 
         return attrs
 
