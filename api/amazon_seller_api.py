@@ -761,261 +761,255 @@ def spapi_add_listing(data):
 
                     shape = "Dikdörtgen"
 
-            product_definitions = ProductTypeDefinitions().search_definitions_product_types(
-                itemName=product_data["categoryName"],
+            while True:
+                try:
+
+                    product_definitions = ProductTypeDefinitions().search_definitions_product_types(
+                        itemName=product_data["categoryName"],
+                        marketplaceIds=MarketPlaceID,
+                        searchLocale="tr_TR",
+                        locale="tr_TR",
+                    )
+                    
+                    if product_definitions.payload['productTypes'] is not []:
+                        
+                        break
+
+                except Exception as e:
+
+                    time.sleep(3)
+                    continue            
+
+            product_attrs = ProductTypeDefinitions().get_definitions_product_type(
+                productType=product_definitions.payload["productTypes"][0]["name"],
                 marketplaceIds=MarketPlaceID,
-                searchLocale="tr_TR",
+                requirements="LISTING",
                 locale="tr_TR",
             )
-
-            if product_definitions is not []:
-
-                product_attrs = ProductTypeDefinitions().get_definitions_product_type(
-                    productType=product_definitions.payload["productTypes"][0]["name"],
-                    marketplaceIds=MarketPlaceID,
-                    requirements="LISTING",
-                    locale="tr_TR",
-                )
-
-                if product_attrs:
-
-                    file_path = f'amazon_{product_attrs.payload["productType"]}_attrs.json'
-
-                    if os.path.isfile(file_path):
-
-                        pass
-
-                    else:
-
-                        product_scheme = requests.get(
-                            url=product_attrs.payload["schema"]["link"]["resource"]
-                        )
-                        scheme_json = json.loads(product_scheme.text)
-                        category_attrs = extract_category_item_attrs(
-                            file_data=scheme_json,
-                            file_name=product_attrs.payload["productType"],
-                        )
-
-                    data_payload = {
-                        "productType": product_attrs.payload["productType"],
-                        "requirements": "LISTING",
-                        "attributes": {
-                            "item_name": [{"value": product_data["title"]}],  #
-                            "brand": [{"value": product_data["brand"]}],  #
-                            "supplier_declared_has_product_identifier_exemption": [
-                                {"value": True}
-                            ],  #
-                            "recommended_browse_nodes": [{"value": "13028044031"}],  #
-                            "bullet_point": bullet_points,  #
-                            "condition_type": [{"value": "new_new"}],  #
-                            "fulfillment_availability": [
-                                {
-                                    "fulfillment_channel_code": "DEFAULT",
-                                    "quantity": product_data["quantity"],
-                                    "lead_time_to_ship_max_days": "5",
-                                }
-                            ],  #
-                            "gift_options": [
-                                {"can_be_messaged": "false", "can_be_wrapped": "false"}
-                            ],  #
-                            "generic_keyword": [
-                                {"value": product_data["title"].split(" ")[0]}  #
-                            ],
-                            "list_price": [
-                                {
-                                    "currency": "TRY",
-                                    "value_with_tax": product_data["listPrice"],
-                                }
-                            ],  #
-                            "manufacturer": [
-                                {"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti."}
-                            ],
-                            "material": [{"value": materyal}],  #
-                            "model_number": [{"value": product_data["productMainId"]}],  #
-                            "number_of_items": [{"value": 1}],  #
-                            "color": [{"value": color}],  #
-                            "size": [{"value": size}],  #
-                            "style": [{"value": style}],  #
-                            "part_number": [{"value": product_sku}],  #
-                            "pattern": [{"value": "Düz"}],  #
-                            "product_description": [
-                                {"value": product_data["description"]}
-                            ],  #
-                            "purchasable_offer": [
+            if product_attrs:
+                file_path = f'amazon_{product_attrs.payload["productType"]}_attrs.json'
+                if os.path.isfile(file_path):
+                    pass
+                else:
+                    product_scheme = requests.get(
+                        url=product_attrs.payload["schema"]["link"]["resource"]
+                    )
+                    scheme_json = json.loads(product_scheme.text)
+                    category_attrs = extract_category_item_attrs(
+                        file_data=scheme_json,
+                        file_name=product_attrs.payload["productType"],
+                    )
+                data_payload = {
+                    "productType": product_attrs.payload["productType"],
+                    "requirements": "LISTING",
+                    "attributes": {
+                        "item_name": [{"value": product_data["title"]}],  #
+                        "brand": [{"value": product_data["brand"]}],  #
+                        "supplier_declared_has_product_identifier_exemption": [
+                            {"value": True}
+                        ],  #
+                        "recommended_browse_nodes": [{"value": "13028044031"}],  #
+                        "bullet_point": bullet_points,  #
+                        "condition_type": [{"value": "new_new"}],  #
+                        "fulfillment_availability": [
                             {
-                                "currency": "TRY",
-                                "our_price": [
-                                    {
-                                        "schedule": [
-                                            {
-                                                "value_with_tax": product_data[
-                                                    "salePrice"
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                ],
+                                "fulfillment_channel_code": "DEFAULT",
+                                "quantity": product_data["quantity"],
+                                "lead_time_to_ship_max_days": "5",
                             }
                         ],  #
-
-                            "country_of_origin": [{"value": "TR"}],  #
-                             #
-                            "package_level": [{"value": "unit"}],
-                            "customer_package_type": [{"value": "Standart Paketleme"}],
-                        },
-                        "offers": [
+                        "gift_options": [
+                            {"can_be_messaged": "false", "can_be_wrapped": "false"}
+                        ],  #
+                        "generic_keyword": [
+                            {"value": product_data["title"].split(" ")[0]}  #
+                        ],
+                        "list_price": [
                             {
-                                "offerType": "B2C",
-                                "price": {
-                                    "currency": "TRY",
-                                    "currencyCode": "TRY",
-                                    "amount": product_data["salePrice"],
+                                "currency": "TRY",
+                                "value_with_tax": product_data["listPrice"],
+                            }
+                        ],  #
+                        "manufacturer": [
+                            {"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti."}
+                        ],
+                        "material": [{"value": materyal}],  #
+                        "model_number": [{"value": product_data["productMainId"]}],  #
+                        "number_of_items": [{"value": 1}],  #
+                        "color": [{"value": color}],  #
+                        "size": [{"value": size}],  #
+                        "style": [{"value": style}],  #
+                        "part_number": [{"value": product_sku}],  #
+                        "pattern": [{"value": "Düz"}],  #
+                        "product_description": [
+                            {"value": product_data["description"]}
+                        ],  #
+                        "purchasable_offer": [
+                        {
+                            "currency": "TRY",
+                            "our_price": [
+                                {
+                                    "schedule": [
+                                        {
+                                            "value_with_tax": product_data[
+                                                "salePrice"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ],
+                        }
+                    ],  #
+                        "country_of_origin": [{"value": "TR"}],  #
+                         #
+                        "package_level": [{"value": "unit"}],
+                        "customer_package_type": [{"value": "Standart Paketleme"}],
+                    },
+                    "offers": [
+                        {
+                            "offerType": "B2C",
+                            "price": {
+                                "currency": "TRY",
+                                "currencyCode": "TRY",
+                                "amount": product_data["salePrice"],
+                            },
+                        }
+                    ],
+                }
+                category_attrs_list = {
+                    "RUG": {
+                        "product_site_launch_date": [
+                            {"value": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
+                        ], 
+                         "included_components": [
+                            {"value": f"Tek adet {product_data['title']}"}
+                        ],  #
+                         "item_dimensions": [
+                            {
+                                "length": {"value": thickness, "unit": "millimeters"},
+                                "width": {
+                                    "value": size_match['value'][1],
+                                    "unit": "centimeters",
+                                },
+                                "height": {
+                                    "value": size_match['value'][0],
+                                    "unit": "centimeters",
                                 },
                             }
                         ],
-                    }
-
-                    category_attrs_list = {
-                        "RUG": {
-                            "product_site_launch_date": [
-                                {"value": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
-                            ], 
-                             "included_components": [
-                                {"value": f"Tek adet {product_data['title']}"}
-                            ],  #
-                             "item_dimensions": [
-                                {
-                                    "length": {"value": thickness, "unit": "millimeters"},
-                                    "width": {
-                                        "value": size_match[1],
-                                        "unit": "centimeters",
-                                    },
-                                    "height": {
-                                        "value": size_match[0],
-                                        "unit": "centimeters",
-                                    },
-                                }
-                            ],
-                            "special_feature": [{"value": feature}],
-                            "item_shape": [{"value": shape}],
-                            "pile_height": [{"value": "Düşük Hav"}],
-                            "item_thickness": [
-                                {"decimal_value": thickness, "unit": "millimeters"}
-                            ],
-                            "item_length_width": [
-                                {
-                                    "length": {
-                                        "unit": "centimeters",
-                                        "value": size_match[0],
-                                    },
-                                    "width": {
-                                        "unit": "centimeters",
-                                        "value": size_match[1],
-                                    },
-                                }
-                            ],
-                            "rug_form_type": [{"value": "doormat"}],
-                        },
-                        "LITTER_BOX": {
-                            "included_components": [
-                                {"value": f"Tek adet {product_data['title']}"}
-                            ],  
-                            "target_audience_keyword": [
-                                {
-                                    "value": "Kediler",
-                                }
-                            ],
-                            "model_name": [
-                                {
-                                    "value": product_data["productMainId"],
-                                }
-                            ],
-                            "litter_box_type": [{"value": "disposable_litter_box"}],
-                            "directions": [{"value": "Kedi tuvalet matı, kum taneciklerinin evin diğer bölgelerine yayılmasını önler. Tuvalet kabının önüne yerleştirilir ve düzenli olarak temizlenir. Haftada en az bir kez yıkanmalı ve ayda bir kez derinlemesine temizlenmelidir. Matın boyutu, tuvalet kabına uygun olmalı ve su geçirmez bir malzeme tercih edilmelidir."}],
-                            "item_length_width_height": [
+                        "special_feature": [{"value": feature}],
+                        "item_shape": [{"value": shape}],
+                        "pile_height": [{"value": "Düşük Hav"}],
+                        "item_thickness": [
+                            {"decimal_value": thickness, "unit": "millimeters"}
+                        ],
+                        "item_length_width": [
                             {
                                 "length": {
+                                    "unit": "centimeters",
+                                    "value": size_match['value'][0],
+                                },
+                                "width": {
+                                    "unit": "centimeters",
+                                    "value": size_match['value'][1],
+                                },
+                            }
+                        ],
+                        "rug_form_type": [{"value": "doormat"}],
+                    },
+                    "LITTER_BOX": {
+                        "included_components": [
+                            {"value": f"Tek adet {product_data['title']}"}
+                        ],  
+                        "target_audience_keyword": [
+                            {
+                                "value": "Kediler",
+                            }
+                        ],
+                        "model_name": [
+                            {
+                                "value": product_data["productMainId"],
+                            }
+                        ],
+                        "litter_box_type": [{"value": "disposable_litter_box"}],
+                        "directions": [{"value": "Kedi tuvalet matı, kum taneciklerinin evin diğer bölgelerine yayılmasını önler. Tuvalet kabının önüne yerleştirilir ve düzenli olarak temizlenir. Haftada en az bir kez yıkanmalı ve ayda bir kez derinlemesine temizlenmelidir. Matın boyutu, tuvalet kabına uygun olmalı ve su geçirmez bir malzeme tercih edilmelidir."}],
+                        "item_length_width_height": [
+                        {
+                            "length": {
+                                "value": thickness,
+                                "unit": "millimeters",
+                            },
+                            "width": {
+                                "value": size_match['value'][1],
+                                "unit": "centimeters",
+                            },
+                            "height": {
+                                "value": size_match['value'][0],
+                                "unit": "centimeters",
+                            },
+                        }
+                    ],
+                        "specific_uses_for_product": [{"value": "Cats"}],
+                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
+                        "rtip_manufacturer_contact_information": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti; +90 552 361 11 11"}],
+                        "warranty_description": [{"value": "30 Days"}],
+                        "is_oem_authorized": [{"value": True}],
+                        "oem_equivalent_part_number": [{"value": product_data["productMainId"]}],
+                        "unit_count": [{"type": {"language_tag":"tr_TR", "value":"Adet"}, "value": 1}]
+                    },
+                    "EXERCISE_MAT": {
+                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
+                        "sport_type": [{"value": "Pilates"}],
+                        "item_length_width_thickness": [
+                            {
+                                "thickness": {
                                     "value": thickness,
                                     "unit": "millimeters",
                                 },
                                 "width": {
-                                    "value": size_match[1],
+                                    "value": size_match['value'][1],
                                     "unit": "centimeters",
                                 },
-                                "height": {
-                                    "value": size_match[0],
+                                "length": {
+                                    "value": size_match['value'][0],
                                     "unit": "centimeters",
                                 },
                             }
                         ],
-                            "specific_uses_for_product": [{"value": "Cats"}],
-                            "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
-                            "rtip_manufacturer_contact_information": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti; +90 552 361 11 11"}],
-                            "warranty_description": [{"value": "30 Days"}],
-                            "is_oem_authorized": [{"value": True}],
-                            "oem_equivalent_part_number": [{"value": product_data["productMainId"]}],
-                            "unit_count": [{"type": {"language_tag":"tr_TR", "value":"Adet"}, "value": 1}]
-                        },
-                        "EXERCISE_MAT": {
-                            "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
-                            "sport_type": [{"value": "Pilates"}],
-                            "item_length_width_thickness": [
-                                {
-                                    "thickness": {
-                                        "value": thickness,
-                                        "unit": "millimeters",
-                                    },
-                                    "width": {
-                                        "value": size_match[1],
-                                        "unit": "centimeters",
-                                    },
-                                    "length": {
-                                        "value": size_match[0],
-                                        "unit": "centimeters",
-                                    },
-                                }
-                            ],
-                        },
-                        "UTILITY_KNIFE": {
-                            "supplier_declared_dg_hz_regulation": "not_applicable",
-                        },
-                    }
-
-                    data_payload["attributes"].update(product_images)
-                    data_payload["attributes"].update(
-                        category_attrs_list[product_attrs.payload["productType"]]
+                    },
+                    "UTILITY_KNIFE": {
+                        "supplier_declared_dg_hz_regulation": "not_applicable",
+                    },
+                }
+                data_payload["attributes"].update(product_images)
+                data_payload["attributes"].update(
+                    category_attrs_list[product_attrs.payload["productType"]]
+                )
+                while True:
+                    try:
+                        listing_add_request = ListingsItems().put_listings_item(
+                            sellerId=AmazonSA_ID,
+                            sku=product_sku,
+                            marketplaceIds=["A33AVAJ2PDY3EV"],
+                            body=data_payload,
+                        )
+                        break
+                    except Exception as e:
+                        time.sleep(3)
+                        continue
+                if (
+                    listing_add_request
+                    and listing_add_request.payload["status"] == "ACCEPTED"
+                ):
+                    logger.info(
+                        f"""New product added with code: {
+                        product_sku}, qty: {product_data['quantity']}"""
                     )
-
-                    while True:
-                        try:
-                            listing_add_request = ListingsItems().put_listings_item(
-                                sellerId=AmazonSA_ID,
-                                sku=product_sku,
-                                marketplaceIds=["A33AVAJ2PDY3EV"],
-                                body=data_payload,
-                            )
-                            break
-                        except Exception as e:
-                            time.sleep(3)
-                            continue
-
-
-                    if (
-                        listing_add_request
-                        and listing_add_request.payload["status"] == "ACCEPTED"
-                    ):
-
-                        logger.info(
-                            f"""New product added with code: {
-                            product_sku}, qty: {product_data['quantity']}"""
-                        )
-
-                    else:
-
-                        logger.error(
-                            f"""New product with code: {product_sku} creation has failed
-                                || Reason: {listing_add_request}"""
-                        )
+                else:
+                    logger.error(
+                        f"""New product with code: {product_sku} creation has failed
+                            || Reason: {listing_add_request}"""
+                    )
 
 
 def extract_category_item_attrs(file_data, file_name=""):
@@ -1105,3 +1099,425 @@ def extract_category_item_attrs(file_data, file_name=""):
     with open(f"amazon_{file_name}_attrs.json", "w", encoding="utf-8") as attrFile:
         json.dump(processed_attrs, attrFile, indent=4)
     return processed_attrs
+
+class AmazonListingManager:
+
+    def __init__(self) -> None:
+        
+        self.marketplace_id = os.environ.get("AMAZONTURKEYMARKETID")
+        self.seller_id = os.environ.get("AMAZONSELLERACCOUNTID")
+
+    def fetch_category_attributes(self, category_name):
+        """
+        Fetches category-specific attributes based on the product type.
+
+        Args:
+            category_name (str): The name of the product category.
+
+        Returns:
+            dict: Category attributes for the product.
+        """
+        product_definitions = self.retry_with_backoff(
+            ProductTypeDefinitions().search_definitions_product_types,
+            itemName=category_name,
+            marketplaceIds=self.marketplace_id,
+            searchLocale="tr_TR",
+            locale="tr_TR",
+        )
+        product_type = product_definitions.payload["productTypes"][0]["name"]
+
+        product_attrs = self.retry_with_backoff(
+            ProductTypeDefinitions().get_definitions_product_type,
+            productType=product_type,
+            marketplaceIds=self.marketplace_id,
+            requirements="LISTING",
+            locale="tr_TR",
+        )
+
+        return self.download_attribute_schema(product_attrs.payload)
+
+    def get_category_type_attrs(self, product_type, product_data, features: dict):
+
+        thickness = features['thickness'][0]
+        size_match = features['size_match'][0]
+        feature = features['feature'][0]
+        shape = features['shape'][0]
+
+        category_attrs_list = {
+                    "RUG": {
+                        "product_site_launch_date": [
+                            {"value": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
+                        ], 
+                         "included_components": [
+                            {"value": f"Tek adet {product_data['title']}"}
+                        ],  #
+                         "item_dimensions": [
+                            {
+                                "length": {"value": thickness, "unit": "millimeters"},
+                                "width": {
+                                    "value": size_match['value'][1],
+                                    "unit": "centimeters",
+                                },
+                                "height": {
+                                    "value": size_match['value'][0],
+                                    "unit": "centimeters",
+                                },
+                            }
+                        ],
+                        "special_feature": [{"value": feature}],
+                        "item_shape": [{"value": shape}],
+                        "pile_height": [{"value": "Düşük Hav"}],
+                        "item_thickness": [
+                            {"decimal_value": thickness, "unit": "millimeters"}
+                        ],
+                        "item_length_width": [
+                            {
+                                "length": {
+                                    "unit": "centimeters",
+                                    "value": size_match['value'][0],
+                                },
+                                "width": {
+                                    "unit": "centimeters",
+                                    "value": size_match['value'][1],
+                                },
+                            }
+                        ],
+                        "rug_form_type": [{"value": "doormat"}],
+                    },
+                    "LITTER_BOX": {
+                        "included_components": [
+                            {"value": f"Tek adet {product_data['title']}"}
+                        ],  
+                        "target_audience_keyword": [
+                            {
+                                "value": "Kediler",
+                            }
+                        ],
+                        "model_name": [
+                            {
+                                "value": product_data["productMainId"],
+                            }
+                        ],
+                        "litter_box_type": [{"value": "disposable_litter_box"}],
+                        "directions": [{"value": "Kedi tuvalet matı, kum taneciklerinin evin diğer bölgelerine yayılmasını önler. Tuvalet kabının önüne yerleştirilir ve düzenli olarak temizlenir. Haftada en az bir kez yıkanmalı ve ayda bir kez derinlemesine temizlenmelidir. Matın boyutu, tuvalet kabına uygun olmalı ve su geçirmez bir malzeme tercih edilmelidir."}],
+                        "item_length_width_height": [
+                        {
+                            "length": {
+                                "value": thickness,
+                                "unit": "millimeters",
+                            },
+                            "width": {
+                                "value": size_match['value'][1],
+                                "unit": "centimeters",
+                            },
+                            "height": {
+                                "value": size_match['value'][0],
+                                "unit": "centimeters",
+                            },
+                        }
+                    ],
+                        "specific_uses_for_product": [{"value": "Cats"}],
+                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
+                        "rtip_manufacturer_contact_information": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti; +90 552 361 11 11"}],
+                        "warranty_description": [{"value": "30 Days"}],
+                        "is_oem_authorized": [{"value": True}],
+                        "oem_equivalent_part_number": [{"value": product_data["productMainId"]}],
+                        "unit_count": [{"type": {"language_tag":"tr_TR", "value":"Adet"}, "value": 1}]
+                    },
+                    "EXERCISE_MAT": {
+                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
+                        "sport_type": [{"value": "Pilates"}],
+                        "item_length_width_thickness": [
+                            {
+                                "thickness": {
+                                    "value": thickness,
+                                    "unit": "millimeters",
+                                },
+                                "width": {
+                                    "value": size_match['value'][1],
+                                    "unit": "centimeters",
+                                },
+                                "length": {
+                                    "value": size_match['value'][0],
+                                    "unit": "centimeters",
+                                },
+                            }
+                        ],
+                    },
+                    "UTILITY_KNIFE": {
+                        "supplier_declared_dg_hz_regulation": "not_applicable",
+                    },
+                }
+        return category_attrs_list[product_type]
+
+    def download_attribute_schema(self, raw_category_attrs):
+        """
+        Downloads and caches the attribute schema for a product type.
+
+        Args:
+            raw_category_attrs (dict): The product attribute data.
+
+        Returns:
+            dict: The schema for the product attributes.
+        """
+        file_path = f'amazon_{raw_category_attrs["productType"]}_attrs.json'
+        if os.path.isfile(file_path):
+            with open(file_path, 'r') as file:
+                return raw_category_attrs, json.load(file)
+        else:
+            product_scheme = requests.get(url=raw_category_attrs["schema"]["link"]["resource"])
+            scheme_json = product_scheme.json()
+            category_attrs = extract_category_item_attrs(file_data=scheme_json, file_name=raw_category_attrs["productType"])
+            with open(file_path, 'w') as file:
+                json.dump(category_attrs, file)
+            return raw_category_attrs, category_attrs
+
+    def extract_category_item_attrs(self, file_data, file_name=""):
+        """
+        Extracts and processes the attribute properties from Amazon category item data.
+
+        Args:
+            file_data (dict): The JSON data containing Amazon item attributes.
+            file_name (str): The name to be used when saving the extracted attributes to a file.
+
+        Returns:
+            dict: A dictionary of processed attributes.
+        """
+
+        processed_attrs = {}
+
+        # Get the 'properties' from the loaded JSON
+        properties = file_data.get("properties", {})
+
+        def process_property_details(property_details):
+            """
+            Processes the property details, extracting examples or nested required properties.
+
+            Args:
+                property_details (dict): The details of a property.
+
+            Returns:
+                dict or any: Processed property details or the example value if available.
+            """
+            if "examples" in property_details:
+                return property_details.get("examples", [None])[0]
+            if "items" in property_details:
+                nested_items = property_details["items"]
+                nested_properties = nested_items.get("properties", {})
+                return {
+                    required: nested_properties.get(required, {}).get("examples", [None])[0]
+                    for required in nested_items.get("required", [])
+                }
+            if "properties" in property_details:
+                return {
+                    inner_property: process_property_details(inner_details)
+                    for inner_property, inner_details in property_details["properties"].items()
+                }
+            return {}
+
+        for attribute_name, attribute_details in properties.items():
+            attribute_type = attribute_details.get("type")
+            processed_attr = process_property_details(attribute_details)
+
+            if attribute_type == "array":
+                processed_attrs[attribute_name] = [processed_attr]
+            else:
+                processed_attrs[attribute_name] = processed_attr
+
+        # Save the result to a new JSON file
+        with open(f"amazon_{file_name}_attrs.json", "w", encoding="utf-8") as attrFile:
+            json.dump(processed_attrs, attrFile, indent=4)
+
+        return processed_attrs
+    
+    def extract_attributes(self, attributes):
+        """
+        Extracts relevant attributes from the product's attributes.
+
+        Args:
+            attributes (list): List of product attributes.
+
+        Returns:
+            dict: Extracted attributes.
+        """
+        size_match = [1, 1]
+        size, color, feature, materyal, style, thickness, shape = 1, None, None, None, None, 1, "Dikdörtgen"
+
+        for attr in attributes:
+            attr_name = attr["attributeName"]
+            attr_value = attr["attributeValue"]
+            if re.search(r"Boyut/Ebat|Beden", attr_name):
+                if isinstance(attr_value, (int, float)):
+                    size = attr_value
+                    size_match = str(attr_value).split("x")
+            elif re.search(r"Renk|Color", attr_name):
+                color = attr_value
+            elif re.search(r"Özellik", attr_name):
+                feature = attr_value
+            elif re.search(r"Materyal", attr_name):
+                materyal = attr_value
+            elif re.search(r"Tema", attr_name):
+                style = attr_value
+            elif re.search(r"Hav Yüksekliği", attr_name):
+                match = re.search(r"\d+", attr_value)
+                if match:
+                    thickness = match.group()
+            elif re.search(r"Şekil", attr_name):
+                shape = attr_value
+
+        return {
+            "size": [{"value": size}],
+            "size_match": [{"value": size_match}],
+            "color": [{"value": color}],
+            "feature": [{"value": feature}],
+            "style": [{"value": style}],
+            "material": [{"value": materyal}],
+            "thickness": [{"value": thickness}],
+            "shape": [{"value": shape}],
+        }
+
+    def build_image_payload(self, images):
+        """
+        Builds the image payload for the listing.
+
+        Args:
+            images (list): List of image URLs.
+
+        Returns:
+            dict: Image payload dictionary.
+        """
+        product_images = {}
+        for i, image in enumerate(images):
+            if i == 0:
+                product_images["main_product_image_locator"] = [{"media_location": image["url"]}]
+            else:
+                product_images[f"other_product_image_locator_{i}"] = [{"media_location": image["url"]}]
+        return product_images
+   
+    def build_payload(self, product_data):
+        """
+        Builds the payload required for adding a listing to Amazon.
+
+        Args:
+            product_data (dict): The product data.
+
+        Returns:
+            dict: The payload required for the SP-API request.
+        """
+        # Prepare bullet points
+        bullet_points_list = textwrap.wrap(product_data["description"], width=len(product_data["description"]) // 5)
+        bullet_points = [{"value": bullet_point} for bullet_point in bullet_points_list]
+
+        # Prepare product images
+        product_images = self.build_image_payload(product_data["images"])
+
+        # Extract attributes
+        attributes = self.extract_attributes(product_data["attributes"])
+
+        # Fetch category attributes and build the complete payload
+        raw_category_attrs, category_attrs = self.fetch_category_attributes(product_data["categoryName"])
+
+        payload = {
+            "productType": raw_category_attrs["productType"],
+            "requirements": "LISTING",
+            "attributes": {
+                "item_name": [{"value": product_data["title"]}],
+                "brand": [{"value": product_data["brand"]}],
+                "supplier_declared_has_product_identifier_exemption": [{"value": True}],
+                "recommended_browse_nodes": [{"value": "13028044031"}],
+                "bullet_point": bullet_points,
+                "condition_type": [{"value": "new_new"}],
+                "fulfillment_availability": [
+                    {"fulfillment_channel_code": "DEFAULT", "quantity": product_data["quantity"], "lead_time_to_ship_max_days": "5"}
+                ],
+                "generic_keyword": [{"value": product_data["title"].split(" ")[0]}],
+                "list_price": [{"currency": "TRY", "value_with_tax": product_data["listPrice"]}],
+                "manufacturer": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti."}],
+                "part_number": [{"value": product_data['stockCode']}],
+                "product_description": [{"value": product_data["description"]}],
+                "country_of_origin": [{"value": "TR"}],
+                "package_level": [{"value": "unit"}],
+                "customer_package_type": [{"value": "Standart Paketleme"}],
+                **product_images,
+            },
+            "offers": [
+                {
+                    "offerType": "B2C",
+                    "price": {"currency": "TRY", "currencyCode": "TRY", "amount": product_data["salePrice"]},
+                }
+            ],
+        }
+
+        specific_attrs = self.get_category_type_attrs(raw_category_attrs["productType"], product_data, attributes)
+        payload["attributes"].update(specific_attrs)
+
+        return payload
+
+    def add_listings(self, data):
+        """
+        Adds product listings to Amazon.
+
+        Args:
+            data (dict): A dictionary containing product data to be listed on Amazon.
+
+        Returns:
+            None
+        """
+        for _, data_items in data.items():
+            for product in data_items:
+                product_data = product["data"]
+                product_sku = product_data['stockCode']
+                try:
+                    payload = self.build_payload(product_data)
+                    self.submit_listing(product_sku, payload)
+                except Exception as e:
+                    logger.error(f"Failed to process product {product_sku}: {e}", exc_info=True)
+
+    def submit_listing(self, product_sku, payload):
+        """
+        Submits the listing to Amazon.
+
+        Args:
+            product_sku (str): The SKU of the product.
+            payload (dict): The payload for the SP-API request.
+
+        Returns:
+            None
+        """
+        listing_add_request = self.retry_with_backoff(
+            ListingsItems().put_listings_item,
+            sellerId=self.seller_id,
+            sku=product_sku,
+            marketplaceIds=self.marketplace_id,
+            body=payload,
+        )
+        if listing_add_request and listing_add_request.payload["status"] == "ACCEPTED":
+            logger.info(f"New product added with code: {product_sku}, qty: {payload['attributes']['fulfillment_availability'][0]['quantity']}")
+        else:
+            logger.error(f"New product with code: {product_sku} creation has failed || Reason: {listing_add_request}")
+
+    def retry_with_backoff(self, func, *args, retries=5, **kwargs):
+        """
+        Retries a function with exponential backoff.
+
+        Args:
+            func (function): The function to retry.
+            *args: Positional arguments for the function.
+            retries (int): Number of retry attempts.
+            **kwargs: Keyword arguments for the function.
+
+        Returns:
+            Any: The result of the function if successful.
+
+        Raises:
+            Exception: If the function fails after all retries.
+        """
+        attempt = 0
+        while attempt < retries:
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying...")
+                time.sleep(2 ** attempt)  # Exponential backoff
+                attempt += 1
+        raise Exception(f"All {retries} retries failed for function {func.__name__}")

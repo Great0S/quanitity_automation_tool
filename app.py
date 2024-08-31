@@ -16,6 +16,7 @@ from rich.prompt import Prompt
 from typing import Dict, List, Any
 
 from api.amazon_seller_api import (
+    AmazonListingManager,
     spapi_add_listing,
     spapi_getlistings,
     spapi_update_listing,
@@ -41,7 +42,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 hpapi = Hb_API()
 n11api = N11API()
-
+amznApi = AmazonListingManager()
 
 def get_data(
     every_product: bool = False,
@@ -701,7 +702,7 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA
     platform_to_function = {
         "n11": n11api.add_products,
         "hepsiburada": hpapi.create_listing,
-        "amazon": spapi_add_listing,
+        "amazon": amznApi.add_listings,
         "pttavm": pttavm_updatedata,
         "pazarama": pazarama_updateRequest,
         "trendyol": post_trendyol_data,
