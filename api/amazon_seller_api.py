@@ -15,7 +15,13 @@ import io
 import time
 import requests
 from sp_api.api import DataKiosk
-from sp_api.api import ListingsItems, ProductTypeDefinitions, CatalogItems, CatalogItemsVersion, ReportsV2
+from sp_api.api import (
+    ListingsItems,
+    ProductTypeDefinitions,
+    CatalogItems,
+    CatalogItemsVersion,
+    ReportsV2,
+)
 from sp_api.base import SellingApiException
 from sp_api.base.reportTypes import ReportType
 from datetime import datetime, timedelta
@@ -24,15 +30,15 @@ from datetime import datetime, timedelta
 client = DataKiosk()
 
 
-client_id = os.environ.get('LWA_APP_ID')
-client_secret = os.environ.get('LWA_CLIENT_SECRET')
-refresh_token = os.environ.get('SP_API_REFRESH_TOKEN')
+client_id = os.environ.get("LWA_APP_ID")
+client_secret = os.environ.get("LWA_CLIENT_SECRET")
+refresh_token = os.environ.get("SP_API_REFRESH_TOKEN")
 MarketPlaceID = os.environ.get("AMAZONTURKEYMARKETID")
-AmazonSA_ID = os.environ.get('AMAZONSELLERACCOUNTID')
+AmazonSA_ID = os.environ.get("AMAZONSELLERACCOUNTID")
 credentials = {
-    'refresh_token': refresh_token,
-    'lwa_app_id': client_id,
-    'lwa_client_secret': client_secret
+    "refresh_token": refresh_token,
+    "lwa_app_id": client_id,
+    "lwa_client_secret": client_secret,
 }
 
 session = requests.session()
@@ -53,36 +59,42 @@ def get_access_token():
     payload = f"""grant_type=refresh_token&client_id={client_id}&client_secret={
         client_secret}&refresh_token={refresh_token}"""
 
-    headers = {
-        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
-    }
+    headers = {"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"}
 
     token_response = requests.request(
-        "POST", token_url, headers=headers, data=payload, timeout=300)
+        "POST", token_url, headers=headers, data=payload, timeout=300
+    )
 
     response_content = json.loads(token_response.text)
 
-    access_token_data = response_content['access_token']
+    access_token_data = response_content["access_token"]
 
     return access_token_data
 
 
-def request_data(session_data=None, operation_uri='', params: dict = None, payload=None, method='GET', url=None):
+def request_data(
+    session_data=None,
+    operation_uri="",
+    params: dict = None,
+    payload=None,
+    method="GET",
+    url=None,
+):
     """
     The function `request_data` sends a request to a specified API endpoint with optional parameters and
     handles various response scenarios.
     """
 
-    endpoint_url = f'https://sellingpartnerapi-eu.amazon.com{operation_uri}?'
-    request_url = ''
+    endpoint_url = f"https://sellingpartnerapi-eu.amazon.com{operation_uri}?"
+    request_url = ""
 
     if params:
 
-        uri = '&'.join([f'{k}={params[k]}' for k, v in params.items()])
+        uri = "&".join([f"{k}={params[k]}" for k, v in params.items()])
 
     else:
 
-        uri = ''
+        uri = ""
 
     if url:
 
@@ -96,15 +108,15 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
     current_time = datetime.now(timezone.utc)
 
     # Format the time in the desired format
-    formatted_time = current_time.strftime('%Y%m%dT%H%M%SZ')
+    formatted_time = current_time.strftime("%Y%m%dT%H%M%SZ")
 
     access_token = get_access_token()
 
     headers = {
-        'Accept-Encoding': 'gzip',
-        'Content-Type': 'application/json',
-        'x-amz-access-token': f'{access_token}',
-        'x-amz-date': formatted_time
+        "Accept-Encoding": "gzip",
+        "Content-Type": "application/json",
+        "x-amz-access-token": f"{access_token}",
+        "x-amz-date": formatted_time,
     }
     while True:
 
@@ -113,22 +125,20 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
             session_data.headers = headers
             try:
 
-                init_request = session_data.get(f"{request_url}",
-                                                data=payload)
+                init_request = session_data.get(f"{request_url}", data=payload)
             except ConnectionError:
 
                 logger.error(
-                    "Amazon request had a ConnectionError, sleeping for 5 seconds!")
+                    "Amazon request had a ConnectionError, sleeping for 5 seconds!"
+                )
 
                 time.sleep(5)
 
         else:
 
-            init_request = requests.request(method,
-                                            f"{request_url}",
-                                            headers=headers,
-                                            data=payload,
-                                            timeout=30)
+            init_request = requests.request(
+                method, f"{request_url}", headers=headers, data=payload, timeout=30
+            )
 
         if init_request.status_code in (200, 400):
 
@@ -138,15 +148,14 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
 
             else:
 
-                logger.error(
-                    "SP-API Has encountred an error. Try again later!")
+                logger.error("SP-API Has encountred an error. Try again later!")
                 jsonify = None
 
             return jsonify
 
         if init_request.status_code == 403:
 
-            session_data.headers['x-amz-access-token'] = access_token
+            session_data.headers["x-amz-access-token"] = access_token
 
         elif init_request.status_code == 429:
 
@@ -154,10 +163,9 @@ def request_data(session_data=None, operation_uri='', params: dict = None, paylo
 
         else:
 
-            error_message = json.loads(init_request.text)[
-                'errors'][0]['message']
+            error_message = json.loads(init_request.text)["errors"][0]["message"]
 
-            if re.search('not found', error_message):
+            if re.search("not found", error_message):
 
                 return None
 
@@ -175,14 +183,15 @@ def spapi_get_orders():
     """
 
     params = {
-        'MarketplaceIds': MarketPlaceID,
-        'OrderStatuses': 'Shipped',
-        'MaxResultsPerPage': 100,
-        'CreatedAfter': "2019-10-07T17:58:48.017Z"}
+        "MarketplaceIds": MarketPlaceID,
+        "OrderStatuses": "Shipped",
+        "MaxResultsPerPage": 100,
+        "CreatedAfter": "2019-10-07T17:58:48.017Z",
+    }
 
-    formatted_data = request_data("/orders/v0/orders/", params)['payload']
+    formatted_data = request_data("/orders/v0/orders/", params)["payload"]
 
-    orders = formatted_data['Orders']
+    orders = formatted_data["Orders"]
 
     orders_dict = []
 
@@ -190,7 +199,7 @@ def spapi_get_orders():
 
     count = 0
 
-    next_token = formatted_data.get('NextToken')
+    next_token = formatted_data.get("NextToken")
 
     def spapi_getorderitems(max_requests, orders_list):
         """
@@ -210,8 +219,7 @@ def spapi_get_orders():
         """
 
         count = 0
-        params = {
-            'MarketplaceIds': MarketPlaceID}
+        params = {"MarketplaceIds": MarketPlaceID}
 
         items_dict = []
         item_request_count = 1
@@ -222,11 +230,16 @@ def spapi_get_orders():
 
             for order in orders_list:
 
-                if 'ASIN' not in order:
+                if "ASIN" not in order:
 
-                    futures.append(executor.submit(
-                        request_data, f"""/orders/v0/orders/{
-                            order['AmazonOrderId']}/orderItems""", params))
+                    futures.append(
+                        executor.submit(
+                            request_data,
+                            f"""/orders/v0/orders/{
+                            order['AmazonOrderId']}/orderItems""",
+                            params,
+                        )
+                    )
 
                     item_request_count += 1
 
@@ -234,13 +247,12 @@ def spapi_get_orders():
 
                         for future in futures:
 
-                            result = future.result()['payload']
+                            result = future.result()["payload"]
 
                             if result:
                                 items_dict.append(result)
 
-                        orderbasic_info(
-                            orders_list=orders_list, item_list=items_dict)
+                        orderbasic_info(orders_list=orders_list, item_list=items_dict)
 
                         item_request_count = 0
 
@@ -259,7 +271,7 @@ def spapi_get_orders():
         :param orders_list: The function `orderbasic_info` takes two parameters: `item_list` and
         `orders_list`. The `item_list` parameter is a list of items with their information, and the
         `orders_list` parameter is a list of orders with order details
-        :return: The function `orderbasic_info` returns two values: 
+        :return: The function `orderbasic_info` returns two values:
         1. The updated `orders_list` after processing the item and order data.
         2. The count of items processed and added to the `orders_list`.
         """
@@ -272,32 +284,39 @@ def spapi_get_orders():
 
             for item_data in item_list:
 
-                if item_data['AmazonOrderId'] == order['AmazonOrderId']:
+                if item_data["AmazonOrderId"] == order["AmazonOrderId"]:
 
                     try:
-                        if "ShippingAddress" in order and order['FulfillmentChannel'] == "MFN" and isinstance(order['ShippingAddress'], dict):
-                            city = order['ShippingAddress']['City']
-                            county = order['ShippingAddress'].get(
-                                'County', None)
+                        if (
+                            "ShippingAddress" in order
+                            and order["FulfillmentChannel"] == "MFN"
+                            and isinstance(order["ShippingAddress"], dict)
+                        ):
+                            city = order["ShippingAddress"]["City"]
+                            county = order["ShippingAddress"].get("County", None)
 
                         # Create a dictionary for each item's information and append it to data_list
-                        if 'ASIN' not in order:
+                        if "ASIN" not in order:
 
-                            for item in item_data['OrderItems']:
+                            for item in item_data["OrderItems"]:
 
                                 data = {
-                                    "AmazonOrderId": order.get('AmazonOrderId', None),
-                                    "OrderStatus": order.get('OrderStatus', None),
-                                    "EarliestShipDate": order.get('EarliestShipDate', None),
-                                    "LatestShipDate": order.get('LatestShipDate', None),
-                                    "PurchaseDate": order.get('PurchaseDate', None),
+                                    "AmazonOrderId": order.get("AmazonOrderId", None),
+                                    "OrderStatus": order.get("OrderStatus", None),
+                                    "EarliestShipDate": order.get(
+                                        "EarliestShipDate", None
+                                    ),
+                                    "LatestShipDate": order.get("LatestShipDate", None),
+                                    "PurchaseDate": order.get("PurchaseDate", None),
                                     "City": city,
                                     "County": county,
-                                    "ASIN": item.get('ASIN', None),
-                                    "QuantityShipped": item.get('QuantityShipped', None),
-                                    "Amount": item['ItemPrice']['Amount'],
-                                    "SellerSKU": item.get('SellerSKU', None),
-                                    "Title": item.get('Title', None)
+                                    "ASIN": item.get("ASIN", None),
+                                    "QuantityShipped": item.get(
+                                        "QuantityShipped", None
+                                    ),
+                                    "Amount": item["ItemPrice"]["Amount"],
+                                    "SellerSKU": item.get("SellerSKU", None),
+                                    "Title": item.get("Title", None),
                                 }
                                 orders_list.append(data)
                                 count += 1
@@ -310,7 +329,10 @@ def spapi_get_orders():
 
         for index, order in enumerate(orders_list):
             for item_data in item_list:
-                if item_data['AmazonOrderId'] == order['AmazonOrderId'] and 'ASIN' not in order:
+                if (
+                    item_data["AmazonOrderId"] == order["AmazonOrderId"]
+                    and "ASIN" not in order
+                ):
                     del orders_list[index]
 
         return orders_list, count
@@ -320,16 +342,18 @@ def spapi_get_orders():
         futures = []
 
         if next_token:
-            params = {'MarketplaceIds': MarketPlaceID,
-                      "NextToken": parse.quote(formatted_data['NextToken'])}
+            params = {
+                "MarketplaceIds": MarketPlaceID,
+                "NextToken": parse.quote(formatted_data["NextToken"]),
+            }
 
             futures = request_data("/orders/v0/orders/", params)
 
-            result = futures['payload']
+            result = futures["payload"]
 
-            next_token = result.get('NextToken', None)
+            next_token = result.get("NextToken", None)
 
-            orders = result.get('Orders')
+            orders = result.get("Orders")
 
             request_count += 1
 
@@ -339,7 +363,7 @@ def spapi_get_orders():
 
                     for io in orders_dict:
 
-                        if io['AmazonOrderId'] == oi['AmazonOrderId']:
+                        if io["AmazonOrderId"] == oi["AmazonOrderId"]:
 
                             break
 
@@ -352,14 +376,16 @@ def spapi_get_orders():
                     count += 1
                     orders_dict.append(oi)
 
-            logger.info(f'{count} orders has been added')
+            logger.info(f"{count} orders has been added")
 
             if request_count % 30 == 0:
                 logger.info(f"Processing {count} orders please wait!")
 
                 spapi_getorderitems(30, orders_dict)
 
-                logger.info(f"Processed {count} orders || Orders left: {len(orders_dict) - count}")
+                logger.info(
+                    f"Processed {count} orders || Orders left: {len(orders_dict) - count}"
+                )
 
                 request_count = 0
 
@@ -368,7 +394,7 @@ def spapi_get_orders():
 
     for data in orders_dict:
 
-        if 'MarketplaceId' in data:
+        if "MarketplaceId" in data:
 
             spapi_getorderitems(30, orders_dict)
 
@@ -395,54 +421,68 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
           A chunk of the list.
         """
         for i in range(0, len(my_list), chunk_size):
-            yield my_list[i:i+chunk_size]
+            yield my_list[i : i + chunk_size]
 
     if local:
 
         dir_path = os.getcwd()
-        matching_files = glob(os.path.join(dir_path, f'*{file_saved}*'))
+        matching_files = glob(os.path.join(dir_path, f"*{file_saved}*"))
 
         for file in matching_files:
 
-            if re.search(r'\.csv', file):
+            if re.search(r"\.csv", file):
 
                 file_saved = file
 
     products = []
     report_items_request = ReportsV2().create_report(
-        reportType=ReportType.GET_MERCHANT_LISTINGS_ALL_DATA, 
-        marketplaceIds=[MarketPlaceID])
+        reportType=ReportType.GET_MERCHANT_LISTINGS_ALL_DATA,
+        marketplaceIds=[MarketPlaceID],
+    )
 
     while True:
 
         report_items_response = ReportsV2().get_report(
-            reportId=report_items_request.payload['reportId'])
+            reportId=report_items_request.payload["reportId"]
+        )
 
-        if report_items_response.payload['processingStatus'] == 'DONE':
+        if report_items_response.payload["processingStatus"] == "DONE":
 
             break
 
         time.sleep(1)
 
-    get_report_items_document = ReportsV2().get_report_document(reportDocumentId=report_items_response.payload['reportDocumentId'],
-                                                                download=True,
-                                                                decrypt=True)
-    report_string = get_report_items_document.payload['document']
+    get_report_items_document = ReportsV2().get_report_document(
+        reportDocumentId=report_items_response.payload["reportDocumentId"],
+        download=True,
+        decrypt=True,
+    )
+    report_string = get_report_items_document.payload["document"]
 
-    if report_string.startswith('\ufeff'):
+    if report_string.startswith("\ufeff"):
 
         report_string = report_string[1:]
 
     report_items_document = io.StringIO(report_string)
-    report_reader = csv.DictReader(report_items_document, delimiter='\t')
+    report_reader = csv.DictReader(report_items_document, delimiter="\t")
     report_items_data = list(report_reader)
-    products = {i['seller-sku']: {'data': {'id': i['product-id'], 'listing-id': i['listing-id'], 'quantity': i['quantity'], }} 
-                for i in report_items_data 
-                for k, v in i.items() 
-                if k == 'quantity' 
-                and not re.search(r'\_fba', i['seller-sku'])}
-    items_skus = [item['seller-sku']
-                  for item in report_items_data if not re.search(r'\_fba', item['seller-sku'])]
+    products = {
+        i["seller-sku"]: {
+            "data": {
+                "id": i["product-id"],
+                "listing-id": i["listing-id"],
+                "quantity": i["quantity"],
+            }
+        }
+        for i in report_items_data
+        for k, v in i.items()
+        if k == "quantity" and not re.search(r"\_fba", i["seller-sku"])
+    }
+    items_skus = [
+        item["seller-sku"]
+        for item in report_items_data
+        if not re.search(r"\_fba", item["seller-sku"])
+    ]
 
     catalog_item = CatalogItems()
     catalog_item.version = CatalogItemsVersion.V_2022_04_01
@@ -451,45 +491,56 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
     end_time = start_time + 2
 
     while time.time() < end_time:
-        
+
         for sku_string in items_skus_string_list:
 
-            sku_strings = ','.join(sku_string)
-            catalog_items_request = catalog_item.search_catalog_items(marketplaceIds=[MarketPlaceID],
-                                                                      includedData='attributes,identifiers,images,productTypes,summaries',
-                                                                      locale='tr_TR',
-                                                                      sellerId=AmazonSA_ID,
-                                                                      identifiersType='SKU',
-                                                                      identifiers=sku_strings,
-                                                                      pageSize=20)
-            
+            sku_strings = ",".join(sku_string)
+            catalog_items_request = catalog_item.search_catalog_items(
+                marketplaceIds=[MarketPlaceID],
+                includedData="attributes,identifiers,images,productTypes,summaries",
+                locale="tr_TR",
+                sellerId=AmazonSA_ID,
+                identifiersType="SKU",
+                identifiers=sku_strings,
+                pageSize=20,
+            )
 
             if catalog_items_request:
-                for item in catalog_items_request.payload['items']:
+                for item in catalog_items_request.payload["items"]:
 
-                    sku = [i['identifier'] for i in item['identifiers'][0]['identifiers'] 
-                           if i['identifierType'] == 'SKU']
-                    
-                    summaries = item['summaries'][0]
+                    sku = [
+                        i["identifier"]
+                        for i in item["identifiers"][0]["identifiers"]
+                        if i["identifierType"] == "SKU"
+                    ]
 
-                    identifiers = {f"""{k}{item['identifiers'][0]['identifiers'].index(i)}""": v
-                                   for i in item['identifiers'][0]['identifiers']
-                                   for k, v in i.  items()}
-                    
-                    attributes = item['attributes']
+                    summaries = item["summaries"][0]
 
-                    images = {f"""link{item['images'][0]['images'].index(i)}""": i['link'] 
-                              for i in item['images'][0]['images'] 
-                              for k, v in i.items() if v == 'MAIN'}
-                    
+                    identifiers = {
+                        f"""{k}{item['identifiers'][0]['identifiers'].index(i)}""": v
+                        for i in item["identifiers"][0]["identifiers"]
+                        for k, v in i.items()
+                    }
+
+                    attributes = item["attributes"]
+
+                    images = {
+                        f"""link{item['images'][0]['images'].index(i)}""": i["link"]
+                        for i in item["images"][0]["images"]
+                        for k, v in i.items()
+                        if v == "MAIN"
+                    }
+
                     combined_dict = {**identifiers, **summaries, **attributes, **images}
 
-                    products[sku[0]]['data'].update(combined_dict)
+                    products[sku[0]]["data"].update(combined_dict)
 
             time.sleep(1)
 
-    products = [{'sku': k, 'data': f} for k, v in products.items() for c, f in v.items()]
-    logger.info(f'Amazon fetched {len(products)} products')
+    products = [
+        {"sku": k, "data": f} for k, v in products.items() for c, f in v.items()
+    ]
+    logger.info(f"Amazon fetched {len(products)} products")
 
     return products
 
@@ -504,19 +555,19 @@ def filter_order_data(orders_list, order, result, items):
 
         try:
 
-            logger.info(result.get('AmazonOrderId', None))
+            logger.info(result.get("AmazonOrderId", None))
 
             data = {
-                "ASIN": item.get('ASIN', None),
-                "QuantityShipped": item.get('QuantityShipped', None),
-                "Amount": item['ItemPrice']['Amount'],
-                "SellerSKU": item.get('SellerSKU', None),
-                "Title": item.get('Title', None)
+                "ASIN": item.get("ASIN", None),
+                "QuantityShipped": item.get("QuantityShipped", None),
+                "Amount": item["ItemPrice"]["Amount"],
+                "SellerSKU": item.get("SellerSKU", None),
+                "Title": item.get("Title", None),
             }
 
             for order_item in orders_list:
 
-                if result['AmazonOrderId'] == order_item['AmazonOrderId']:
+                if result["AmazonOrderId"] == order_item["AmazonOrderId"]:
 
                     orders_list.remove(order_item)
 
@@ -559,10 +610,9 @@ def save_to_csv(data, filename=""):
 
             keys.update(item.keys())
 
-        with open(f"{filename}_data_list.csv",
-                  "w",
-                  newline='',
-                  encoding="utf-8") as csvfile:
+        with open(
+            f"{filename}_data_list.csv", "w", newline="", encoding="utf-8"
+        ) as csvfile:
 
             file_writer = csv.DictWriter(csvfile, fieldnames=sorted(keys))
 
@@ -578,306 +628,480 @@ def spapi_update_listing(product):
     The function `spapi_updateListing` updates a product listing on Amazon Seller Central with a new
     quantity value.
 
-    :param product: The `spapi_updateListing` function is designed to update a listing on Amazon 
+    :param product: The `spapi_updateListing` function is designed to update a listing on Amazon
     Seller Central using the Selling Partner API
     """
 
-    sku = product['sku']
+    sku = product["sku"]
 
-    qty = product['qty']
+    qty = product["qty"]
 
-    params = {
-        'marketplaceIds': MarketPlaceID,
-        'issueLocale': 'en_US'}
+    params = {"marketplaceIds": MarketPlaceID, "issueLocale": "en_US"}
 
-    data_payload = json.dumps({
-        "productType": "HOME_BED_AND_BATH",
-        "patches": [
-            {
-                "op": "replace",
-                "path": "/attributes/fulfillment_availability",
-                "value": [
-                    {
-                        "fulfillment_channel_code": "DEFAULT",
-                        "quantity": qty,
-                        "marketplace_id": "A33AVAJ2PDY3EV"
-                    }
-                ]
-            }
-        ]
-    })
+    data_payload = json.dumps(
+        {
+            "productType": "HOME_BED_AND_BATH",
+            "patches": [
+                {
+                    "op": "replace",
+                    "path": "/attributes/fulfillment_availability",
+                    "value": [
+                        {
+                            "fulfillment_channel_code": "DEFAULT",
+                            "quantity": qty,
+                            "marketplace_id": "A33AVAJ2PDY3EV",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
 
     listing_update_request = request_data(
         operation_uri=f"/listings/2021-08-01/items/{AmazonSA_ID}/{sku}",
         params=params,
         payload=data_payload,
-        method='PATCH')
+        method="PATCH",
+    )
 
-    if listing_update_request and listing_update_request['status'] == 'ACCEPTED':
+    if listing_update_request and listing_update_request["status"] == "ACCEPTED":
 
-        logger.info(f"""Product with code: {
-            product["sku"]}, New value: {product["qty"]}""")
+        logger.info(
+            f"""Product with code: {
+            product["sku"]}, New value: {product["qty"]}"""
+        )
 
     else:
 
-        logger.error(f"""Product with code: {product["sku"]} failed
-              to update || Reason: {listing_update_request}""")
+        logger.error(
+            f"""Product with code: {product["sku"]} failed
+              to update || Reason: {listing_update_request}"""
+        )
 
 
 def spapi_add_listing(data):
 
-    for product in data.items():
+    for data_item in data.items():
 
-        product_sku = product[0]
-        product_data = product[1][0]['data']
-        source_product_attrs = product_data['attributes']
-        product_images = {}
-        bullet_points_list = textwrap.wrap(
-            product_data['description'], width=len(product_data['description']) // 5)
-        bullet_points = [{'value': bullet_point}
-                         for bullet_point in bullet_points_list]
+        data_items = data_item[1]
 
-        for i in enumerate(product_data['images']):
+        for product in data_items:
+            
+            product_data = product["data"]
+            product_sku = product_data['stockCode']
+            source_product_attrs = product_data["attributes"]
+            product_images = {}
+            bullet_points_list = textwrap.wrap(
+                product_data["description"], width=len(product_data["description"]) // 5
+            )
+            bullet_points = [{"value": bullet_point} for bullet_point in bullet_points_list]
+            size_match = [1, 1]
+            size = 1
+            color = None
+            feature = None
+            materyal = None
+            style = None
+            thickness = 1
+            shape = None
 
-            if i[0] == 0:
+            for i in enumerate(product_data["images"]):
 
-                product_images['main_product_image_locator'] = [
-                    {"media_location": i[1]['url']}]
+                if i[0] == 0:
 
-            else:
-
-                product_images[f"other_product_image_locator_{i[0]}"] = [{"media_location": i[1]['url']}]
-
-        for atrr in source_product_attrs:
-
-            if re.search('Boyut/Ebat', atrr['attributeName']):
-
-                size = atrr['attributeValue']
-                size_match = atrr['attributeValue'].split('x')
-
-            if re.search(r'Renk|Color', atrr['attributeName']):
-
-                color = atrr['attributeValue']
-
-            if re.search('Özellik', atrr['attributeName']):
-
-                feature = atrr['attributeValue']
-
-            if re.search('Materyal', atrr['attributeName']):
-
-                materyal = atrr['attributeValue']
-
-            if re.search('Tema', atrr['attributeName']):
-
-                style = atrr['attributeValue']
-
-            if re.search('Hav Yüksekliği', atrr['attributeName']):
-
-                thickness = atrr['attributeValue']
-                match = re.search(r'\d+', thickness)
-
-                if match:
-
-                    result = match.group()
-                    thickness = result
-
-                else:
-
-                    thickness = '0 mm'
-
-            if re.search('Şekil', atrr['attributeName']):
-
-                shape = atrr['attributeValue']
-
-            else:
-
-                shape = 'Dikdörtgen'
-
-        product_definitions = ProductTypeDefinitions().search_definitions_product_types(
-            itemName=product_data['categoryName'],
-            marketplaceIds=MarketPlaceID,
-            searchLocale="tr_TR",
-            locale="tr_TR")
-
-        if product_definitions is not []:
-
-            product_attrs = ProductTypeDefinitions().get_definitions_product_type(
-                productType=product_definitions.payload['productTypes'][0]['name'],
-                marketplaceIds=MarketPlaceID,
-                requirements="LISTING",
-                locale="tr_TR")
-
-            if product_attrs:
-
-                file_path = f'amazon_{product_attrs.payload["productType"]}_attrs.json'
-
-                if os.path.isfile(file_path):
-
-                    pass
-
-                else:
-
-                    product_scheme = requests.get(
-                        url=product_attrs.payload['schema']['link']['resource'])
-                    scheme_json = json.loads(product_scheme.text)
-                    extract_category_item_attrs(
-                        file_data=scheme_json, file_name=product_attrs.payload['productType'])
-
-                data_payload = {
-                    "productType": product_attrs.payload['productType'],
-                    "requirements": "LISTING",
-                    "attributes": {
-                        "item_name": [{"value": product_data['title']}],
-                        "brand": [{"value": product_data['brand']}],
-                        "supplier_declared_has_product_identifier_exemption": [{"value": True}],
-                        "recommended_browse_nodes": [{"value": "13028044031"}],
-                        "bullet_point": bullet_points,
-                        "condition_type": [{"value": "new_new"}],
-                        "fulfillment_availability": [
-                            {"fulfillment_channel_code": "DEFAULT",
-                                "quantity": product_data['quantity']}
-                        ],
-                        "gift_options": [{"can_be_messaged": "false", "can_be_wrapped": "false"}],
-                        "generic_keyword": [
-                            {"value": product_data['title'].split(' ')[0]}
-                        ],
-                        "list_price": [{"currency": "TRY", "value_with_tax": product_data['listPrice']}],
-                        "manufacturer": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti."}],
-                        "material": [{"value": materyal}],
-                        "model_number": [{"value": product_data['productMainId']}],
-                        "number_of_items": [{"value": 1}],
-                        "color": [{"value": color}],
-                        "size": [{"value": size}],
-                        "special_feature": [{"value": feature}],
-                        "style": [{"value": style}],
-                        "part_number": [{"value": product_sku}],
-                        "pattern": [{"value": "Düz"}],
-                        "product_description": [
-                            {
-                                "value": product_data['description']
-                            }
-                        ],
-                        "product_site_launch_date": [{"value": datetime.now(timezone.utc).strftime('%Y-%m-%d')}],
-                        "pile_height": [{"value": "Düşük Hav"}],
-                        "purchasable_offer": [
-                            {"currency": "TRY", "our_price": [
-                                {"schedule": [{"value_with_tax": product_data['salePrice']}]}]}
-                        ],
-                        "included_components": [
-                            {"value": f"Tek adet {product_data['title']}"}
-                        ],
-                        "item_dimensions": [
-                            {
-                                "length": {"value": thickness, "unit": "millimeters"},
-                                "width": {"value": size_match[1], "unit": "centimeters"},
-                                "height": {"value": size_match[0], "unit": "centimeters"},
-                            }
-                        ],
-                        "item_shape": [{"value": shape}],
-                        "item_thickness": [{"decimal_value": thickness, "unit": "millimeters"}],
-                        "item_length_width": [
-                            {
-                                "length": {"unit": "centimeters", "value": size_match[0]},
-                                "width": {"unit": "centimeters", "value": size_match[1]},
-                            }
-                        ],
-                        "country_of_origin": [{"value": "TR"}],
-                        "rug_form_type": [{"value": "doormat"}],
-                    },
-                    "offers": [
-                        {
-                            "offerType": "B2C",
-                            "price": {
-                                "currency": "TRY",
-                                "currencyCode": "TRY",
-                                "amount": product_data['salePrice']
-                            }
-                        }
+                    product_images["main_product_image_locator"] = [
+                        {"media_location": i[1]["url"]}
                     ]
-                }
-
-                data_payload["attributes"].update(product_images)
-
-                listing_add_request = ListingsItems().put_listings_item(
-                    sellerId=AmazonSA_ID,
-                    sku=product_sku,
-                    marketplaceIds=["A33AVAJ2PDY3EV"],
-                    body=data_payload)
-
-                if listing_add_request and listing_add_request.payload['status'] == 'ACCEPTED':
-
-                    logger.info(f"""New product added with code: {
-                        product_sku}, qty: {product_data['quantity']}""")
 
                 else:
 
-                    logger.error(f"""New product with code: {product_sku} creation has failed
-                            || Reason: {listing_add_request}""")
+                    product_images[f"other_product_image_locator_{i[0]}"] = [
+                        {"media_location": i[1]["url"]}
+                    ]
+
+            for atrr in source_product_attrs:
+
+                if re.search("Boyut/Ebat", atrr["attributeName"]) or re.search(
+                    "Beden", atrr["attributeName"]
+                ):
+                    if isinstance(atrr["attributeValue"], (int, float)):
+                        size = atrr["attributeValue"]
+                        size_match = atrr["attributeValue"].split("x")
+
+                if re.search(r"Renk|Color", atrr["attributeName"]):
+
+                    color = atrr["attributeValue"]
+
+                if re.search("Özellik", atrr["attributeName"]):
+
+                    feature = atrr["attributeValue"]
+
+                if re.search("Materyal", atrr["attributeName"]):
+
+                    materyal = atrr["attributeValue"]
+
+                if re.search("Tema", atrr["attributeName"]):
+
+                    style = atrr["attributeValue"]
+
+                if re.search("Hav Yüksekliği", atrr["attributeName"]):
+
+                    thickness = atrr["attributeValue"]
+                    match = re.search(r"\d+", thickness)
+
+                    if match:
+
+                        result = match.group()
+                        thickness = result
+
+                if re.search("Şekil", atrr["attributeName"]):
+
+                    shape = atrr["attributeValue"]
+
+                else:
+
+                    shape = "Dikdörtgen"
+
+            product_definitions = ProductTypeDefinitions().search_definitions_product_types(
+                itemName=product_data["categoryName"],
+                marketplaceIds=MarketPlaceID,
+                searchLocale="tr_TR",
+                locale="tr_TR",
+            )
+
+            if product_definitions is not []:
+
+                product_attrs = ProductTypeDefinitions().get_definitions_product_type(
+                    productType=product_definitions.payload["productTypes"][0]["name"],
+                    marketplaceIds=MarketPlaceID,
+                    requirements="LISTING",
+                    locale="tr_TR",
+                )
+
+                if product_attrs:
+
+                    file_path = f'amazon_{product_attrs.payload["productType"]}_attrs.json'
+
+                    if os.path.isfile(file_path):
+
+                        pass
+
+                    else:
+
+                        product_scheme = requests.get(
+                            url=product_attrs.payload["schema"]["link"]["resource"]
+                        )
+                        scheme_json = json.loads(product_scheme.text)
+                        category_attrs = extract_category_item_attrs(
+                            file_data=scheme_json,
+                            file_name=product_attrs.payload["productType"],
+                        )
+
+                    data_payload = {
+                        "productType": product_attrs.payload["productType"],
+                        "requirements": "LISTING",
+                        "attributes": {
+                            "item_name": [{"value": product_data["title"]}],  #
+                            "brand": [{"value": product_data["brand"]}],  #
+                            "supplier_declared_has_product_identifier_exemption": [
+                                {"value": True}
+                            ],  #
+                            "recommended_browse_nodes": [{"value": "13028044031"}],  #
+                            "bullet_point": bullet_points,  #
+                            "condition_type": [{"value": "new_new"}],  #
+                            "fulfillment_availability": [
+                                {
+                                    "fulfillment_channel_code": "DEFAULT",
+                                    "quantity": product_data["quantity"],
+                                    "lead_time_to_ship_max_days": "5",
+                                }
+                            ],  #
+                            "gift_options": [
+                                {"can_be_messaged": "false", "can_be_wrapped": "false"}
+                            ],  #
+                            "generic_keyword": [
+                                {"value": product_data["title"].split(" ")[0]}  #
+                            ],
+                            "list_price": [
+                                {
+                                    "currency": "TRY",
+                                    "value_with_tax": product_data["listPrice"],
+                                }
+                            ],  #
+                            "manufacturer": [
+                                {"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti."}
+                            ],
+                            "material": [{"value": materyal}],  #
+                            "model_number": [{"value": product_data["productMainId"]}],  #
+                            "number_of_items": [{"value": 1}],  #
+                            "color": [{"value": color}],  #
+                            "size": [{"value": size}],  #
+                            "style": [{"value": style}],  #
+                            "part_number": [{"value": product_sku}],  #
+                            "pattern": [{"value": "Düz"}],  #
+                            "product_description": [
+                                {"value": product_data["description"]}
+                            ],  #
+                            "purchasable_offer": [
+                            {
+                                "currency": "TRY",
+                                "our_price": [
+                                    {
+                                        "schedule": [
+                                            {
+                                                "value_with_tax": product_data[
+                                                    "salePrice"
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                            }
+                        ],  #
+
+                            "country_of_origin": [{"value": "TR"}],  #
+                             #
+                            "package_level": [{"value": "unit"}],
+                            "customer_package_type": [{"value": "Standart Paketleme"}],
+                        },
+                        "offers": [
+                            {
+                                "offerType": "B2C",
+                                "price": {
+                                    "currency": "TRY",
+                                    "currencyCode": "TRY",
+                                    "amount": product_data["salePrice"],
+                                },
+                            }
+                        ],
+                    }
+
+                    category_attrs_list = {
+                        "RUG": {
+                            "product_site_launch_date": [
+                                {"value": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
+                            ], 
+                             "included_components": [
+                                {"value": f"Tek adet {product_data['title']}"}
+                            ],  #
+                             "item_dimensions": [
+                                {
+                                    "length": {"value": thickness, "unit": "millimeters"},
+                                    "width": {
+                                        "value": size_match[1],
+                                        "unit": "centimeters",
+                                    },
+                                    "height": {
+                                        "value": size_match[0],
+                                        "unit": "centimeters",
+                                    },
+                                }
+                            ],
+                            "special_feature": [{"value": feature}],
+                            "item_shape": [{"value": shape}],
+                            "pile_height": [{"value": "Düşük Hav"}],
+                            "item_thickness": [
+                                {"decimal_value": thickness, "unit": "millimeters"}
+                            ],
+                            "item_length_width": [
+                                {
+                                    "length": {
+                                        "unit": "centimeters",
+                                        "value": size_match[0],
+                                    },
+                                    "width": {
+                                        "unit": "centimeters",
+                                        "value": size_match[1],
+                                    },
+                                }
+                            ],
+                            "rug_form_type": [{"value": "doormat"}],
+                        },
+                        "LITTER_BOX": {
+                            "included_components": [
+                                {"value": f"Tek adet {product_data['title']}"}
+                            ],  
+                            "target_audience_keyword": [
+                                {
+                                    "value": "Kediler",
+                                }
+                            ],
+                            "model_name": [
+                                {
+                                    "value": product_data["productMainId"],
+                                }
+                            ],
+                            "litter_box_type": [{"value": "disposable_litter_box"}],
+                            "directions": [{"value": "Kedi tuvalet matı, kum taneciklerinin evin diğer bölgelerine yayılmasını önler. Tuvalet kabının önüne yerleştirilir ve düzenli olarak temizlenir. Haftada en az bir kez yıkanmalı ve ayda bir kez derinlemesine temizlenmelidir. Matın boyutu, tuvalet kabına uygun olmalı ve su geçirmez bir malzeme tercih edilmelidir."}],
+                            "item_length_width_height": [
+                            {
+                                "length": {
+                                    "value": thickness,
+                                    "unit": "millimeters",
+                                },
+                                "width": {
+                                    "value": size_match[1],
+                                    "unit": "centimeters",
+                                },
+                                "height": {
+                                    "value": size_match[0],
+                                    "unit": "centimeters",
+                                },
+                            }
+                        ],
+                            "specific_uses_for_product": [{"value": "Cats"}],
+                            "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
+                            "rtip_manufacturer_contact_information": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti; +90 552 361 11 11"}],
+                            "warranty_description": [{"value": "30 Days"}],
+                            "is_oem_authorized": [{"value": True}],
+                            "oem_equivalent_part_number": [{"value": product_data["productMainId"]}],
+                            "unit_count": [{"type": {"language_tag":"tr_TR", "value":"Adet"}, "value": 1}]
+                        },
+                        "EXERCISE_MAT": {
+                            "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
+                            "sport_type": [{"value": "Pilates"}],
+                            "item_length_width_thickness": [
+                                {
+                                    "thickness": {
+                                        "value": thickness,
+                                        "unit": "millimeters",
+                                    },
+                                    "width": {
+                                        "value": size_match[1],
+                                        "unit": "centimeters",
+                                    },
+                                    "length": {
+                                        "value": size_match[0],
+                                        "unit": "centimeters",
+                                    },
+                                }
+                            ],
+                        },
+                        "UTILITY_KNIFE": {
+                            "supplier_declared_dg_hz_regulation": "not_applicable",
+                        },
+                    }
+
+                    data_payload["attributes"].update(product_images)
+                    data_payload["attributes"].update(
+                        category_attrs_list[product_attrs.payload["productType"]]
+                    )
+
+                    while True:
+                        try:
+                            listing_add_request = ListingsItems().put_listings_item(
+                                sellerId=AmazonSA_ID,
+                                sku=product_sku,
+                                marketplaceIds=["A33AVAJ2PDY3EV"],
+                                body=data_payload,
+                            )
+                            break
+                        except Exception as e:
+                            time.sleep(3)
+                            continue
 
 
-def extract_category_item_attrs(file_data, file_name=''):
+                    if (
+                        listing_add_request
+                        and listing_add_request.payload["status"] == "ACCEPTED"
+                    ):
+
+                        logger.info(
+                            f"""New product added with code: {
+                            product_sku}, qty: {product_data['quantity']}"""
+                        )
+
+                    else:
+
+                        logger.error(
+                            f"""New product with code: {product_sku} creation has failed
+                                || Reason: {listing_add_request}"""
+                        )
+
+
+def extract_category_item_attrs(file_data, file_name=""):
 
     amazon_attrs = file_data
     processed_attrs = {}
     temporary_attr = {}
 
     # Get the 'properties' from the loaded JSON
-    properties = amazon_attrs.get('properties', {})
+    properties = amazon_attrs.get("properties", {})
 
     for attribute_name, attribute_details in properties.items():
 
         sub_attributes = attribute_details
         temporary_attr[attribute_name] = {}
 
-        if 'items' in sub_attributes:
-            items_attributes = sub_attributes['items']
-            items_properties = items_attributes.get('properties', {})
+        if "items" in sub_attributes:
+            items_attributes = sub_attributes["items"]
+            items_properties = items_attributes.get("properties", {})
 
             for property_name, property_details in items_properties.items():
                 temporary_attr[attribute_name][property_name] = {}
 
-                if 'examples' in property_details:
-                    temporary_attr[attribute_name][property_name] = property_details.get('examples', [
-                                                                                         None])[0]
+                if "examples" in property_details:
+                    temporary_attr[attribute_name][property_name] = (
+                        property_details.get("examples", [None])[0]
+                    )
                 else:
-                    if 'items' in property_details:
-                        nested_items = property_details['items']
+                    if "items" in property_details:
+                        nested_items = property_details["items"]
 
-                        if 'required' in nested_items:
-                            for required_obj in nested_items.get('required', []):
-                                temporary_attr[attribute_name][property_name][required_obj] = {
-                                }
+                        if "required" in nested_items:
+                            for required_obj in nested_items.get("required", []):
+                                temporary_attr[attribute_name][property_name][
+                                    required_obj
+                                ] = {}
 
-                                if 'properties' in nested_items.get('properties', {}):
-                                    obj_properties = nested_items['properties'].get(
-                                        required_obj, {})
-                                    temporary_attr[attribute_name][property_name][required_obj] = obj_properties.get(
-                                        'examples', [None])[0]
+                                if "properties" in nested_items.get("properties", {}):
+                                    obj_properties = nested_items["properties"].get(
+                                        required_obj, {}
+                                    )
+                                    temporary_attr[attribute_name][property_name][
+                                        required_obj
+                                    ] = obj_properties.get("examples", [None])[0]
                                 else:
-                                    nested_properties = nested_items['properties'].get(
-                                        required_obj, {}).get('items', {})
+                                    nested_properties = (
+                                        nested_items["properties"]
+                                        .get(required_obj, {})
+                                        .get("items", {})
+                                    )
 
-                                    if 'properties' in nested_properties:
-                                        for sub_required in nested_properties.get('required', []):
-                                            sub_property_details = nested_properties['properties'].get(
-                                                sub_required, {})
-                                            temporary_attr[attribute_name][property_name][required_obj][sub_required] = sub_property_details.get(
-                                                'examples', [None])[0]
+                                    if "properties" in nested_properties:
+                                        for sub_required in nested_properties.get(
+                                            "required", []
+                                        ):
+                                            sub_property_details = nested_properties[
+                                                "properties"
+                                            ].get(sub_required, {})
+                                            temporary_attr[attribute_name][
+                                                property_name
+                                            ][required_obj][
+                                                sub_required
+                                            ] = sub_property_details.get(
+                                                "examples", [None]
+                                            )[
+                                                0
+                                            ]
                     else:
-                        if 'properties' in property_details:
-                            for inner_property_name, inner_property_details in property_details['properties'].items():
-                                temporary_attr[attribute_name][property_name][inner_property_name] = inner_property_details.get(
-                                    'examples', [None])[0]
+                        if "properties" in property_details:
+                            for (
+                                inner_property_name,
+                                inner_property_details,
+                            ) in property_details["properties"].items():
+                                temporary_attr[attribute_name][property_name][
+                                    inner_property_name
+                                ] = inner_property_details.get("examples", [None])[0]
 
         # Determine the type of the attribute
-        attribute_type = sub_attributes.get('type')
+        attribute_type = sub_attributes.get("type")
 
-        if attribute_type == 'array':
+        if attribute_type == "array":
             processed_attrs[attribute_name] = [temporary_attr[attribute_name]]
         else:
             processed_attrs[attribute_name] = temporary_attr[attribute_name]
 
     # Save the result to a new JSON file
-    with open(f'amazon_{file_name}_attrs.json', 'w', encoding='utf-8') as attrFile:
+    with open(f"amazon_{file_name}_attrs.json", "w", encoding="utf-8") as attrFile:
         json.dump(processed_attrs, attrFile, indent=4)
     return processed_attrs
