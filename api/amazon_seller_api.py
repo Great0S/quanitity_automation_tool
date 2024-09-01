@@ -1412,7 +1412,8 @@ class AmazonListingManager:
         product_images = self.build_image_payload(product_data["images"])
 
         # Extract attributes
-        attributes = self.extract_attributes(product_data["attributes"])
+        
+        self.attributes = self.extract_attributes(product_data["attributes"])
 
         # Fetch category attributes and build the complete payload
         raw_category_attrs, category_attrs = self.fetch_category_attributes(product_data["categoryName"])
@@ -1425,16 +1426,23 @@ class AmazonListingManager:
                 "brand": [{"value": product_data["brand"]}],
                 "supplier_declared_has_product_identifier_exemption": [{"value": True}],
                 "recommended_browse_nodes": [{"value": "13028044031"}],
-                "bullet_point": bullet_points,
-                "condition_type": [{"value": "new_new"}],
-                "fulfillment_availability": [
-                    {"fulfillment_channel_code": "DEFAULT", "quantity": product_data["quantity"], "lead_time_to_ship_max_days": "5"}
-                ],
+                "bullet_point": bullet_points,  
+                "condition_type": [{"value": "new_new"}],  
+                "fulfillment_availability": [{"fulfillment_channel_code": "DEFAULT","quantity": product_data["quantity"],"lead_time_to_ship_max_days": "5"}],
+                "gift_options": [{"can_be_messaged": "false", "can_be_wrapped": "false"}], 
                 "generic_keyword": [{"value": product_data["title"].split(" ")[0]}],
-                "list_price": [{"currency": "TRY", "value_with_tax": product_data["listPrice"]}],
+                "list_price": [{"currency": "TRY","value_with_tax": product_data["listPrice"],}],
                 "manufacturer": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti."}],
-                "part_number": [{"value": product_data['stockCode']}],
+                "material": self.attributes["material"],
+                "model_number": [{"value": product_data["productMainId"]}],
+                "number_of_items": [{"value": 1}], 
+                "color": self.attributes["color"],
+                "size": self.attributes["size"],
+                "style": self.attributes["style"],
+                "part_number": [{"value": product_data["productMainId"]}],
+                "pattern": [{"value": "Düz"}],
                 "product_description": [{"value": product_data["description"]}],
+                "purchasable_offer": [{"currency": "TRY","our_price": [{"schedule": [{"value_with_tax": product_data["salePrice"]}]}],}],
                 "country_of_origin": [{"value": "TR"}],
                 "package_level": [{"value": "unit"}],
                 "customer_package_type": [{"value": "Standart Paketleme"}],
@@ -1448,7 +1456,7 @@ class AmazonListingManager:
             ],
         }
 
-        specific_attrs = self.get_category_type_attrs(raw_category_attrs["productType"], product_data, attributes)
+        specific_attrs = self.get_category_type_attrs(raw_category_attrs["productType"], product_data, self.attributes)
         payload["attributes"].update(specific_attrs)
 
         return payload
