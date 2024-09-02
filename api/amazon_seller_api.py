@@ -888,11 +888,11 @@ def spapi_add_listing(data):
                             {
                                 "length": {"value": thickness, "unit": "millimeters"},
                                 "width": {
-                                    "value": size_match['value'][1],
+                                    "value": size_match[1],
                                     "unit": "centimeters",
                                 },
                                 "height": {
-                                    "value": size_match['value'][0],
+                                    "value": size_match[0],
                                     "unit": "centimeters",
                                 },
                             }
@@ -907,11 +907,11 @@ def spapi_add_listing(data):
                             {
                                 "length": {
                                     "unit": "centimeters",
-                                    "value": size_match['value'][0],
+                                    "value": size_match[0],
                                 },
                                 "width": {
                                     "unit": "centimeters",
-                                    "value": size_match['value'][1],
+                                    "value": size_match[1],
                                 },
                             }
                         ],
@@ -940,11 +940,11 @@ def spapi_add_listing(data):
                                 "unit": "millimeters",
                             },
                             "width": {
-                                "value": size_match['value'][1],
+                                "value": size_match[1],
                                 "unit": "centimeters",
                             },
                             "height": {
-                                "value": size_match['value'][0],
+                                "value": size_match[0],
                                 "unit": "centimeters",
                             },
                         }
@@ -967,11 +967,11 @@ def spapi_add_listing(data):
                                     "unit": "millimeters",
                                 },
                                 "width": {
-                                    "value": size_match['value'][1],
+                                    "value": size_match[1],
                                     "unit": "centimeters",
                                 },
                                 "length": {
-                                    "value": size_match['value'][0],
+                                    "value": size_match[0],
                                     "unit": "centimeters",
                                 },
                             }
@@ -1117,13 +1117,18 @@ class AmazonListingManager:
         Returns:
             dict: Category attributes for the product.
         """
-        product_definitions = self.retry_with_backoff(
-            ProductTypeDefinitions().search_definitions_product_types,
-            itemName=category_name,
-            marketplaceIds=self.marketplace_id,
-            searchLocale="tr_TR",
-            locale="tr_TR",
-        )
+        while True:
+            product_definitions = self.retry_with_backoff(
+                ProductTypeDefinitions().search_definitions_product_types,
+                itemName=category_name,
+                marketplaceIds=self.marketplace_id,
+                searchLocale="tr_TR",
+                locale="tr_TR",
+            )
+            if len(product_definitions.payload['productTypes']) > 0:
+                break
+            time.sleep(3)
+
         product_type = product_definitions.payload["productTypes"][0]["name"]
 
         product_attrs = self.retry_with_backoff(
@@ -1138,10 +1143,10 @@ class AmazonListingManager:
 
     def get_category_type_attrs(self, product_type, product_data, features: dict):
 
-        thickness = features['thickness'][0]
-        size_match = features['size_match'][0]
-        feature = features['feature'][0]
-        shape = features['shape'][0]
+        thickness = features['thickness']
+        size_match = features['size_match']
+        feature = features['feature']
+        shape = features['shape']
 
         category_attrs_list = {
                     "RUG": {
@@ -1155,11 +1160,11 @@ class AmazonListingManager:
                             {
                                 "length": {"value": thickness, "unit": "millimeters"},
                                 "width": {
-                                    "value": size_match['value'][1],
+                                    "value": size_match[1],
                                     "unit": "centimeters",
                                 },
                                 "height": {
-                                    "value": size_match['value'][0],
+                                    "value": size_match[0],
                                     "unit": "centimeters",
                                 },
                             }
@@ -1174,11 +1179,11 @@ class AmazonListingManager:
                             {
                                 "length": {
                                     "unit": "centimeters",
-                                    "value": size_match['value'][0],
+                                    "value": size_match[0],
                                 },
                                 "width": {
                                     "unit": "centimeters",
-                                    "value": size_match['value'][1],
+                                    "value": size_match[1],
                                 },
                             }
                         ],
@@ -1207,11 +1212,11 @@ class AmazonListingManager:
                                 "unit": "millimeters",
                             },
                             "width": {
-                                "value": size_match['value'][1],
+                                "value": size_match[1],
                                 "unit": "centimeters",
                             },
                             "height": {
-                                "value": size_match['value'][0],
+                                "value": size_match[0],
                                 "unit": "centimeters",
                             },
                         }
@@ -1234,11 +1239,11 @@ class AmazonListingManager:
                                     "unit": "millimeters",
                                 },
                                 "width": {
-                                    "value": size_match['value'][1],
+                                    "value": size_match[1],
                                     "unit": "centimeters",
                                 },
                                 "length": {
-                                    "value": size_match['value'][0],
+                                    "value": size_match[0],
                                     "unit": "centimeters",
                                 },
                             }
@@ -1366,14 +1371,14 @@ class AmazonListingManager:
                 shape = attr_value
 
         return {
-            "size": [{"value": size}],
-            "size_match": [{"value": size_match}],
-            "color": [{"value": color}],
-            "feature": [{"value": feature}],
-            "style": [{"value": style}],
-            "material": [{"value": materyal}],
-            "thickness": [{"value": thickness}],
-            "shape": [{"value": shape}],
+            "size": size,
+            "size_match": size_match,
+            "color": color,
+            "feature": feature,
+            "style": style,
+            "material": materyal,
+            "thickness": thickness,
+            "shape": shape,
         }
 
     def build_image_payload(self, images):
@@ -1411,8 +1416,7 @@ class AmazonListingManager:
         # Prepare product images
         product_images = self.build_image_payload(product_data["images"])
 
-        # Extract attributes
-        
+        # Extract attributes        
         self.attributes = self.extract_attributes(product_data["attributes"])
 
         # Fetch category attributes and build the complete payload
@@ -1433,12 +1437,12 @@ class AmazonListingManager:
                 "generic_keyword": [{"value": product_data["title"].split(" ")[0]}],
                 "list_price": [{"currency": "TRY","value_with_tax": product_data["listPrice"],}],
                 "manufacturer": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti."}],
-                "material": self.attributes["material"],
+                "material": [{"value": self.attributes["material"]}],
                 "model_number": [{"value": product_data["productMainId"]}],
                 "number_of_items": [{"value": 1}], 
-                "color": self.attributes["color"],
-                "size": self.attributes["size"],
-                "style": self.attributes["style"],
+                "color": [{"value": self.attributes["color"]}],
+                "size": [{"value": self.attributes["size"]}],
+                "style": [{"value": self.attributes["style"]}],
                 "part_number": [{"value": product_data["productMainId"]}],
                 "pattern": [{"value": "Düz"}],
                 "product_description": [{"value": product_data["description"]}],

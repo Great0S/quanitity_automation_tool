@@ -17,12 +17,11 @@ from typing import Dict, List, Any
 
 from api.amazon_seller_api import (
     AmazonListingManager,
-    spapi_add_listing,
     spapi_getlistings,
     spapi_update_listing,
 )
 from api.hepsiburada_api import Hb_API
-from api.pazarama_api import getPazarama_productsList, pazarama_updateRequest
+from api.pazarama_api import PazaramaAPIClient
 from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
 from api.trendyol_api import get_trendyol_stock_data, post_trendyol_data
 from api.n11_api import N11API
@@ -37,12 +36,13 @@ from api.wordpress_api import (
 logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
-    handlers=[RichHandler(rich_tracebacks=True)],
-)
+    handlers=[RichHandler(rich_tracebacks=True)])
+
 logger = logging.getLogger(__name__)
-hpapi = Hb_API()
-n11api = N11API()
+hpApi = Hb_API()
+n11Api = N11API()
 amznApi = AmazonListingManager()
+pazaramaApi = PazaramaAPIClient()
 
 def get_data(
     every_product: bool = False,
@@ -77,9 +77,9 @@ def get_data(
 
     data_content = {
         "trendyol_data": get_trendyol_stock_data(every_product),
-        "n11_data": n11api.get_products(every_product),
-        "hepsiburada_data": hpapi.get_listings(every_product),
-        "pazarama_data": getPazarama_productsList(every_product),
+        "n11_data": n11Api.get_products(every_product),
+        "hepsiburada_data": hpApi.get_listings(every_product),
+        "pazarama_data": pazaramaApi.get_products(every_product),
         "wordpress_data": get_wordpress_products(every_product),
         "pttavm_data": getpttavm_procuctskdata(every_product),
         "amazon_data": spapi_getlistings(every_product),
@@ -98,11 +98,11 @@ def filter_data(every_product, local, targets):
     data_content = {}
     codes = []
     platform_to_function = {
-        "n11": n11api.get_products,
-        "hepsiburada": hpapi.get_listings,
+        "n11": n11Api.get_products,
+        "hepsiburada": hpApi.get_listings,
         "amazon": spapi_getlistings,
         "pttavm": getpttavm_procuctskdata,
-        "pazarama": getPazarama_productsList,
+        "pazarama": pazaramaApi.get_products,
         "wordpress": get_wordpress_products,
         "trendyol": get_trendyol_stock_data,
     }
@@ -468,9 +468,9 @@ class App(Enum):
             
         data_content = {
             "trendyol_data": get_trendyol_stock_data(every_product),
-            "n11_data": n11api.get_products(every_product),
-            "hepsiburada_data": hpapi.get_listings(every_product),
-            "pazarama_data": getPazarama_productsList(every_product),
+            "n11_data": n11Api.get_products(every_product),
+            "hepsiburada_data": hpApi.get_listings(every_product),
+            "pazarama_data": pazaramaApi.get_products(every_product),
             "wordpress_data": get_wordpress_products(every_product),
             "pttavm_data": getpttavm_procuctskdata(every_product),
             "amazon_data": spapi_getlistings(every_product),
@@ -512,11 +512,11 @@ class App(Enum):
 
         # Mapping of platform names to their respective data retrieval functions
         platform_to_function = {
-            "n11": n11api.get_products,
-            "hepsiburada": hpapi.get_listings,
+            "n11": n11Api.get_products,
+            "hepsiburada": hpApi.get_listings,
             "amazon": spapi_getlistings,
             "pttavm": getpttavm_procuctskdata,
-            "pazarama": getPazarama_productsList,
+            "pazarama": pazaramaApi.get_products,
             "wordpress": get_wordpress_products,
             "trendyol": get_trendyol_stock_data,
         }
@@ -629,11 +629,11 @@ class App(Enum):
         """
 
         platform_to_function = {
-            App.N11: n11api.update_products,
-            App.HEPSIBURADA: hpapi.update_listing,
+            App.N11: n11Api.update_products,
+            App.HEPSIBURADA: hpApi.update_listing,
             App.AMAZON: spapi_update_listing,
             App.PTTAVM: pttavm_updatedata,
-            App.PAZARAMA: pazarama_updateRequest,
+            App.PAZARAMA: pazaramaApi.update_products,
             App.TRENDYOL: post_trendyol_data,
             App.WORDPRESS: update_wordpress_products,
         }
@@ -700,11 +700,11 @@ class App(Enum):
 def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA=False):
 
     platform_to_function = {
-        "n11": n11api.add_products,
-        "hepsiburada": hpapi.create_listing,
+        "n11": n11Api.add_products,
+        "hepsiburada": hpApi.create_listing,
         "amazon": amznApi.add_listings,
         "pttavm": pttavm_updatedata,
-        "pazarama": pazarama_updateRequest,
+        "pazarama": pazaramaApi.create_products,
         "trendyol": post_trendyol_data,
         "wordpress": create_wordpress_products,
     }
