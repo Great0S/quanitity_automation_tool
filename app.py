@@ -9,17 +9,14 @@ import logging
 import re
 import os
 from datetime import datetime, timezone
+import threading
 from dateutil.relativedelta import relativedelta
 from tui import ProductManagerApp
 from rich.logging import RichHandler
 from rich.prompt import Prompt
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, Tuple
 
-from api.amazon_seller_api import (
-    AmazonListingManager,
-    spapi_getlistings,
-    spapi_update_listing,
-)
+from api.amazon_seller_api import AmazonListingManager, spapi_getlistings
 from api.hepsiburada_api import Hb_API
 from api.pazarama_api import PazaramaAPIClient
 from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
@@ -410,7 +407,7 @@ def add_to_matching_items(matching_items, params, every_product):
             }
         ]
     
-class App(Enum):
+class App:
 
     N11 = "n11"
     HEPSIBURADA = "hepsiburada"
@@ -420,130 +417,236 @@ class App(Enum):
     TRENDYOL = "trendyol"
     WORDPRESS = "wordpress"
 
-    def get_data(
-    every_product: bool = False,
-    local: bool = False,
-    source: str = None,
-    targets: list = None,
-    match: bool = False):
+    def __init__(self) -> None:
+
+        self.platform_data_cache = {}        
+        self.platform_to_update_function = {
+            'n11': n11Api.update_products,
+            'hepsiburada': hpApi.update_listing,
+            'amazon': amznApi.update_listing,
+            'pttavm': pttavm_updatedata,
+            'pazarama': pazaramaApi.update_product,
+            'trendyol': post_trendyol_data,
+            'wordpress': update_wordpress_products,
+        }
+
+    def load_initial_data(self, load_all: bool) -> None:
         """
-        The `get_data()` function retrieves stock data
+        Load initial data in the background and cache it.
+        
+        Args:
+            load_all (bool): Whether to load all products or partial data.
+        """
+        self.platform_data_cache.update({
+                "trendyol_data": get_trendyol_stock_data(load_all),
+                "n11_data": n11Api.get_products(load_all),
+                "hepsiburada_data": hpApi.get_listings(load_all),
+                "pazarama_data": pazaramaApi.get_products(load_all),
+                "wordpress_data": get_wordpress_products(load_all),
+                "pttavm_data": getpttavm_procuctskdata(load_all),
+                "amazon_data": spapi_getlistings(load_all),
+            })
+        
+    def retrieve_stock_data(self,
+                            include_all_products: bool = False,
+                            use_local_data: bool = False,
+                            source_platform: str = None,
+                            target_platforms: list = None,
+                            match_data: bool = False):
+        """
+        The `retrieve_stock_data()` function retrieves stock data
         from various platforms and returns specific data and
         lists related to the retrieved information.
 
         Parameters:
-        - every_product (bool): Whether to retrieve all products or not.
-        - local (bool): Whether to retrieve local data or not.
-        - source (str): The source platform to retrieve data from.
-        - targets (list): List of target platforms to retrieve data from.
-        - match (bool): Whether to match the data between source and targets.
+        - include_all_products (bool): Whether to retrieve all products or just specific ones.
+        - use_local_data (bool): Whether to retrieve local data or not.
+        - source_platform (str): The source platform from which to retrieve data.
+        - target_platforms (list): List of target platforms to retrieve data from.
+        - match_data (bool): Whether to match the data between source and targets.
 
         Returns:
         - dict: Data from target platforms, possibly including source platform data.
-        - list: Combined list of all unique codes from source and targets.
+        - list: Combined list of all unique product codes from source and targets.
         """
 
-        if targets:
+        if target_platforms:
 
-            target = targets if isinstance(targets, list) else [targets]
+            targets = target_platforms if isinstance(target_platforms, list) else [target_platforms]
 
             try:
                 # Retrieve data from source and target platforms
-                source_platform, source_codes = App.filter_data(every_product, local, [source])
-    
-                target_platforms, target_codes = App.filter_data(every_product, local, target) if targets else ({}, [])
-    
+                source_data, source_codes = self.retrieve_data(include_all_products, use_local_data, [source_platform])
+
+                target_data, target_codes = self.retrieve_data(include_all_products, use_local_data, targets) if target_platforms else ({}, [])
+
                 # Combine codes from source and targets, ensuring uniqueness
-                all_codes = list(set(source_codes + target_codes))
-    
+                combined_product_codes = list(set(source_codes + target_codes))
+
                 # Include source platform data in target platforms if applicable
-                if source_platform and f"{source}_data" in source_platform:
-                    target_platforms[f"{source}_data"] = source_platform[f"{source}_data"]
-    
-                return target_platforms, all_codes
-    
+                if source_data and f"{source_platform}_data" in source_data:
+                    target_data[f"{source_platform}_data"] = source_data[f"{source_platform}_data"]
+
+                return target_data, combined_product_codes
+
             except Exception as e:
-                logger.error(f"An error occurred while retrieving data: {e}")
+                logger.error(f"An error occurred while retrieving stock data: {e}")
                 return {}, []
-            
-        data_content = {
-            "trendyol_data": get_trendyol_stock_data(every_product),
-            "n11_data": n11Api.get_products(every_product),
-            "hepsiburada_data": hpApi.get_listings(every_product),
-            "pazarama_data": pazaramaApi.get_products(every_product),
-            "wordpress_data": get_wordpress_products(every_product),
-            "pttavm_data": getpttavm_procuctskdata(every_product),
-            "amazon_data": spapi_getlistings(every_product),
-            }
 
-        return data_content, []
+        self.include_all_products = include_all_products
+        return self.data_content, []
     
-    def get_date_range(date_input):
+    def get_date_range(date_option: str) -> Tuple[datetime, datetime]:
+        """
+        Retrieves the start and end dates based on the user's input or predefined options.
 
-        if date_input == "1":
+        Parameters:
+        - date_option (str): Option to determine date range selection. 
+                             "1" for the past month, "2" for user-defined dates.
+
+        Returns:
+        - Tuple[datetime, datetime]: A tuple containing start_date and end_date.
+        """
+        if date_option == "1":
             end_date = datetime.now()
             start_date = end_date - relativedelta(months=1)
-        elif date_input == "2":
-            start_date = datetime.strptime(Prompt.ask("Enter the start date (YYYY-MM-DD): "), "%Y-%m-%d")
-            end_date = datetime.strptime(Prompt.ask("Enter the end date (YYYY-MM-DD): "), "%Y-%m-%d")
+        elif date_option == "2":
+            try:
+                start_date_input = Prompt.ask("Enter the start date (YYYY-MM-DD): ")
+                end_date_input = Prompt.ask("Enter the end date (YYYY-MM-DD): ")
+                start_date = datetime.strptime(start_date_input, "%Y-%m-%d")
+                end_date = datetime.strptime(end_date_input, "%Y-%m-%d")
+                if start_date > end_date:
+                    raise ValueError("Start date cannot be after end date.")
+            except ValueError as e:
+                print(f"Invalid date format or range: {e}")
+                return None, None
         else:
-            start_date, end_date = None, None
+            print("Invalid option selected.")
+            return None, None
 
         return start_date, end_date
 
-    def filter_data(every_product, local, targets):
+    def retrieve_data(self, include_all_products: bool, use_local_data: bool, platforms: list) -> Tuple[dict, list]:
         """
-        The function `filter_data` filters and retrieves
-        stock data for different platforms based on
-        specified targets.
-
+        Retrieves and filters stock data from specified platforms.
+    
         Parameters:
-        - every_product (bool): Whether to retrieve all products or not.
-        - local (bool): Flag to determine if local data should be used.
-        - targets (list): List of target platforms to retrieve data from.
-
+        - include_all_products (bool): Flag to determine if all products should be included.
+        - use_local_data (bool): Flag to determine if local data should be used.
+        - platforms (list): List of platform names from which to retrieve data.
+    
         Returns:
-        - dict: Retrieved data from target platforms.
-        - list: List of SKUs (codes) from the retrieved data.
+        - dict: A dictionary containing data from the specified platforms.
+        - list: A list of SKUs extracted from the retrieved data.
         """
+        # Initialize the result variables
+        filtered_data = {}
+        sku_list = []
+    
+        # Load initial data based on the include_all_products flag
+        self.load_initial_data(include_all_products)
+        
+        # Access cached data
+        cached_data = self.platform_data_cache
+    
+        # Retrieve and process data for each specified platform
+        for platform in platforms:
+            platform_key = f"{platform.lower()}_data"
+            platform_data = cached_data.get(platform_key)
+            
+            if platform_data:
+                filtered_data[platform_key] = platform_data
+    
+                # Extract SKUs from the data and add to sku_list
+                skus = [item["sku"] for item in platform_data if "sku" in item]
+                sku_list.extend(skus)
+    
+        return filtered_data, sku_list
 
-        data_content = {}
-        codes = []
-
-        # Mapping of platform names to their respective data retrieval functions
-        platform_to_function = {
-            "n11": n11Api.get_products,
-            "hepsiburada": hpApi.get_listings,
-            "amazon": spapi_getlistings,
-            "pttavm": getpttavm_procuctskdata,
-            "pazarama": pazaramaApi.get_products,
-            "wordpress": get_wordpress_products,
-            "trendyol": get_trendyol_stock_data,
-        }
-
-        # Loop through each target and retrieve data
-        for target in targets:
-            function = platform_to_function.get(target)
-            if function:
-                data = function(every_product)
-                data_content[f"{target}_data"] = data
-
-                # Extract codes (SKUs) from the data
-                codes.extend(item["sku"] for item in data)
-
-        return data_content, codes
-
-    def filter_post_data_by_date(post_data, start_date, end_date):
-
+    def filter_data_by_date_range(
+        data: Dict[str, dict],
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> Dict[str, dict]:
+        """
+        Filters the given data based on a specified date range.
+    
+        Parameters:
+        - data (Dict[str, dict]): Dictionary where keys are identifiers (e.g., SKUs) and values are dictionaries containing post data.
+        - start_date (Optional[datetime]): The earliest date to include in the filter. If None, no start date filter is applied.
+        - end_date (Optional[datetime]): The latest date to include in the filter. If None, no end date filter is applied.
+    
+        Returns:
+        - Dict[str, dict]: A dictionary containing only the entries within the specified date range.
+        """
+        
         if not start_date and not end_date:
-            return post_data
+            return data
+    
+        filtered_data = {}
+        for identifier, entry in data.items():
+            last_update_date_str = entry.get("lastUpdateDate")
+            
+            if last_update_date_str:
+                try:
+                    last_update_date = datetime.strptime(last_update_date_str, "%Y-%m-%d")
+                except ValueError:
+                    continue  # Skip entries with invalid date formats
+                
+                if start_date and last_update_date < start_date:
+                    continue
+                if end_date and last_update_date > end_date:
+                    continue
+                
+                filtered_data[identifier] = entry
+    
+        return filtered_data
 
-        return {
-            sku: data for sku, data in post_data.items()
-            if start_date <= datetime.strptime(data[1]["lastUpdateDate"], "%Y-%m-%d") <= end_date
-        }
+    def process_products_by_sku(
+                            self,
+                            sku_updates: List[Dict[str, str]],
+                            update_type: Optional[str] = None
+                        ) -> Dict[str, List[Dict[str, str]]]:
+        """
+         Updates product data based on provided SKU and update options.
 
-    def process_update_data(source=None, use_source=False, targets=None, options=None):
+         Parameters:
+         - sku_updates (List[Dict[str, str]]): List of dictionaries where each dictionary maps SKU to the new value for update.
+         - update_type (Optional[str]): Type of update to perform. Options are 'quantity' to update stock quantity, 'price' to update price, or None for no update.
+
+         Returns:
+         - Dict[str, List[Dict[str, str]]]: A dictionary where keys are platform names and values are lists of updated product data dictionaries.
+         """
+
+        self.load_initial_data(False)
+        data_content = self.platform_data_cache
+        product_data = []
+
+        for platform, products in data_content.items():
+            for product in products:  
+                product_sku = product.get("sku")
+
+                # Check if the product SKU needs to be updated             
+                for sku_update in sku_updates:
+                    for sku, new_value in sku_update.items():
+
+                        if product_sku == sku:
+
+                            if update_type == 'qty':
+                                product["qty"] = int(new_value)
+                                product_data.append({"platform": platform, "data": product})
+                            elif update_type == 'price':
+                                product["price"] = float(new_value)
+                                product_data.append({"platform": platform, "data": product})
+                            elif update_type == 'info':
+                                product_data.append({"platform": platform, "data": product})
+                            break
+                    break
+
+        return product_data
+
+    def process_update_data(self, source=None, use_source=False, targets=None, options=None):
         """
         The function `process_update_data` retrieves data, processes
         stock updates from different platforms, and returns the
@@ -560,9 +663,7 @@ class App(Enum):
 
         try:
             # Retrieve data based on the options provided
-            data_lists, _ = App.get_data(
-                every_product=all_data, source=source, targets=targets
-            )
+            data_lists, _ = self.get_data(every_product=all_data, source=source, targets=targets)
 
             # Return early if no data is retrieved
             if not data_lists:
@@ -605,43 +706,45 @@ class App(Enum):
             logger.error(f"An error occurred while processing update data: {e}")
             return {}
 
-    def execute_platform_updates(platform, func, post_data, options, source):
+    def execute_platform_updates(self, platform, func, post_data, options, source):
 
         try:
             if isinstance(post_data, list):
                 for post in post_data:
-                    if platform.value == post['platform']:
+                    if f"{platform}_data" == post['platform']:
 
-                        func(post)
+                        func(post['data'])
             else:
-                if platform.value == post_data['platform']:
+                if platform == post_data['platform']:
                     func(post_data)
 
             # logger.info(f"Successfully updated {len(post_data)} products on {platform.name}.")
         except Exception as e:
-            logger.error(f"Failed to update products on {platform.name}. Error: {e}")
+            logger.error(f"Failed to update products on {platform}. Error: {e}")
 
-    def execute_updates(source=None, use_source=False, targets=None, options=None):
+    def execute_updates(self, source=None, use_source=False, targets=None, options=None, user_input=None):
         """
         The function `execute_updates` processes update data
         for different platforms and calls corresponding
         update functions based on the platform.
         """
 
-        platform_to_function = {
-            App.N11: n11Api.update_products,
-            App.HEPSIBURADA: hpApi.update_listing,
-            App.AMAZON: spapi_update_listing,
-            App.PTTAVM: pttavm_updatedata,
-            App.PAZARAMA: pazaramaApi.update_products,
-            App.TRENDYOL: post_trendyol_data,
-            App.WORDPRESS: update_wordpress_products,
-        }
+        
         date_input = None
+        start_date = None
+        end_date = None
+        filtered_post_data = None
 
         logger.info("Starting updates...")
 
-        post_data = App.process_update_data(source=source, use_source=use_source, targets=targets, options=options)
+        if user_input:
+
+            post_data = self.process_products_by_sku(user_input, update_type=options)
+        
+        else:
+
+            post_data = self.process_update_data(source=source, use_source=use_source, targets=targets, options=options)
+
         if not post_data:
 
             logger.info("No data to process. Exiting.")
@@ -670,36 +773,39 @@ class App(Enum):
                 if date_input == "3":
                     logger.info("Exiting the program.")
                     break  
+
+                start_date, end_date = self.get_date_range(date_input)
+                filtered_post_data = self.filter_post_data_by_date(post_data, start_date, end_date)
+
             else:
                 logger.error("Invalid choice. Please select a valid option.")
 
-            start_date, end_date = App.get_date_range(date_input)
-
             logger.info("Update in progress...")
 
-            # Filter by date if required
-            filtered_post_data = App.filter_post_data_by_date(post_data, start_date, end_date)
+            if filtered_post_data:
+
+                post_data = filtered_post_data
+
+            
 
             # Process updates
-            for platform_enum, func in platform_to_function.items():
+            for platform, func in self.platform_to_update_function.items():
 
                 if isinstance(targets, list):
-                    if platform_enum.value in targets:
-                        App.execute_platform_updates(platform_enum, func, filtered_post_data, options, source)
-                elif platform_enum.value == targets:
-                    App.execute_platform_updates(platform_enum, func, filtered_post_data, options, source)
+                    if platform in targets:
+                        self.execute_platform_updates(platform, func, post_data, options, source)
+                elif platform == targets:
+                    self.execute_platform_updates(platform, func, post_data, options, source)
                 elif not source and not targets:
-                    App.execute_platform_updates(platform_enum, func, filtered_post_data, options, source)
+                    self.execute_platform_updates(platform, func, post_data, options, source)
 
             logger.info("Updates completed.")
 
             break
             
+    def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA=False):
 
-
-def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA=False):
-
-    platform_to_function = {
+        platform_to_function = {
         "n11": n11Api.add_products,
         "hepsiburada": hpApi.create_listing,
         "amazon": amznApi.add_listings,
@@ -709,7 +815,7 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA
         "wordpress": create_wordpress_products,
     }
 
-    data_lists, _ = get_data(
+        data_lists, _ = get_data(
         every_product=True,
         local=LOCAL_DATA,
         source=SOURCE_PLATFORM,
@@ -717,7 +823,7 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA
         match=True,
     )
 
-    filtered_data = filter_items_data(
+        filtered_data = filter_items_data(
         data=data_lists,
         every_product=True,
         no_match=True,
@@ -725,56 +831,57 @@ def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA
         target=TARGET_PLATFORM,
     )
 
-    if filtered_data:
+        if filtered_data:
 
-        platform_to_function[TARGET_PLATFORM](data=filtered_data)
+            platform_to_function[TARGET_PLATFORM](data=filtered_data)
 
-    logger.info("Done")
+        logger.info("Done")
 
+    def process(self, data_dict: dict = None):
 
-def process(data_dict: dict = None):
+        # Clear screen command depending on the OS
+        if os.name == "nt":  # For Windows
+            os.system("cls")
+        else:  # For Linux and macOS
+            os.system("clear")
 
-    # Clear screen command depending on the OS
-    if os.name == "nt":  # For Windows
-        os.system("cls")
-    else:  # For Linux and macOS
-        os.system("clear")
+        if data_dict:
 
-    if data_dict:
+            logger.info("User input recieved, processing...")
 
-        logger.info("User input recieved, processing...")
+            try:
 
-        try:
+                for k, v in data_dict.items():
 
-            for k, v in data_dict.items():
+                    if k == "update":
 
-                if k == "update":
+                        App.execute_updates(self,
+                            source=data_dict["update"]["source"],
+                            targets=data_dict["update"]["target"],
+                            use_source=True if data_dict["update"]["options"] else False,
+                            options=data_dict["update"]["options"],
+                            user_input=data_dict["update"]["user_input"],
+                        )
+                        break
 
-                    App.execute_updates(
-                        source=data_dict["update"]["source"],
-                        targets=data_dict["update"]["target"],
-                        use_source=True if data_dict["update"]["options"] else False,
-                        options=data_dict["update"]["options"],
+                    App.create_products(self,
+                        SOURCE_PLATFORM=data_dict["create"]["source"],
+                        TARGET_PLATFORM=data_dict["create"]["target"],
+                        TARGET_OPTIONS=data_dict["create"]["options"],
+                        LOCAL_DATA=data_dict["create"]["local_data"],
                     )
                     break
 
-                create_products(
-                    SOURCE_PLATFORM=data_dict["create"]["source"],
-                    TARGET_PLATFORM=data_dict["create"]["target"],
-                    TARGET_OPTIONS=data_dict["create"]["options"],
-                    LOCAL_DATA=data_dict["create"]["local_data"],
-                )
-                break
+            except KeyboardInterrupt:
 
-        except KeyboardInterrupt:
-
-            logger.warning("The program has been interrupted.")
-            logger.info("Shutting down...")
-            exit()
+                logger.warning("The program has been interrupted.")
+                logger.info("Shutting down...")
+                exit()
 
 
 if __name__ == "__main__":
 
+    app_instance = App()
     input_app = ProductManagerApp()
     results = input_app.run()
-    process(results)
+    app_instance.process(results)

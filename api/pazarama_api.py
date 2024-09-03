@@ -433,7 +433,7 @@ class PazaramaAPIClient:
 
         return products_items
 
-    def update_product(self, product):
+    def update_product(self, product: dict):
         """
         The function `pazarama_updateRequest` updates the stock count of a product on Pazarama platform
         based on the provided product information.

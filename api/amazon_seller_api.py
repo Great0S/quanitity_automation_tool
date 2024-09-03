@@ -623,62 +623,6 @@ def save_to_csv(data, filename=""):
                 file_writer.writerow(d)
 
 
-def spapi_update_listing(product):
-    """
-    The function `spapi_updateListing` updates a product listing on Amazon Seller Central with a new
-    quantity value.
-
-    :param product: The `spapi_updateListing` function is designed to update a listing on Amazon
-    Seller Central using the Selling Partner API
-    """
-
-    sku = product["sku"]
-
-    qty = product["qty"]
-
-    params = {"marketplaceIds": MarketPlaceID, "issueLocale": "en_US"}
-
-    data_payload = json.dumps(
-        {
-            "productType": "HOME_BED_AND_BATH",
-            "patches": [
-                {
-                    "op": "replace",
-                    "path": "/attributes/fulfillment_availability",
-                    "value": [
-                        {
-                            "fulfillment_channel_code": "DEFAULT",
-                            "quantity": qty,
-                            "marketplace_id": "A33AVAJ2PDY3EV",
-                        }
-                    ],
-                }
-            ],
-        }
-    )
-
-    listing_update_request = request_data(
-        operation_uri=f"/listings/2021-08-01/items/{AmazonSA_ID}/{sku}",
-        params=params,
-        payload=data_payload,
-        method="PATCH",
-    )
-
-    if listing_update_request and listing_update_request["status"] == "ACCEPTED":
-
-        logger.info(
-            f"""Product with code: {
-            product["sku"]}, New value: {product["qty"]}"""
-        )
-
-    else:
-
-        logger.error(
-            f"""Product with code: {product["sku"]} failed
-              to update || Reason: {listing_update_request}"""
-        )
-
-
 def spapi_add_listing(data):
 
     for data_item in data.items():
@@ -1107,6 +1051,32 @@ class AmazonListingManager:
         self.marketplace_id = os.environ.get("AMAZONTURKEYMARKETID")
         self.seller_id = os.environ.get("AMAZONSELLERACCOUNTID")
 
+    def retry_with_backoff(self, func, *args, retries=5, **kwargs):
+        """
+        Retries a function with exponential backoff.
+
+        Args:
+            func (function): The function to retry.
+            *args: Positional arguments for the function.
+            retries (int): Number of retry attempts.
+            **kwargs: Keyword arguments for the function.
+
+        Returns:
+            Any: The result of the function if successful.
+
+        Raises:
+            Exception: If the function fails after all retries.
+        """
+        attempt = 0
+        while attempt < retries:
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying...")
+                time.sleep(2 ** attempt)  # Exponential backoff
+                attempt += 1
+        raise Exception(f"All {retries} retries failed for function {func.__name__}")
+
     def fetch_category_attributes(self, category_name):
         """
         Fetches category-specific attributes based on the product type.
@@ -1465,26 +1435,6 @@ class AmazonListingManager:
 
         return payload
 
-    def add_listings(self, data):
-        """
-        Adds product listings to Amazon.
-
-        Args:
-            data (dict): A dictionary containing product data to be listed on Amazon.
-
-        Returns:
-            None
-        """
-        for _, data_items in data.items():
-            for product in data_items:
-                product_data = product["data"]
-                product_sku = product_data['stockCode']
-                try:
-                    payload = self.build_payload(product_data)
-                    self.submit_listing(product_sku, payload)
-                except Exception as e:
-                    logger.error(f"Failed to process product {product_sku}: {e}", exc_info=True)
-
     def submit_listing(self, product_sku, payload):
         """
         Submits the listing to Amazon.
@@ -1508,28 +1458,78 @@ class AmazonListingManager:
         else:
             logger.error(f"New product with code: {product_sku} creation has failed || Reason: {listing_add_request}")
 
-    def retry_with_backoff(self, func, *args, retries=5, **kwargs):
+    def add_listings(self, data):
         """
-        Retries a function with exponential backoff.
+        Adds product listings to Amazon.
 
         Args:
-            func (function): The function to retry.
-            *args: Positional arguments for the function.
-            retries (int): Number of retry attempts.
-            **kwargs: Keyword arguments for the function.
+            data (dict): A dictionary containing product data to be listed on Amazon.
 
         Returns:
-            Any: The result of the function if successful.
-
-        Raises:
-            Exception: If the function fails after all retries.
+            None
         """
-        attempt = 0
-        while attempt < retries:
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying...")
-                time.sleep(2 ** attempt)  # Exponential backoff
-                attempt += 1
-        raise Exception(f"All {retries} retries failed for function {func.__name__}")
+        for _, data_items in data.items():
+            for product in data_items:
+                product_data = product["data"]
+                product_sku = product_data['stockCode']
+                try:
+                    payload = self.build_payload(product_data)
+                    self.submit_listing(product_sku, payload)
+                except Exception as e:
+                    logger.error(f"Failed to process product {product_sku}: {e}", exc_info=True)
+
+    def update_listing(product: dict):
+        """
+        The function `spapi_updateListing` updates a product listing on Amazon Seller Central with a new
+        quantity value.
+
+        :param product: The `spapi_updateListing` function is designed to update a listing on Amazon
+        Seller Central using the Selling Partner API
+        """
+
+        sku = product["sku"]    
+        qty = product["qty"]
+        params = {"marketplaceIds": MarketPlaceID, "issueLocale": "en_US"}
+
+        data_payload = json.dumps(
+            {
+                "productType": "HOME_BED_AND_BATH",
+                "patches": [
+                    {
+                        "op": "replace",
+                        "path": "/attributes/fulfillment_availability",
+                        "value": [
+                            {
+                                "fulfillment_channel_code": "DEFAULT",
+                                "quantity": qty,
+                                "marketplace_id": "A33AVAJ2PDY3EV",
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+
+        listing_update_request = request_data(
+            operation_uri=f"/listings/2021-08-01/items/{AmazonSA_ID}/{sku}",
+            params=params,
+            payload=data_payload,
+            method="PATCH",
+        )
+
+        if listing_update_request and listing_update_request["status"] == "ACCEPTED":
+
+            logger.info(
+                f"""Product with code: {
+                product["sku"]}, New value: {product["qty"]}"""
+            )
+
+        else:
+
+            logger.error(
+                f"""Product with code: {product["sku"]} failed
+                  to update || Reason: {listing_update_request}"""
+            )
+
+
+

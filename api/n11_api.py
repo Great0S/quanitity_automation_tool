@@ -696,7 +696,7 @@ class N11API:
             operations_structure["product"]["price"] = item_data['salePrice']
             operations_structure["product"]["currencyType"] = 1
             operations_structure["product"]["images"] = image_elements
-            operations_structure["product"]["maxPurchaseQuantity"] = 5000
+            operations_structure["product"]["maxPurchaseQuantity"] = 500
             operations_structure["product"]["groupAttribute"] = groupAtrr
             operations_structure["product"]["groupItemCode"] = groupCode
             operations_structure["product"]["itemName"] = item_data["title"]
@@ -801,7 +801,6 @@ class N11API:
         
         Item = {
             "bundle": False,
-            "gtin": group_item_data["barcode"],
             "n11CatalogId": 1000722,
             "quantity": group_item_data["quantity"],
             "sellerStockCode": str(group_item_data["stockCode"]),
@@ -835,6 +834,7 @@ class N11API:
         return attrs
 
     def get_images(self, item_data):
+
         image_elements = []
 
         for i, image_url in enumerate(item_data["images"], 1):

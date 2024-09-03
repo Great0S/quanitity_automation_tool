@@ -129,7 +129,7 @@ def get_trendyol_stock_data(every_product: bool = False, local: bool = False, Fi
     return products
 
 
-def post_trendyol_data(product):
+def post_trendyol_data(product: dict):
     """
     The function `post_data` sends a POST request to a specified URL with a payload containing a list of
     products.

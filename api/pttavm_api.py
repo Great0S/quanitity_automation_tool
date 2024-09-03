@@ -117,7 +117,7 @@ def getpttavm_procuctskdata(everyproduct: bool = False, local: bool = False):
     return None
 
 
-def pttavm_updatedata(product):
+def pttavm_updatedata(product: dict):
     """
     The function `pttavm_updateData` updates product data 
     on a platform called PTTAVM by sending a

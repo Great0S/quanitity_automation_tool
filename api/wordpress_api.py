@@ -79,7 +79,7 @@ def get_wordpress_products(everyproduct: bool = False, local: bool = False):
     return filtered_products
 
 
-def update_wordpress_products(data):
+def update_wordpress_products(data: dict):
 
     stock_status = ''
 
