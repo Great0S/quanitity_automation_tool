@@ -41,49 +41,6 @@ n11Api = N11API()
 amznApi = AmazonListingManager()
 pazaramaApi = PazaramaAPIClient()
 
-def get_data(
-    every_product: bool = False,
-    local: bool = False,
-    source: str = None,
-    targets: list = None,
-    match: bool = False,
-):
-    """
-    The `get_data()` function retrieves stock data
-    from various platforms and returns specific data and
-    lists related to the retrieved information.
-    """
-
-    # Retrieve stock data from APIs
-    if targets:
-
-        target = targets if isinstance(targets, list) else [targets]
-
-        source_platform, source_codes = filter_data(
-            every_product, local, [source])
-        
-        target_platforms, target_codes = filter_data(
-            every_product, local, target)
-        
-        all_codes = list(set(target_codes + source_codes))
-
-        # We add the source platform data to the target platforms so they stay on one list
-        target_platforms[f"{source}_data"] = source_platform[f"{source}_data"]
-
-        return target_platforms, all_codes
-
-    data_content = {
-        "trendyol_data": get_trendyol_stock_data(every_product),
-        "n11_data": n11Api.get_products(every_product),
-        "hepsiburada_data": hpApi.get_listings(every_product),
-        "pazarama_data": pazaramaApi.get_products(every_product),
-        "wordpress_data": get_wordpress_products(every_product),
-        "pttavm_data": getpttavm_procuctskdata(every_product),
-        "amazon_data": spapi_getlistings(every_product),
-    }
-
-    return data_content, []
-
 
 def filter_data(every_product, local, targets):
     """
@@ -120,98 +77,61 @@ def filter_data(every_product, local, targets):
 
     return data_content, codes
 
-
-def process_update_data(source=None, use_source=False, targets=None, options=None):
+def filter_items(
+    self,
+    data: Dict[str, Any],
+    source: str = "",
+    use_source: bool = False,
+    target: str = "",
+    include_all: bool = False,
+    find_mismatches: bool = False,
+) -> List[Dict[str, Any]]:
     """
-    The function `process_update_data` retrieves data, processes
-    stock updates from different platforms, and returns the
-    platform updates.
-    """
+    Filters and compares item data across platforms, returning items with quantity changes or mismatches.
 
-    all_data = False
+    Args:
+        data (Dict[str, Any]): Input data with items from various platforms.
+        source (str): Source platform for comparison.
+        use_source (bool): Whether to prioritize source platform data.
+        target (str): Specific target platform to compare against.
+        include_all (bool): Include all items, even if unchanged.
+        find_mismatches (bool): Return items that don't match across platforms.
 
-    if options:
-
-        if options == "full" or options == "info":
-
-            data_lists, _ = get_data(
-                every_product=True, source=source, targets=targets)
-
-            all_data = True
-
-    else:
-
-        data_lists, _ = get_data(source=source, targets=targets)
-
-    # Initializing empty lists. These lists will be used
-    # to store data during the processing of stock
-    # data from N11 and Trendyol APIs.
-    platform_updates = filter_items_data(
-        data=data_lists,
-        source=source,
-        use_source=use_source,
-        target=targets,
-        every_product=all_data,
-    )
-    # Filter platform_updates by createdTime and updatedTime from source
-    if use_source:
-
-        for item in platform_updates:
-
-            source_data = platform_updates[item][0]["data"]
-            product_createdTime = datetime.fromtimestamp(
-                source_data["createDateTime"] / 1000, tz=timezone.utc
-            ).strftime("%Y-%m-%d")
-            product_updatedTime = datetime.fromtimestamp(
-                source_data["lastUpdateDate"] / 1000, tz=timezone.utc
-            ).strftime("%Y-%m-%d")
-            platform_updates[item][1]["createDateTime"] = product_createdTime
-            platform_updates[item][1]["lastUpdateDate"] = product_updatedTime
-
-    logger.info(f"""Product updates count is {len(platform_updates)}""")
-
-    return platform_updates
-
-
-def filter_items_data(
-    data="",
-    source="",
-    use_source=False,
-    target="",
-    every_product: bool = False,
-    no_match=False,
-):
-    """
-    The function `filter_items_data` compares quantity values
-    for items across different platforms and returns a list of
-    changed values and matching values.
+    Returns:
+        List[Dict[str, Any]]: List of items with quantity changes or mismatches.
     """
 
-    changed_values = []
+    # self.platforms.pop(source)
 
-    platforms = [
-        "trendyol",
-        "n11",
-        "amazon",
-        "hepsiburada",
-        "pazarama",
-        "wordpress",
-        "pttavm",
-    ]
-    matching_items = {}
-    non_matching_items = {}
+    # if find_mismatches:
+    #     return find_non_matching_items(data, source, target)
 
-    if no_match:
+    # matching_items = {}
+
+    # for platform in self.platforms:
+    #     platform_data = data.get(f"{platform}_data")
+    #     if not platform_data:
+    #         continue
+
+    #     if use_source:
+    #         compare_with_source(data[f"{source}_data"], platform_data, platform, matching_items, include_all)
+    #     else:
+    #         for item in platform_data:
+    #             add_items_without_source(matching_items=matching_items, target_item=item, platform=platform, include_all=include_all)
+
+    # return generate_changed_items(matching_items, use_source, include_all)
+
+    if find_mismatches:
 
         use_source = True
-        non_matching_items = get_non_matching_items(data, source, target)
+        non_matching_items = find_non_matching_items(data, source, target)
 
     else:
 
         if source:
-            del platforms[platforms.index(source)]
+            del self.platforms[self.platforms.index(source)]
 
-        for platform in platforms:
+        for platform in self.platforms:
             if f"{platform}_data" in data:
                 if use_source:
 
@@ -227,8 +147,8 @@ def filter_items_data(
                                     "target_item": platform_item,
                                 }
 
-                                add_to_matching_items(
-                                    matching_items, params, every_product)
+                                add_matching_item(
+                                    matching_items, params, include_all)
                                 break
 
                 else:
@@ -236,7 +156,7 @@ def filter_items_data(
                     for platform_item in data[f"{platform}_data"]:
 
                         add_items_without_source(
-                            every_product, matching_items, platform, platform_item)
+                            include_all, matching_items, platform, platform_item)
 
     if non_matching_items:
 
@@ -244,9 +164,9 @@ def filter_items_data(
 
     if matching_items:
 
-        if not every_product:
+        if not include_all:
 
-            changed_values = generate_changed_values(matching_items, use_source)
+            changed_values = generate_changed_items(matching_items, use_source)
 
         else:
 
@@ -300,61 +220,37 @@ def get_product_variants(matching_items: Dict[Any, List[Dict[str, Any]]]) -> Dic
     
     return group_codes
 
-def get_non_matching_items(data, source, target):
-    """Helper function to get non matching items."""
+def find_non_matching_items(data: Dict[str, Any], source: str, target: str) -> List[Dict[str, Any]]:
+    """Finds items that don't match between source and target platforms."""
+    non_matching_items = []
+    target_data = {item["sku"]: item for item in data.get(f"{target}_data", [])}
 
-    non_matching_items = {}
+    for source_item in data.get(f"{source}_data", []):
+        if source_item["sku"] not in target_data:
+            non_matching_items.append({"platform": target, "data": source_item["data"]})
 
-    if f"{target}_data" in data:
+    return non_matching_items
 
-        target_skus = list(item["sku"] for item in data[f"{target}_data"])
-        for source_item in data[f"{source}_data"]:
+def generate_changed_items(matching_items: Dict[str, List[Dict[str, Any]]], use_source: bool) -> List[Dict[str, Any]]:
+    """Generates a list of items with quantity changes or includes all items if specified."""
+    changed_items = []
 
-            source_item_sku = source_item["sku"]
-            if (source_item_sku not in target_skus and source_item_sku not in non_matching_items):
+    for sku, items in matching_items.items():
+        if len(items) > 1:
+            reference_item = items[0] if use_source else min(items, key=lambda x: x["qty"])
+            for item in items:
+                if reference_item["qty"] != item["qty"]:
+                    changed_items.append({
+                        "id": item.get("id"),
+                        "sku": sku,
+                        "price": reference_item.get("price", 0),
+                        "qty": str(reference_item["qty"]),
+                        "platform": item["platform"]
+                    })
 
-                non_matching_items[source_item_sku] = [
-                    {"platform": target, "data": source_item["data"]}]
+    return changed_items
 
-        return non_matching_items
-
-    else:
-
-        return non_matching_items
-
-def generate_changed_values(matching_items, use_source):
-    """Helper function to generate changed values from matching_items."""
-
-    changed_values = []
-
-    for sku, products in matching_items.items():
-
-        if len(products) > 1:
-
-            if use_source:
-                source_val = products[0]
-            else:
-                source_val = min(products, key=lambda x: x["qty"])
-
-            for product in products:
-                if source_val["qty"] != product["qty"]:
-                    if source_val["qty"] == 0:
-
-                        pass
-
-                    changed_values.append(
-                        {
-                            "id": product["id"],
-                            "sku": sku,
-                            "price": source_val.get("price", 0),
-                            "qty": str(source_val["qty"]),
-                            "platform": product["platform"],
-                        }
-                    )
-
-    return changed_values
-
-def add_items_without_source(every_product, matching_items, platform, target_item):
+def add_items_without_source(include_all: bool, matching_items: Dict[str, List[Dict[str, Any]]], platform: str, target_item):
     """Helper function to add items without considering the source."""
 
     qty = (
@@ -366,7 +262,7 @@ def add_items_without_source(every_product, matching_items, platform, target_ite
     price = target_item.get("price", 0)
 
     if target_item["sku"] in matching_items:
-        if every_product:
+        if include_all:
             matching_items[target_item["sku"]].append(
                 {"platform": platform, "data": target_item["data"]}
             )
@@ -375,7 +271,7 @@ def add_items_without_source(every_product, matching_items, platform, target_ite
                 {"platform": platform, "id": item_id, "price": price, "qty": qty}
             )
     else:
-        if every_product:
+        if include_all:
             matching_items[target_item["sku"]] = [
                 {"platform": platform, "data": target_item["data"]}
             ]
@@ -384,23 +280,30 @@ def add_items_without_source(every_product, matching_items, platform, target_ite
                 {"platform": platform, "id": item_id, "price": price, "qty": qty}
             ]
 
-def add_to_matching_items(matching_items, params, every_product):
+def compare_with_source(source_data: List[Dict[str, Any]], platform_data: List[Dict[str, Any]], 
+                        platform: str, matching_items: Dict[str, List[Dict[str, Any]]], include_all: bool):
+    """Compares items between source and a target platform, updating matching_items."""
+    for source_item in source_data:
+        for target_item in platform_data:
+            if source_item["sku"] == target_item["sku"]:
+                add_matching_item(matching_items, source_item, target_item, platform, include_all)
+                break
+
+def add_matching_item(matching_items: Dict[str, List[Dict[str, Any]]], source_item: Dict[str, Any], 
+                      target_item: Dict[str, Any], platform: str, include_all: bool):
     """Helper function to add matching items to the matching_items dictionary."""
 
-    source_item = params["source_item"]
-    target_item = params["target_item"]
-    target = params["target_platform"]
-    source = params["source_platform"]
-
-    if every_product:
-        matching_items[source_item["sku"]] = [
-            {"platform": source, "data": source_item["data"]},
-            {"platform": target, "data": target_item["data"]}            
+    """Adds a source and target item pair to matching_items."""
+    sku = source_item["sku"]
+    if include_all:
+        matching_items[sku] = [
+            {"platform": source_item["platform"], "data": source_item["data"]},
+            {"platform": platform, "data": target_item["data"]}            
         ]
     else:
-        matching_items[source_item["sku"]] = [
+        matching_items[sku] = [
             {
-                "platform": target,
+                "platform": platform,
                 "id": target_item.get("id", None),
                 "price": target_item.get("price", 0),
                 "qty": target_item.get("qty", 0),
@@ -419,7 +322,16 @@ class App:
 
     def __init__(self) -> None:
 
-        self.platform_data_cache = {}        
+        self.platform_data_cache = {}     
+        self.platforms = [
+            self.N11,
+            self.HEPSIBURADA,
+            self.AMAZON,
+            self.PTTAVM,
+            self.PAZARAMA,
+            self.TRENDYOL,
+            self.WORDPRESS,
+        ]   
         self.platform_to_update_function = {
             'n11': n11Api.update_products,
             'hepsiburada': hpApi.update_listing,
@@ -493,8 +405,8 @@ class App:
                 logger.error(f"An error occurred while retrieving stock data: {e}")
                 return {}, []
 
-        self.include_all_products = include_all_products
-        return self.data_content, []
+        self.load_initial_data(include_all_products)
+        return self.platform_data_cache, []
     
     def get_date_range(date_option: str) -> Tuple[datetime, datetime]:
         """
@@ -603,6 +515,50 @@ class App:
     
         return filtered_data
 
+    def filter_items(
+        self,
+        data: Dict[str, Any],
+        source: str = "",
+        use_source: bool = False,
+        target: str = "",
+        include_all: bool = False,
+        find_mismatches: bool = False,
+        ) -> List[Dict[str, Any]]:
+        """
+        Filters and compares item data across platforms, returning items with quantity changes or mismatches.
+
+        Args:
+            data (Dict[str, Any]): Input data with items from various platforms.
+            source (str): Source platform for comparison.
+            use_source (bool): Whether to prioritize source platform data.
+            target (str): Specific target platform to compare against.
+            include_all (bool): Include all items, even if unchanged.
+            find_mismatches (bool): Return items that don't match across platforms.
+
+        Returns:
+            List[Dict[str, Any]]: List of items with quantity changes or mismatches.
+        """
+        if source:
+            del self.platforms[self.platforms.index(source)]
+
+        if find_mismatches:
+            return find_non_matching_items(data, source, target)
+
+        matching_items = {}
+
+        for platform in self.platforms:
+            platform_data = data.get(f"{platform}_data")
+            if not platform_data:
+                continue
+
+            if use_source:
+                compare_with_source(data[f"{source}_data"], platform_data, platform, matching_items, include_all)
+            else:
+                for item in platform_data:
+                    add_items_without_source(matching_items=matching_items, target_item=item, platform=platform, include_all=include_all)
+
+        return generate_changed_items(matching_items, use_source, include_all)
+    
     def process_products_by_sku(
                             self,
                             sku_updates: List[Dict[str, str]],
@@ -663,7 +619,7 @@ class App:
 
         try:
             # Retrieve data based on the options provided
-            data_lists, _ = self.get_data(every_product=all_data, source=source, targets=targets)
+            data_lists, _ = self.retrieve_stock_data(include_all_products=all_data, source_platform=source, target_platforms=targets)
 
             # Return early if no data is retrieved
             if not data_lists:
@@ -671,12 +627,12 @@ class App:
                 return {}
 
             # Process the retrieved data to filter relevant platform updates
-            platform_updates = filter_items_data(
+            platform_updates = self.filter_items(
                 data=data_lists,
                 source=source,
                 use_source=use_source,
                 target=targets,
-                every_product=all_data,
+                include_all=all_data,
             )
 
             # If source data should be used, convert timestamps to readable dates
@@ -803,7 +759,7 @@ class App:
 
             break
             
-    def create_products(SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA=False):
+    def create_products(self, SOURCE_PLATFORM, TARGET_PLATFORM, TARGET_OPTIONS, LOCAL_DATA=False):
 
         platform_to_function = {
         "n11": n11Api.add_products,
@@ -815,7 +771,7 @@ class App:
         "wordpress": create_wordpress_products,
     }
 
-        data_lists, _ = get_data(
+        data_lists, _ = self.retrieve_data(
         every_product=True,
         local=LOCAL_DATA,
         source=SOURCE_PLATFORM,
@@ -823,7 +779,7 @@ class App:
         match=True,
     )
 
-        filtered_data = filter_items_data(
+        filtered_data = self.filter_items(
         data=data_lists,
         every_product=True,
         no_match=True,

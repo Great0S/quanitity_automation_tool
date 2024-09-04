@@ -209,7 +209,7 @@ class ProductManagerApp(App[str]):
                 self.query_one(Log).write_line(
                     "No specific platform update selected.")
                 
-                self.exit(result={'update': {'source': None, 'target': None, 'options': None}})
+                self.exit(result={'update': {'source': None, 'target': None, 'options': None, 'user_input': None}})
 
         if event.radio_set.id == "specific_update_op_choice":
 
