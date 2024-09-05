@@ -208,19 +208,15 @@ class PazaramaAPIClient:
                 if response.status_code == 200:
                     return response_data
 
-            except requests.exceptions.HTTPError as e:
+            except requests.exceptions.RequestException as e:
                 if response.status_code == 429:  # Too many requests
                     logger.warning("Rate limit exceeded. Retrying after a delay...")
-                    time.sleep(1)
+                    time.sleep(3)
                 else:
                     logger.error(
                         f"Request failed with status {response.status_code} || Reason: {e}"
                     )
                     return None
-
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Request encountered an error: {str(e)}")
-                return None
 
     def request_processing(
         self, uri: str, payload: dict = None, params: dict = None, method: str = "GET"

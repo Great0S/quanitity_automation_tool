@@ -342,14 +342,22 @@ class App:
             'wordpress': update_wordpress_products,
         }
 
-    def load_initial_data(self, load_all: bool) -> None:
+    def load_initial_data(self, load_all: bool, platforms: list = None) -> None:
         """
         Load initial data in the background and cache it.
         
         Args:
             load_all (bool): Whether to load all products or partial data.
         """
-        self.platform_data_cache.update({
+
+        
+
+        if platforms:
+
+
+
+
+            data_content = {
                 "trendyol_data": get_trendyol_stock_data(load_all),
                 "n11_data": n11Api.get_products(load_all),
                 "hepsiburada_data": hpApi.get_listings(load_all),
@@ -357,7 +365,16 @@ class App:
                 "wordpress_data": get_wordpress_products(load_all),
                 "pttavm_data": getpttavm_procuctskdata(load_all),
                 "amazon_data": spapi_getlistings(load_all),
-            })
+            }
+
+            data = {}
+            for platform in platforms:
+
+                data[platform] = data_content[f"{platform}_data"]
+
+            return data
+        
+        self.platform_data_cache.update(data_content)
         
     def retrieve_stock_data(self,
                             include_all_products: bool = False,
@@ -388,25 +405,21 @@ class App:
 
             try:
                 # Retrieve data from source and target platforms
-                source_data, source_codes = self.retrieve_data(include_all_products, use_local_data, [source_platform])
+                source_data = self.retrieve_data(include_all_products, use_local_data, [source_platform])
 
-                target_data, target_codes = self.retrieve_data(include_all_products, use_local_data, targets) if target_platforms else ({}, [])
-
-                # Combine codes from source and targets, ensuring uniqueness
-                combined_product_codes = list(set(source_codes + target_codes))
+                target_data = self.retrieve_data(include_all_products, use_local_data, targets) if target_platforms else ({}, [])
 
                 # Include source platform data in target platforms if applicable
-                if source_data and f"{source_platform}_data" in source_data:
-                    target_data[f"{source_platform}_data"] = source_data[f"{source_platform}_data"]
+                target_data[f"{source_platform}_data"] = source_data[f"{source_platform}_data"]
 
-                return target_data, combined_product_codes
+                return target_data
 
             except Exception as e:
                 logger.error(f"An error occurred while retrieving stock data: {e}")
-                return {}, []
+                return {}
 
         self.load_initial_data(include_all_products)
-        return self.platform_data_cache, []
+        return self.platform_data_cache
     
     def get_date_range(date_option: str) -> Tuple[datetime, datetime]:
         """
@@ -454,7 +467,6 @@ class App:
         """
         # Initialize the result variables
         filtered_data = {}
-        sku_list = []
     
         # Load initial data based on the include_all_products flag
         self.load_initial_data(include_all_products)
@@ -470,11 +482,7 @@ class App:
             if platform_data:
                 filtered_data[platform_key] = platform_data
     
-                # Extract SKUs from the data and add to sku_list
-                skus = [item["sku"] for item in platform_data if "sku" in item]
-                sku_list.extend(skus)
-    
-        return filtered_data, sku_list
+        return filtered_data
 
     def filter_data_by_date_range(
         data: Dict[str, dict],
@@ -557,7 +565,7 @@ class App:
                 for item in platform_data:
                     add_items_without_source(matching_items=matching_items, target_item=item, platform=platform, include_all=include_all)
 
-        return generate_changed_items(matching_items, use_source, include_all)
+        return generate_changed_items(matching_items, use_source)
     
     def process_products_by_sku(
                             self,
@@ -667,9 +675,9 @@ class App:
         try:
             if isinstance(post_data, list):
                 for post in post_data:
-                    if f"{platform}_data" == post['platform']:
+                    if platform == post['platform']:
 
-                        func(post['data'])
+                        func(post)
             else:
                 if platform == post_data['platform']:
                     func(post_data)
@@ -771,18 +779,18 @@ class App:
         "wordpress": create_wordpress_products,
     }
 
-        data_lists, _ = self.retrieve_data(
-        every_product=True,
-        local=LOCAL_DATA,
-        source=SOURCE_PLATFORM,
-        targets=[TARGET_PLATFORM],
-        match=True,
+        data_lists, _ = self.retrieve_stock_data(
+        include_all_products=True,
+        use_local_data=LOCAL_DATA,
+        source_platform=SOURCE_PLATFORM,
+        target_platforms=[TARGET_PLATFORM],
+        match_data=True,
     )
 
         filtered_data = self.filter_items(
         data=data_lists,
-        every_product=True,
-        no_match=True,
+        include_all=True,
+        find_mismatches=True,
         source=SOURCE_PLATFORM,
         target=TARGET_PLATFORM,
     )

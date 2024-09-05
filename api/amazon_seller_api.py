@@ -1478,7 +1478,7 @@ class AmazonListingManager:
                 except Exception as e:
                     logger.error(f"Failed to process product {product_sku}: {e}", exc_info=True)
 
-    def update_listing(product: dict):
+    def update_listing(self, product: dict):
         """
         The function `spapi_updateListing` updates a product listing on Amazon Seller Central with a new
         quantity value.
