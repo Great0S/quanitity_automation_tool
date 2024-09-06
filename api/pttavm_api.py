@@ -103,7 +103,7 @@ def getpttavm_procuctskdata(everyproduct: bool = False, local: bool = False):
                 products.append({'id': product['a:Barkod'],
                                  'sku': product['a:UrunKodu'],
                                  'qty': int(product['a:Miktar']),
-                                 'price': float(product['a:KDVsiz'])})
+                                 'price': float(product['a:KDVli'])})
 
             else:
 

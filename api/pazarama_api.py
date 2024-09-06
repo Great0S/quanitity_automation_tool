@@ -257,9 +257,6 @@ class PazaramaAPIClient:
         end_time = time.time()
         elapsed_time = end_time - start_time
 
-        # Log the duration of the request
-        logger.info(f"Request to {uri} took {elapsed_time:.2f} seconds.")
-
         return response, elapsed_time
 
     def create_products(self, data):

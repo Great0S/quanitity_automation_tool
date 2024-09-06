@@ -342,40 +342,49 @@ class App:
             'wordpress': update_wordpress_products,
         }
 
-    def load_initial_data(self, load_all: bool, platforms: list = None) -> None:
+    def load_initial_data(self, load_all: bool, platforms: list[str] = None) -> dict:
         """
         Load initial data in the background and cache it.
-        
+
         Args:
             load_all (bool): Whether to load all products or partial data.
+            platforms (list[str], optional): List of platform names to load data from. 
+                                             Loads all platforms if None.
+
+        Returns:
+            dict: Loaded data from the specified platforms or all platforms if none are specified.
         """
 
-        
+        # Mapping of platform names to corresponding data retrieval functions
+        platform_functions = {
+            "trendyol": lambda: get_trendyol_stock_data(load_all),
+            "n11": lambda: n11Api.get_products(load_all),
+            "hepsiburada": lambda: hpApi.get_listings(load_all),
+            "pazarama": lambda: pazaramaApi.get_products(load_all),
+            "wordpress": lambda: get_wordpress_products(load_all),
+            "pttavm": lambda: getpttavm_procuctskdata(load_all),
+            "amazon": lambda: spapi_getlistings(load_all),
+        }
 
-        if platforms:
+        data = {}
 
+        # Load data for the specified platforms or all platforms if none specified
+        selected_platforms = platforms or platform_functions.keys()
 
+        for platform in selected_platforms:
+            try:
+                data[platform] = platform_functions[platform]()
+            except KeyError:
+                print(f"Platform '{platform}' not found.")
+            except Exception as e:
+                print(f"Error loading data for platform '{platform}': {e}")
 
+        # Cache loaded data if all platforms are being loaded
+        if platforms is None:
+            self.platform_data_cache.update(data)
 
-            data_content = {
-                "trendyol_data": get_trendyol_stock_data(load_all),
-                "n11_data": n11Api.get_products(load_all),
-                "hepsiburada_data": hpApi.get_listings(load_all),
-                "pazarama_data": pazaramaApi.get_products(load_all),
-                "wordpress_data": get_wordpress_products(load_all),
-                "pttavm_data": getpttavm_procuctskdata(load_all),
-                "amazon_data": spapi_getlistings(load_all),
-            }
-
-            data = {}
-            for platform in platforms:
-
-                data[platform] = data_content[f"{platform}_data"]
-
-            return data
-        
-        self.platform_data_cache.update(data_content)
-        
+        return data
+   
     def retrieve_stock_data(self,
                             include_all_products: bool = False,
                             use_local_data: bool = False,
@@ -588,25 +597,29 @@ class App:
         product_data = []
 
         for platform, products in data_content.items():
-            for product in products:  
-                product_sku = product.get("sku")
-
+            for sku_update in sku_updates:  
+                
                 # Check if the product SKU needs to be updated             
-                for sku_update in sku_updates:
-                    for sku, new_value in sku_update.items():
+                for product in products:
+                    product_sku = product.get("sku")
 
+                    for sku, new_value in sku_update.items():
                         if product_sku == sku:
 
                             if update_type == 'qty':
                                 product["qty"] = int(new_value)
-                                product_data.append({"platform": platform, "data": product})
+                                product["platform"] = platform
+                                product_data.append(product)
                             elif update_type == 'price':
                                 product["price"] = float(new_value)
-                                product_data.append({"platform": platform, "data": product})
+                                product["platform"] = platform
+                                product_data.append(product)
                             elif update_type == 'info':
-                                product_data.append({"platform": platform, "data": product})
+                                product["platform"] = platform
+                                product_data.append(product)
                             break
-                    break
+                    
+                    
 
         return product_data
 
@@ -627,7 +640,7 @@ class App:
 
         try:
             # Retrieve data based on the options provided
-            data_lists, _ = self.retrieve_stock_data(include_all_products=all_data, source_platform=source, target_platforms=targets)
+            data_lists = self.retrieve_stock_data(include_all_products=all_data, source_platform=source, target_platforms=targets)
 
             # Return early if no data is retrieved
             if not data_lists:

@@ -147,7 +147,12 @@ class ProductManagerApp(App[str]):
                 value_list = [value.strip() for value in self.sku_value_input.split(",")]
 
                 # Pair each SKU with its corresponding value using zip
-                self.sku_input = [{sku: value} for sku, value in zip(sku_list, value_list)]
+                if len(value_list) == 1:
+                    # Apply the single value to all SKUs
+                    self.sku_input = [{sku: value_list[0]} for sku in sku_list]
+                else:
+                    # Apply corresponding values to each SKU
+                    self.sku_input = [{sku: value} for sku, value in zip(sku_list, value_list)]
 
                 self.hide_containers(["specific_sku_op_container"])
                 self.show_container("specific_partial_op_choice_container")
