@@ -419,7 +419,7 @@ class App:
                 target_data = self.retrieve_data(include_all_products, use_local_data, targets) if target_platforms else ({}, [])
 
                 # Include source platform data in target platforms if applicable
-                target_data[f"{source_platform}_data"] = source_data[f"{source_platform}_data"]
+                target_data[source_platform] = source_data[source_platform]
 
                 return target_data
 
@@ -485,7 +485,7 @@ class App:
     
         # Retrieve and process data for each specified platform
         for platform in platforms:
-            platform_key = f"{platform.lower()}_data"
+            platform_key = platform.lower()
             platform_data = cached_data.get(platform_key)
             
             if platform_data:
@@ -564,12 +564,12 @@ class App:
         matching_items = {}
 
         for platform in self.platforms:
-            platform_data = data.get(f"{platform}_data")
+            platform_data = data.get(platform)
             if not platform_data:
                 continue
 
             if use_source:
-                compare_with_source(data[f"{source}_data"], platform_data, platform, matching_items, include_all)
+                compare_with_source(data[source], platform_data, platform, matching_items, include_all)
             else:
                 for item in platform_data:
                     add_items_without_source(matching_items=matching_items, target_item=item, platform=platform, include_all=include_all)

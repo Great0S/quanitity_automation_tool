@@ -49,7 +49,7 @@ class N11API:
             strict=False, xml_huge_tree=True, xsd_ignore_sequence_order=True
         )
         try:
-
+            ds = requests.get(wsdl_url)
             client = Client(wsdl=wsdl_url, settings=settings)
             return client
 
@@ -571,7 +571,11 @@ class N11API:
 
             return self.__fetch_local_data__()
 
-        client = self.__create_client__()
+        if self.client:
+            client = self.client
+        else:
+            client = self.__create_client__()
+            
         if client is None:
             return []
 
