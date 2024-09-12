@@ -1,4 +1,6 @@
+import base64
 import logging
+import os
 import re
 import requests
 import json
@@ -29,6 +31,15 @@ class PazaramaAPIClient:
         self.access_token = None
         self.token_expiry = None
 
+        # Access environment variables securely
+        pazaram_key = os.getenv('PAZARAMAKEY')
+        pazaram_secret = os.getenv('PAZARAMASECRET')
+
+        user_pass = f"{pazaram_key}:{pazaram_secret}"
+        user_pass_bytes = user_pass.encode('utf-8')
+        base64_bytes = base64.b64encode(user_pass_bytes)
+        self.base64_hash = base64_bytes.decode('utf-8')
+
     def get_access_token(self):
         """
         Retrieves a new access token from the Pazarama API.
@@ -45,7 +56,7 @@ class PazaramaAPIClient:
         payload = "grant_type=client_credentials&scope=merchantgatewayapi.fullaccess"
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
-            "Authorization": "Basic OTQ5NWRlYjQzYmQ4NDQ4OTg0NTRhMzI5NTIzYzNhN2E6NWJmM2I5MmRjNGQyNGM3ZmE2NDY3MWEzMjhlZWVjYTE=",
+            "Authorization": f"Basic {str(self.base64_hash)}",
         }
 
         try:
