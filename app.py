@@ -4,12 +4,10 @@
  functionalities provided by these APIs to retrieve stock data, update listings, and perform other
  operations related to each platform."""
 
-from enum import Enum
 import logging
 import re
 import os
 from datetime import datetime, timezone
-import threading
 from dateutil.relativedelta import relativedelta
 from tui import ProductManagerApp
 from rich.logging import RichHandler

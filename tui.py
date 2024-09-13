@@ -1,5 +1,5 @@
 from textual.app import App, ComposeResult
-from textual.containers import Vertical, Horizontal, VerticalScroll
+from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Label, RadioSet, RadioButton, Input, Log, Button
 
 
