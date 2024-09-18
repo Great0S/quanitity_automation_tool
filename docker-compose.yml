@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  api_gateway:
+    build: ./api_gateway
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - n11_service
+      - hepsiburada_service
+      - trendyol_service
+      - pazarama_service
+      - pttavm_service
+      - wordpress_service
+      - amazon_service
+
+  n11_service:
+    build: ./services/n11_service
+    env_file:
+      - .env
+
+  hepsiburada_service:
+    build: ./services/hepsiburada_service
+    env_file:
+      - .env
+
+  amazon_service:
+    build: ./services/amazon_service
+    env_file:
+      - .env
+
+  # Add other services as needed
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
