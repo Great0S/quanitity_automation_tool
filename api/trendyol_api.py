@@ -2,14 +2,13 @@
  importing necessary modules in Python for working with JSON data, regular expressions, time-related
  functions, operating system functionalities, and making HTTP requests, respectively."""
 import json
-import logging
 import re
 import time
 import os
 import requests
+from app.config import logger
 
 
-logger = logging.getLogger(__name__)
 auth_hash = os.environ.get('TRENDYOLAUTHHASH')
 store_id = os.environ.get('TRENDYOLSTOREID')
 headers = {
@@ -45,15 +44,15 @@ def request_data(url_addons, request_type, payload_content):
         continue
 
 
-def prepare_data(data):
+def prepare_data(product_data):
     """
-    The function prepares the data by decoding the response from a request.
+    The function prepares the product_data by decoding the response from a request.
 
-    :param request_data: The parameter `request_data` is the data that is received from a request made
+    :param request_data: The parameter `request_data` is the product_data that is received from a request made
     to an API or a server. It could be in the form of a JSON string or any other format
-    :return: the decoded data, which is a Python object obtained by parsing the response text as JSON.
+    :return: the decoded product_data, which is a Python object obtained by parsing the response text as JSON.
     """
-    response = data
+    response = product_data
 
     decoded_data = json.loads(response.text)
 
@@ -62,7 +61,7 @@ def prepare_data(data):
 
 def get_trendyol_stock_data(every_product: bool = False, local: bool = False, Filters=''):
     """
-    The function `get_data` retrieves products data from multiple pages and appends it to a list.
+    The function `get_data` retrieves products product_data from multiple pages and appends it to a list.
 
     """
     page = 0

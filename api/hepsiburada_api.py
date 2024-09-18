@@ -9,6 +9,7 @@ import time
 import json
 import requests
 from circuitbreaker import CircuitBreaker
+from app.config import logger
 
 products = []
 
@@ -41,7 +42,7 @@ class Hb_API:
         self.mpop_url = "https://mpop.hepsiburada.com/"
         self.listing_external_url = f"https://listing-external.hepsiburada.com/Listings/merchantid/{self.store_id}"
 
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger
 
     def prepare_product_data(self, items: dict, source: str = "", op: str = "") -> list:
         """
@@ -424,7 +425,7 @@ class Hb_API:
 
             return []
 
-    def update_listing(self, products: dict, options=None, source="") -> None:
+    def update_listing(self, product_data: dict, options=None, source="") -> None:
         """
         Updates stock information for a product on HepsiBurada.
 
@@ -440,7 +441,7 @@ class Hb_API:
             if options != "full":
 
                 update_data = self.prepare_product_data(
-                    items=products, op='update', source=source
+                    items=product_data, op='update', source=source
                 )
 
                 listing_details = {}
@@ -553,9 +554,9 @@ class Hb_API:
             update_payload = json.dumps(
                 [
                     {
-                        "hepsiburadaSku": products["id"],
-                        "merchantSku": products["sku"],
-                        "availableStock": products["qty"],
+                        "hepsiburadaSku": product_data["id"],
+                        "merchantSku": product_data["sku"],
+                        "availableStock": product_data["qty"],
                     }
                 ]
             )
@@ -585,14 +586,14 @@ class Hb_API:
 
                             self.logger.info(
                                 f"""Product with code: {
-                                    products["sku"]}, New value: {products["qty"]}"""
+                                    product_data["sku"]}, New value: {product_data["qty"]}"""
                             )
                             break
 
                         if check_status["errors"]:
 
                             self.logger.error(
-                                f"""Product with code: {products["sku"]} failed to update || Reason: {
+                                f"""Product with code: {product_data["sku"]} failed to update || Reason: {
                                     check_status["errors"]}"""
                             )
                             break
@@ -601,7 +602,7 @@ class Hb_API:
 
                         continue
 
-    def create_listing(self, data) -> None:
+    def create_listing(self, product_data) -> None:
         """
         Sends a POST request to the HepsiBurada API to create a new listing.
 
@@ -610,9 +611,9 @@ class Hb_API:
             ready_data (list): A list of dictionaries containing product data.
         """
 
-        if data:
+        if product_data:
 
-            ready_data = self.prepare_product_data(items=data, op='create')
+            ready_data = self.prepare_product_data(items=product_data, op='create')
 
             with open("integrator.json", "w", encoding="utf-8") as json_file:
 

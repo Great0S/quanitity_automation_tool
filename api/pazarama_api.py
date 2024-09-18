@@ -1,12 +1,11 @@
 import base64
-import logging
 import os
 import re
 import requests
 import json
 import time
+from app.config import logger
 
-logger = logging.getLogger(__name__)
 
 
 class PazaramaAPIClient:
@@ -270,7 +269,7 @@ class PazaramaAPIClient:
 
         return response, elapsed_time
 
-    def create_products(self, data):
+    def create_products(self, product_data):
         """
         The function `pazarama_updateRequest` updates the stock count of a product on Pazarama platform
         based on the provided product information.
@@ -330,7 +329,7 @@ class PazaramaAPIClient:
             },
         }
 
-        for _, data_items in data.items():
+        for _, data_items in product_data.items():
             for product in data_items:
                 product_data = product["data"]
                 product_sku = product_data["stockCode"]
@@ -437,7 +436,7 @@ class PazaramaAPIClient:
 
         return products_items
 
-    def update_product(self, product: dict):
+    def update_product(self, product_data: dict):
         """
         The function `pazarama_updateRequest` updates the stock count of a product on Pazarama platform
         based on the provided product information.
@@ -446,9 +445,9 @@ class PazaramaAPIClient:
         to be a dictionary containing the following keys:
         """
 
-        product_id = product["id"]
-        sku = product["sku"]
-        qty = product["qty"]
+        product_id = product_data["id"]
+        sku = product_data["sku"]
+        qty = product_data["qty"]
 
         update_payload = {"items": [{"code": product_id, "stockCount": int(qty)}]}
 
@@ -461,7 +460,7 @@ class PazaramaAPIClient:
             if update_request["success"] == True:
 
                 logger.info(
-                    f"""Product with code: {product["sku"]}, New value: {product["qty"]}, Elapsed time: {elapsed_time:.2f} seconds."""
+                    f"""Product with code: {product_data["sku"]}, New value: {product_data["qty"]}, Elapsed time: {elapsed_time:.2f} seconds."""
                 )
 
             else:

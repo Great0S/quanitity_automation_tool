@@ -4,7 +4,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from glob import glob
-import logging
 import textwrap
 from urllib import parse
 import json
@@ -22,9 +21,10 @@ from sp_api.api import (
     CatalogItemsVersion,
     ReportsV2,
 )
-from sp_api.base import SellingApiException
 from sp_api.base.reportTypes import ReportType
-from datetime import datetime, timedelta
+from datetime import datetime
+from app.config import logger
+
 
 # DATA KIOSK API
 client = DataKiosk()
@@ -42,7 +42,7 @@ credentials = {
 }
 
 session = requests.session()
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 
 def get_access_token():
@@ -1458,7 +1458,7 @@ class AmazonListingManager:
         else:
             logger.error(f"New product with code: {product_sku} creation has failed || Reason: {listing_add_request}")
 
-    def add_listings(self, data):
+    def add_listings(self, product_data):
         """
         Adds product listings to Amazon.
 
@@ -1468,7 +1468,7 @@ class AmazonListingManager:
         Returns:
             None
         """
-        for _, data_items in data.items():
+        for _, data_items in product_data.items():
             for product in data_items:
                 product_data = product["data"]
                 product_sku = product_data['stockCode']
@@ -1478,7 +1478,7 @@ class AmazonListingManager:
                 except Exception as e:
                     logger.error(f"Failed to process product {product_sku}: {e}", exc_info=True)
 
-    def update_listing(self, product: dict):
+    def update_listing(self, product_data: dict):
         """
         The function `spapi_updateListing` updates a product listing on Amazon Seller Central with a new
         quantity value.
@@ -1487,8 +1487,8 @@ class AmazonListingManager:
         Seller Central using the Selling Partner API
         """
 
-        sku = product["sku"]    
-        qty = product["qty"]
+        sku = product_data["sku"]    
+        qty = product_data["qty"]
         params = {"marketplaceIds": MarketPlaceID, "issueLocale": "en_US"}
 
         data_payload = json.dumps(
@@ -1521,13 +1521,13 @@ class AmazonListingManager:
 
             logger.info(
                 f"""Product with code: {
-                product["sku"]}, New value: {product["qty"]}"""
+                product_data["sku"]}, New value: {product_data["qty"]}"""
             )
 
         else:
 
             logger.error(
-                f"""Product with code: {product["sku"]} failed
+                f"""Product with code: {product_data["sku"]} failed
                   to update || Reason: {listing_update_request}"""
             )
 

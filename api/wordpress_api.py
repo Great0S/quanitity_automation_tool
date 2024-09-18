@@ -1,11 +1,9 @@
 import json
-import logging
 import os
 import re
 from woocommerce import API
+from app.config import logger
 
-
-logger = logging.getLogger(__name__)
 
 wcapi = API(
     url="https://www.emanzemin.com",
@@ -79,13 +77,13 @@ def get_wordpress_products(everyproduct: bool = False, local: bool = False):
     return filtered_products
 
 
-def update_wordpress_products(data: dict):
+def update_wordpress_products(product_data: dict):
 
     stock_status = ''
 
-    if isinstance(data, dict):
+    if isinstance(product_data, dict):
 
-        if int(data['qty']) > 0:
+        if int(product_data['qty']) > 0:
 
             stock_status = 'instock'
 
@@ -93,32 +91,32 @@ def update_wordpress_products(data: dict):
 
             stock_status = 'outofstock'
 
-        update_request = wcapi.put(f"products/{data['id']}",
-                                   {'stock_quantity': data['qty'],
+        update_request = wcapi.put(f"products/{product_data['id']}",
+                                   {'stock_quantity': product_data['qty'],
                                     'stock_status': stock_status}).json()
 
-        if update_request['stock_quantity'] == int(data['qty']):
+        if update_request['stock_quantity'] == int(product_data['qty']):
 
             logger.info(f"""Product success, sku: {
-                data['sku']}, New stock: {
-                data['qty']}""")
+                product_data['sku']}, New stock: {
+                product_data['qty']}""")
 
         else:
 
             logger.error(f"""Product update failed, sku: {
-                data['sku']}, New stock: {
-                    data['qty']}""")
+                product_data['sku']}, New stock: {
+                    product_data['qty']}""")
 
 
-def create_wordpress_products(data):
+def create_wordpress_products(product_data):
 
-    if isinstance(data, dict):
+    if isinstance(product_data, dict):
 
         categories = get_products_categories()
 
-        for item in data:
+        for item in product_data:
 
-            item_data = data[item][0]['data']
+            item_data = product_data[item][0]['data']
 
             category = ''
 

@@ -1,14 +1,14 @@
 """ The lines `import csv`, `import os`, `import requests`, and `import xmltodict` are importing
  necessary Python libraries/modules for the script to use."""
 import csv
-import logging
 import os
 import re
 import time
 import requests
 import xmltodict
+from app.config import logger
 
-logger = logging.getLogger(__name__)
+
 username = os.environ.get('PTTAVMUSERNAME')
 password = os.environ.get('PTTAVMPASSWORD')
 TedarikciId = os.environ.get('PTTAVMTEDARIKCIID')
@@ -117,17 +117,17 @@ def getpttavm_procuctskdata(everyproduct: bool = False, local: bool = False):
     return None
 
 
-def pttavm_updatedata(product: dict):
+def pttavm_updatedata(product_data: dict):
     """
     The function `pttavm_updateData` updates product data 
     on a platform called PTTAVM by sending a
     request with the provided product information.
     """
 
-    sku = product['sku']
-    item_id = product['id']
-    qty = product['qty']
-    price = product['price']
+    sku = product_data['sku']
+    item_id = product_data['id']
+    qty = product_data['qty']
+    price = product_data['price']
     # price_kdvsiz = product['price'] - product['price'] * 0.1
 
     update_payload = f"""
