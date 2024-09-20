@@ -17,25 +17,25 @@ Base = declarative_base()
 class Product(Base):
     __tablename__ = "products"
 
-    id = Column(Integer, primary_key=True)
-    barcode = Column(String, unique=True, nullable=False)
-    title = Column(String, nullable=False)
-    product_main_id = Column(String, nullable=False)
-    brand_id = Column(Integer, nullable=False)
-    category_id = Column(Integer, nullable=False)
-    category_name = Column(String, nullable=False)
-    quantity = Column(Integer, nullable=False)
-    stock_code = Column(String, nullable=False)
-    dimensional_weight = Column(Float, nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
+    barcode = Column(String, unique=True, index=True)
+    title = Column(String)
+    product_main_id = Column(String)
+    brand_id = Column(Integer)
+    category_id = Column(Integer)
+    category_name = Column(String)
+    quantity = Column(Integer)
+    stock_code = Column(String)
+    dimensional_weight = Column(Float)
     description = Column(String)
-    brand = Column(String, nullable=False)
-    list_price = Column(DECIMAL(10, 2), nullable=False)
-    sale_price = Column(DECIMAL(10, 2), nullable=False)
-    vat_rate = Column(Integer, nullable=False)
+    brand = Column(String)
+    list_price = Column(Float)
+    sale_price = Column(Float)
+    vat_rate = Column(Integer)
     has_active_campaign = Column(Boolean, default=False)
     has_html_content = Column(Boolean, default=False)
-    created_date = Column(DateTime, nullable=False)
-    last_update_date = Column(DateTime, nullable=False)
+    created_date = Column(DateTime)
+    last_update_date = Column(DateTime)
     blacklisted = Column(Boolean, default=False)
 
     # Relationships
@@ -58,8 +58,8 @@ class Product(Base):
 class Image(Base):
     __tablename__ = "images"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    url = Column(String, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    url = Column(String)
     product_id = Column(Integer, ForeignKey("products.id"))
 
     product = relationship("Product", back_populates="images")
@@ -68,10 +68,10 @@ class Image(Base):
 class Attribute(Base):
     __tablename__ = "attributes"
 
-    id = Column(Integer, primary_key=True)
-    attribute_id = Column(Integer, nullable=False)
-    attribute_value = Column(String, nullable=True)
-    attribute_name = Column(String, nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
+    attribute_id = Column(Integer)
+    attribute_value = Column(String)
+    attribute_name = Column(String)
     product_id = Column(Integer, ForeignKey("products.id"))
 
     product = relationship("Product", back_populates="attributes")

@@ -1,31 +1,27 @@
 # Product Models
-from decimal import Decimal
-from typing import List, Optional
+from datetime import datetime
+from typing import List, Optional, Union
 
 from pydantic import BaseModel, Field, HttpUrl
 
 
-class ImageScheme(BaseModel):
+class ImageSchema(BaseModel):
     url: HttpUrl
 
 
-class AttributeScheme(BaseModel):
-    attribute_id: int = Field(..., description="The unique identifier for the attribute")
-    attribute_value: Optional[int] = Field(None, description="The value of the attribute")
-    attribute_name: Optional[str] = Field(None, description="Name of the attribute")
+class AttributeSchema(BaseModel):
+    attribute_id: int = Field(
+        ..., description="The unique identifier for the attribute")
+    attribute_value: Optional[int] = Field(
+        None, description="The value of the attribute")
+    attribute_name: Optional[str] = Field(None,
+                                          description="Name of the attribute")
 
     class Config:
         from_attributes = True
-        json_schema_extra = {
-            "example": {
-                "attribute_id": 1,
-                "attribute_value": 100,
-                "attribute_name": "Custom Value"
-            }
-        }
 
 
-class ProductScheme(BaseModel):
+class ProductBase(BaseModel):
     barcode: str
     title: str
     product_main_id: str
@@ -35,58 +31,46 @@ class ProductScheme(BaseModel):
     quantity: int
     stock_code: str
     dimensional_weight: float
-    description: str
+    description: Optional[str]
     brand: str
-    list_price: Decimal
-    sale_price: Decimal
-    vat_rate: int
-    has_active_campaign: bool
-    has_html_content: bool
-    created_date: int
-    last_update_date: int
-    blacklisted: bool
-    images: List[ImageScheme]
-    attributes: List[AttributeScheme]
+    list_price: float
+    sale_price: float
+    vat_rate: float
 
     class Config:
         from_attributes = True
 
     def __str__(self):
-        return (
-            f"Product: {self.title}\n"
-            f"Barcode: {self.barcode}\n"
-            f"Main ID: {self.product_main_id}\n"
-            f"Price: {self.sale_price} {self.currency_type}\n"
-            f"Quantity: {self.quantity}\n"
-            f"Stock Code: {self.stock_code}\n"
-            f"Delivery: {self.delivery_option}\n"
-            f"Images: {len(self.images)}\n"
-            f"Attributes: {len(self.attributes)}"
-        )
+        return (f"Product: {self.title}\n"
+                f"Barcode: {self.barcode}\n"
+                f"Main ID: {self.product_main_id}\n"
+                f"Price: {self.sale_price} {self.currency_type}\n"
+                f"Quantity: {self.quantity}\n"
+                f"Stock Code: {self.stock_code}\n")
 
 
-class ProductUpdate(BaseModel):
-    barcode: str
+class ProductSchema(ProductBase):
+    has_active_campaign: Optional[bool] = False
+    has_html_content: Optional[bool] = False
+    blacklisted: Optional[bool] = False
+    images: Optional[List[ImageSchema]]
+    attributes: Optional[List[AttributeSchema]]
+
+
+class ProductUpdateSchema(BaseModel):
     quantity: int
-    sale_price: Optional[Decimal] = Field(..., decimal_places=2)
-    list_price: Optional[Decimal] = Field(..., decimal_places=2)
-    title: Optional[str] = None
-    product_main_id: Optional[str] = None
-    brand_id: Optional[int] = None
-    category_id: Optional[int] = None
-    category_name: Optional[str] = None
-    stock_code: Optional[str] = None
-    dimensional_weight: Optional[float] = None
-    description: Optional[str] = None
-    brand: Optional[str] = None
-    vat_rate: Optional[int] = None
-    blacklisted: Optional[bool] = None
-    has_active_campaign: Optional[bool] = None
-    has_html_content: Optional[bool] = None
-    created_date: Optional[int] = None
-    last_update_date: Optional[int] = None
-    images: Optional[List[ImageScheme]] = None
-    attributes: Optional[List[AttributeScheme]] = None
+    sale_price: float
+    list_price: float
+    title: Optional[str]
+    product_main_id: Optional[str]
+    brand_id: Optional[int]
+    category_id: Optional[int]
+    stock_code: Optional[str]
+    dimensional_weight: Optional[float]
+    description: Optional[str]
+    vat_rate: Optional[float]
+    images: Optional[List[ImageSchema]]
+    attributes: Optional[List[AttributeSchema]]
 
     class Config:
         from_attributes = True
@@ -99,24 +83,35 @@ class ProductUpdate(BaseModel):
                      f"List Price: {self.list_price}")
 
         if self.title:  # Check if it's a full update
-            additional_info = (f"\nTitle: {self.title}\n"
-                               f"Main ID: {self.product_main_id}\n"
-                               f"Stock Code: {self.stock_code}\n"
-                               f"Images: {len(self.images) if self.images else 0}\n"
-                               f"Attributes: {len(self.attributes) if self.attributes else 0}")
+            additional_info = (
+                f"\nTitle: {self.title}\n"
+                f"Main ID: {self.product_main_id}\n"
+                f"Stock Code: {self.stock_code}\n"
+                f"Images: {len(self.images) if self.images else 0}\n"
+                f"Attributes: {len(self.attributes) if self.attributes else 0}"
+            )
             return base_info + additional_info
-        
+
         return base_info
 
 
+class ProductStockPriceUpdate(BaseModel):
+    quantity: int
+    sale_price: float
+    list_price: float
+
+
+class ProductFullUpdate(ProductBase):
+    pass
+
+
 class ProductUpdateBatch(BaseModel):
-    items: List[ProductUpdate]
-
-    def __str__(self):
-        return f"Product Update Batch: {len(self.items)} items"
+    ids: List[str]  # List of barcodes or product_main_ids
+    data: Union[ProductStockPriceUpdate, ProductFullUpdate]
 
 
-class ProductDeleteScheme:
+class ProductDeleteSchema:
+
     def __init__(self, items):
         self.items = items
 
@@ -134,7 +129,17 @@ class ProductDeleteScheme:
         return cls(data.get("items", []))
 
 
+class ProductInDB(ProductBase):
+    id: int
+    created_date: datetime
+    last_update_date: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class ProductGet:
+
     def __init__(self, code: str):
         self.code = code
         self.approved: Optional[bool] = None
