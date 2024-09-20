@@ -1,10 +1,10 @@
+import os
 from datetime import datetime
+from contextlib import contextmanager
 from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from contextlib import contextmanager
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
-import os
 
 from services.trendyol_service.models import Attribute, Base, Image, Product
 from services.trendyol_service.scheme import ProductScheme, ProductUpdate
@@ -35,7 +35,7 @@ def get_db():
     try:
         yield db
         db.commit()
-    except:
+    except Exception:
         db.rollback()
         raise
     finally:
@@ -49,18 +49,20 @@ def create_db_product(product: ProductScheme) -> Product:
         try:
             # Check if the product already exists
             existing_product = (
-                db.query(Product).filter(Product.barcode == product["barcode"]).first()
+                db.query(Product).filter(
+                    Product.barcode == product["barcode"]).first()
             )
 
             if existing_product:
                 logger.info(
-                    f"Product with barcode {product['barcode']} already exists. Skipping."
-                )
+                    "Product with barcode %s already exists. Skipping.", product['barcode'])
                 return existing_product
 
             # Convert timestamp to datetime
-            created_date = datetime.fromtimestamp(product["createDateTime"] / 1000)
-            last_update_date = datetime.fromtimestamp(product["lastUpdateDate"] / 1000)
+            created_date = datetime.fromtimestamp(
+                product["createDateTime"] / 1000)
+            last_update_date = datetime.fromtimestamp(
+                product["lastUpdateDate"] / 1000)
 
             # Create the product first
             db_product = Product(
@@ -108,13 +110,14 @@ def create_db_product(product: ProductScheme) -> Product:
 
         except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"Error creating product: {str(e)}")
+            logger.error("Error creating product: %s", str(e))
             raise
 
 
-def get_item(db, model, identifier):
+def get_item(model, identifier):
     """
-    Helper function to get an item from the database by code or barcode and return as JSON.
+    Helper function to get an item from the database by code or
+    barcode and return as JSON.
 
     :param db: Database session
     :param model: The model class to query
@@ -123,7 +126,8 @@ def get_item(db, model, identifier):
     """
     with get_db() as db:
         try:
-            item = db.query(model).filter(model.stock_code == identifier).first()
+            item = db.query(model).filter(
+                model.stock_code == identifier).first()
 
             if item:
                 # Convert the item to a dictionary
@@ -140,28 +144,28 @@ def get_item(db, model, identifier):
 
         except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"Error querying product: {str(e)}")
+            logger.error("Error querying product: %s", str(e))
             return JSONResponse(
                 content={"error": "Database error occurred"}, status_code=500
             )
 
 
-def update_item(product_update: ProductUpdate):
+def update_item(product_id, product_update: ProductUpdate):
     """Update a product in the database based on ProductUpdate object."""
     # Query the database for the product with the matching barcode
     with get_db() as db:
         try:
             db_product = (
                 db.query(Product)
-                .filter(Product.barcode == product_update.barcode)
+                .filter(Product.barcode == product_id)
                 .first()
             )
 
             if db_product:
                 # Update required fields
-                db_product.quantity = product_update.quantity
-                db_product.sale_price = product_update.sale_price
-                db_product.list_price = product_update.list_price
+                db_product.quantity = product_update['quantity']
+                db_product.sale_price = product_update['sale_price']
+                db_product.list_price = product_update['list_price']
 
                 # Update optional fields if they are provided
                 optional_fields = [
@@ -180,44 +184,39 @@ def update_item(product_update: ProductUpdate):
                 ]
 
                 for field in optional_fields:
-                    value = getattr(product_update, field)
+
+                    value = getattr(product_update, field, None)
                     if value is not None:
                         setattr(db_product, field, value)
 
                 # Handle nested objects
-                if product_update.delivery_option:
-                    db_product.delivery_duration = (
-                        product_update.delivery_option.delivery_duration
-                    )
-                    db_product.fast_delivery_type = (
-                        product_update.delivery_option.fast_delivery_type
-                    )
-
-                if product_update.images:
+                if "images" in product_update and product_update['images']:
                     # Assuming you have a separate table for images
-                    db_product.images = [
-                        Image(url=img.url) for img in product_update.images
-                    ]
+                    for img in product_update["images"]:
+                        db.add(Image(url=img.get("url"),
+                               product_id=db_product.id))
 
-                if product_update.attributes:
-                    # Assuming you have a separate table for attributes
-                    db_product.attributes = [
-                        Attribute(
-                            attribute_id=attr.attribute_id,
-                            attribute_value_id=attr.attribute_value_id,
-                            custom_attribute_value=attr.custom_attribute_value,
+                # Create and add attributes
+                if "attributes" in product_update and product_update["attributes"]:
+                    for attr in product_update["attributes"]:
+                        db.add(
+                            Attribute(
+                                attribute_id=attr.get("attributeId"),
+                                attribute_name=attr.get("attributeName"),
+                                attribute_value=attr.get("attributeValue"),
+                                product_id=db_product.id,
+                            )
                         )
-                        for attr in product_update.attributes
-                    ]
-
+                # Commit the changes to the database
                 db.commit()
                 db.refresh(db_product)
                 return db_product
-            else:
-                return None
+
+            return None
+
         except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"Error creating product: {str(e)}")
+            logger.error("Error creating product: %s", str(e))
             raise
 
 

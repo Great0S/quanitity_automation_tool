@@ -11,8 +11,8 @@ class ImageScheme(BaseModel):
 
 class AttributeScheme(BaseModel):
     attribute_id: int = Field(..., description="The unique identifier for the attribute")
-    attribute_value: Optional[int] = Field(None, description="The value of the attribute, if applicable")
-    attribute_name: Optional[str] = Field(None, description="Name of the attribute, if applicable")
+    attribute_value: Optional[int] = Field(None, description="The value of the attribute")
+    attribute_name: Optional[str] = Field(None, description="Name of the attribute")
 
     class Config:
         from_attributes = True
@@ -68,8 +68,8 @@ class ProductScheme(BaseModel):
 class ProductUpdate(BaseModel):
     barcode: str
     quantity: int
-    sale_price: Decimal = Field(..., decimal_places=2)
-    list_price: Decimal = Field(..., decimal_places=2)
+    sale_price: Optional[Decimal] = Field(..., decimal_places=2)
+    list_price: Optional[Decimal] = Field(..., decimal_places=2)
     title: Optional[str] = None
     product_main_id: Optional[str] = None
     brand_id: Optional[int] = None
@@ -105,8 +105,8 @@ class ProductUpdate(BaseModel):
                                f"Images: {len(self.images) if self.images else 0}\n"
                                f"Attributes: {len(self.attributes) if self.attributes else 0}")
             return base_info + additional_info
-        else:
-            return base_info
+        
+        return base_info
 
 
 class ProductUpdateBatch(BaseModel):
