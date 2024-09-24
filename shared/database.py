@@ -1,237 +1,232 @@
 import os
 from datetime import datetime
-from contextlib import contextmanager
-from fastapi.responses import JSONResponse
-from sqlalchemy import create_engine
+from contextlib import asynccontextmanager
+from typing import List, Optional, Type, TypeVar
+from pydantic import BaseModel
+
+from sqlalchemy import delete
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.future import select
+from box import Box
 
 from services.trendyol_service.models import Attribute, Base, Image, Product
 from services.trendyol_service.schemas import ProductSchema, ProductUpdateSchema
 from .logging import logger
 
+T = TypeVar('T', bound=BaseModel)
 
 class DatabaseManager:
+    _instance = None
 
-    def __init__(self):
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(DatabaseManager, cls).__new__(cls)
+            cls._instance._initialize()
+        return cls._instance
+
+    def _initialize(self):
         self.db_user = os.getenv("DB_USER")
         self.db_password = os.getenv("DB_PASSWORD")
         self.db_host = os.getenv("DB_HOST", "localhost")
         self.db_port = os.getenv("DB_PORT", "5432")
         self.db_name = os.getenv("DB_NAME")
 
-        self.database_url = f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
-        self.engine = create_engine(self.database_url,
-                                    pool_size=20,
-                                    max_overflow=40,
-                                    pool_timeout=60)
-        self.session_local = sessionmaker(autocommit=False,
-                                          autoflush=False,
-                                          bind=self.engine)
+        self.database_url = f"postgresql+asyncpg://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+        self.engine = create_async_engine(
+            self.database_url,
+            pool_size=20,
+            max_overflow=40,
+            pool_timeout=60
+        )
+        self.async_session = sessionmaker(
+            self.engine, class_=AsyncSession, expire_on_commit=False
+        )
 
-        # Base.metadata.drop_all(bind=self.engine)
-        Base.metadata.create_all(bind=self.engine)
+    async def init_db(self):
+        async with self.engine.begin() as conn:
+            # await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
 
-    @contextmanager
-    def get_db(self):
-        """Provide a transactional scope around a series of operations."""
-        db = self.session_local()
-        try:
-            yield db
-            db.commit()
-        except Exception:
-            db.rollback()
-            raise
-        finally:
-            db.close()
-
-    def create_db_product(self, product: ProductSchema) -> Product:
-        """Function to create a new product in the database."""
-        with self.get_db() as db:
+    @asynccontextmanager
+    async def get_db(self):
+        async with self.async_session() as session:
             try:
-                # Check if the product already exists
-                existing_product = db.query(Product).filter(
-                    Product.barcode == product["barcode"]).first()
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
 
+    async def create_product(self, product: ProductSchema) -> Product:
+        """Function to create a new product in the database."""
+        async with self.get_db() as db:
+            try:
+                product = Box(product)
+                # Check if the product already exists
+                existing_product = await self._get_existing_product(db, product.barcode)
                 if existing_product:
-                    logger.info(
-                        "Product with barcode %s already exists. Skipping.",
-                        product['barcode'])
+                    # logger.info(f"Product with barcode {product.barcode} already exists. Skipping.")
                     return existing_product
 
-                # Convert timestamp to datetime
-                created_date = datetime.fromtimestamp(
-                    product["createDateTime"] / 1000)
-                last_update_date = datetime.fromtimestamp(
-                    product["lastUpdateDate"] / 1000)
+                db_product = await self._create_new_product(db, product)
+                await self._add_images(db, db_product, product.images)
+                await self._add_attributes(db, db_product, product.attributes)
 
-                # Create the product first
-                db_product = Product(
-                    barcode=product["barcode"],
-                    title=product["title"],
-                    product_main_id=product["productMainId"],
-                    brand_id=product["brandId"],
-                    category_id=product["pimCategoryId"],
-                    category_name=product["categoryName"],
-                    quantity=product["quantity"],
-                    stock_code=product["stockCode"],
-                    dimensional_weight=product["dimensionalWeight"],
-                    description=product.get("description"),
-                    brand=product["brand"],
-                    list_price=product["listPrice"],
-                    sale_price=product["salePrice"],
-                    vat_rate=product["vatRate"],
-                    has_active_campaign=product.get("hasActiveCampaign",
-                                                    False),
-                    has_html_content=product.get("hasHtmlContent", False),
-                    created_date=created_date,
-                    last_update_date=last_update_date,
-                    blacklisted=product.get("blacklisted", False),
-                )
-                db.add(db_product)
-                db.flush()  # This will assign an ID to db_product
-
-                if "images" in product:
-                    for img in product["images"]:
-                        db.add(
-                            Image(url=img.get("url"),
-                                  product_id=db_product.id))
-
-                # Create and add attributes
-                if "attributes" in product:
-                    for attr in product["attributes"]:
-                        db.add(
-                            Attribute(
-                                attribute_id=attr.get("attributeId"),
-                                attribute_name=attr.get("attributeName"),
-                                attribute_value=attr.get("attributeValue"),
-                                product_id=db_product.id,
-                            ))
-
-                db.refresh(db_product)
+                await db.refresh(db_product)
                 return db_product
 
             except SQLAlchemyError as e:
-                db.rollback()
-                logger.error("Error creating product: %s", str(e))
+                logger.error(f"Error creating product: {str(e)}")
                 raise
 
-    def get_item(self, model, identifier):
-        """Helper function to get an item from the database by code or barcode and return as JSON."""
-        with self.get_db() as db:
+    async def _get_existing_product(self, db: AsyncSession, barcode: str) -> Optional[Product]:
+        result = await db.execute(select(Product).filter(Product.barcode == barcode))
+        return result.scalar_one_or_none()
+
+    async def _create_new_product(self, db: AsyncSession, product: ProductSchema) -> Product:
+        db_product = Product(
+            barcode=product.barcode,
+            title=product.title,
+            productMainId=product.productMainId,
+            brandId=product.brandId,
+            pimCategoryId=product.pimCategoryId,
+            categoryName=product.categoryName,
+            quantity=product.quantity,
+            stockCode=product.stockCode,
+            dimensionalWeight=product.dimensionalWeight,
+            description=product.description,
+            brand=product.brand,
+            listPrice=product.listPrice,
+            salePrice=product.salePrice,
+            vatRate=product.vatRate,
+            hasActiveCampaign=product.hasActiveCampaign,
+            hasHtmlContent=product.hasHtmlContent,
+            createDateTime=datetime.now(),
+            lastUpdateDate=datetime.now(),
+            blacklisted=product.blacklisted,
+        )
+        db.add(db_product)
+        await db.flush()
+        return db_product
+
+    async def _add_images(self, db: AsyncSession, product: Product, images: list):
+        for img in images:
+            db.add(Image(url=img.url, product_id=product.id))
+
+    async def _add_attributes(self, db: AsyncSession, product: Product, attributes: list):
+        for attr in attributes:
+            db.add(Attribute(
+                attributeId=attr.attributeId,
+                attributeName=attr.attributeName,
+                attributeValue=attr.attributeValue,
+                product_id=product.id,
+            ))
+
+    async def get_item(self, model: Type[T], identifier: str) -> Optional[dict]:
+        """Get an item from the database by code or barcode and return as a dictionary."""
+        async with self.get_db() as db:
             try:
-                item = db.query(model).filter(
-                    model.stock_code == identifier).first()
+                result = await db.execute(select(model).filter(model.stockCode == identifier))
+                item = result.scalar_one_or_none()
 
                 if item:
-                    item_dict = {
-                        column.name: getattr(item, column.name)
-                        for column in item.__table__.columns
-                    }
-                    return item_dict
+                    return {column.name: getattr(item, column.name) for column in item.__table__.columns}
                 else:
-                    return JSONResponse(content={"message": "Item not found"},
-                                        status_code=404)
+                    logger.info(f"Item with identifier {identifier} not found")
+                    return None
 
             except SQLAlchemyError as e:
-                db.rollback()
-                logger.error("Error querying product: %s", str(e))
-                return JSONResponse(
-                    content={"error": "Database error occurred"},
-                    status_code=500)
+                logger.error(f"Error querying item: {str(e)}")
+                raise
 
-    def update_item(self, product_id, product_update: ProductUpdateSchema):
-        """Update a product in the database based on ProductUpdate object."""
-        with self.get_db() as db:
+    async def update_item(self, product_id: str, product_update: ProductUpdateSchema) -> Optional[Product]:
+        """Update a product in the database based on ProductUpdateSchema."""
+        async with self.get_db() as db:
             try:
-                db_product = db.query(Product).filter(
-                    Product.barcode == product_id).first()
+                result = await db.execute(select(Product).filter(Product.barcode == product_id))
+                db_product = result.scalar_one_or_none()
 
                 if db_product:
-                    # Update required fields
-                    db_product.quantity = product_update['quantity']
-                    db_product.sale_price = product_update['sale_price']
-                    db_product.list_price = product_update['list_price']
-
-                    # Update optional fields if they are provided
-                    optional_fields = [
-                        "title",
-                        "product_main_id",
-                        "brand_id",
-                        "category_id",
-                        "stock_code",
-                        "dimensional_weight",
-                        "description",
-                        "currency_type",
-                        "vat_rate",
-                        "cargo_company_id",
-                        "shipment_address_id",
-                        "returning_address_id",
-                    ]
-
-                    for field in optional_fields:
-                        value = getattr(product_update, field, None)
-                        if value is not None:
+                    # Update fields
+                    for field, value in product_update.items():
+                        if field == "images":
+                            await self._update_images(db, db_product, value)
+                        elif field == "attributes":
+                            await self._update_attributes(db, db_product, value)
+                        else:
                             setattr(db_product, field, value)
 
-                    # Handle nested objects
-                    if "images" in product_update and product_update['images']:
-                        for img in product_update["images"]:
-                            db.add(
-                                Image(url=img.get("url"),
-                                      product_id=db_product.id))
-
-                    # Create and add attributes
-                    if "attributes" in product_update and product_update[
-                            "attributes"]:
-                        for attr in product_update["attributes"]:
-                            db.add(
-                                Attribute(
-                                    attribute_id=attr.get("attributeId"),
-                                    attribute_name=attr.get("attributeName"),
-                                    attribute_value=attr.get("attributeValue"),
-                                    product_id=db_product.id,
-                                ))
-
-                    db.commit()
-                    db.refresh(db_product)
+                    await db.commit()
+                    await db.refresh(db_product)
                     return db_product
 
+                logger.info(f"Product with id {product_id} not found for update")
                 return None
 
             except SQLAlchemyError as e:
-                db.rollback()
-                logger.error("Error updating product: %s", str(e))
+                logger.error(f"Error updating product: {str(e)}")
                 raise
 
-    def delete_products(self, model, barcode):
-        """Function to delete multiple products from the database."""
-        with self.get_db() as db:
-            deleted_items = []
-            db_item = db.query(model).filter(model.barcode == barcode).first()
-            if db_item:
-                db.delete(db_item)
-                deleted_items.append(db_item)
-            return deleted_items
+    async def _update_images(self, db, product: Product, images: List[dict]):
+        # Remove existing images
+        await db.execute(delete(Image).where(Image.product_id == product.id))
 
-    def get_all_products(self):
-        """Function to retrieve all products from the database."""
-        with self.get_db() as db:
-            try:
-                products = db.query(Product).all()
-                return products
-            except SQLAlchemyError as e:
-                db.rollback()
-                logger.error("Error querying products: %s", str(e))
-                return []
+        # Add new images
+        for img in images:
+            db.add(Image(url=img["url"], product_id=product.id))
 
-    def get_product_by_barcode(self, barcode):
-        """Function to retrieve a product by barcode from the database."""
-        with self.get_db() as db:
+    async def _update_attributes(self, db, product: Product, attributes: List[dict]):
+        # Remove existing attributes
+        await db.execute(delete(Attribute).where(Attribute.product_id == product.id))
+
+        # Add new attributes
+        for attr in attributes:
+            db.add(Attribute(
+                attributeId=attr["attributeId"],
+                attributeName=attr["attributeName"],
+                attributeValue=attr["attributeValue"],
+                product_id=product.id,
+            ))
+
+    async def delete_product(self, model: Type[T], barcode: str) -> Optional[T]:
+        """Delete a product from the database."""
+        async with self.get_db() as db:
             try:
-                product = db.query(Product).filter(
-                    Product.barcode == barcode).first()
-                return product
+                result = await db.execute(select(model).filter(model.barcode == barcode))
+                db_item = result.scalar_one_or_none()
+
+                if db_item:
+                    await db.delete(db_item)
+                    await db.commit()
+                    return db_item
+
+                logger.info(f"Product with barcode {barcode} not found for deletion")
+                return None
+
             except SQLAlchemyError as e:
-                db.rollback()
-                logger.error("Error querying product: %s", str(e))
+                logger.error(f"Error deleting product: {str(e)}")
+                raise
+
+    async def get_all_products(self) -> List[Product]:
+        """Retrieve all products from the database."""
+        async with self.get_db() as db:
+            try:
+                result = await db.execute(select(Product))
+                return result.scalars().all()
+            except SQLAlchemyError as e:
+                logger.error(f"Error querying products: {str(e)}")
+                raise
+
+    async def get_product_by_barcode(self, barcode: str) -> Optional[Product]:
+        """Retrieve a product by barcode from the database."""
+        async with self.get_db() as db:
+            try:
+                result = await db.execute(select(Product).filter(Product.barcode == barcode))
+                return result.scalar_one_or_none()
+            except SQLAlchemyError as e:
+                logger.error(f"Error querying product: {str(e)}")
+                raise

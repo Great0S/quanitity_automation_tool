@@ -2,13 +2,16 @@
  importing necessary modules in Python for working with JSON data, regular expressions, time-related
  functions, operating system functionalities, and making HTTP requests, respectively."""
 
+import asyncio
 import json
 import re
 import time
 import os
 import logging
+from typing import Dict, List, Optional
 import requests
-
+import aiohttp
+from aiohttp import ClientSession
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,131 +20,89 @@ logger = logging.getLogger(__name__)
 class TrendyolAPI:
 
     def __init__(self):
-
         self.auth_hash = os.environ.get("TRENDYOLAUTHHASH")
         self.store_id = os.environ.get("TRENDYOLSTOREID")
-        self.products_url = (
-            f"https://api.trendyol.com/sapigw/suppliers/{
-                self.store_id}/products"
-        )
+        self.base_url = f"https://api.trendyol.com/sapigw/suppliers/{self.store_id}/products"
         self.headers = {
             "User-Agent": f"{self.store_id} - SelfIntegration",
             "Content-Type": "application/json",
             "Authorization": f"Basic {self.auth_hash}",
         }
 
-    def request_data(self, url_addons, request_type, payload_content):
+    async def request_data(self, session: ClientSession, url: str, method: str, payload: Optional[Dict] = None) -> Optional[Dict]:
         """
-        The function `request_data` sends a request to a specified URL with specified headers,
-        request type, and payload content.
+        Send a request to the specified URL with the given method and payload.
         """
-        payload = payload_content
+        max_retries = 3
+        retry_delay = 1
 
-        url = self.products_url + url_addons
+        for attempt in range(max_retries):
+            try:
+                async with session.request(method, url, headers=self.headers, json=payload, timeout=300) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    elif response.status == 400:
+                        logger.warning(f"Bad request for URL: {url}")
+                        return None
+                    else:
+                        logger.warning(f"Request failed with status {response.status} for URL: {url}")
+            except aiohttp.ClientError as e:
+                logger.error(f"Request error: {str(e)}")
 
-        while True:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
 
-            api_request = requests.request(
-                request_type, url, headers=self.headers, data=payload, timeout=3000
-            )
+        logger.error(f"Max retries reached for URL: {url}")
+        return None
 
-            if api_request.status_code == 200:
-
-                return api_request
-
-            if api_request.status_code == 400:
-
-                return None
-
-            time.sleep(1)
-
-    def prepare_data(self, product_data):
+    async def get_products(self, every_product: bool = False, filters: str = "") -> List[Dict]:
         """
-        The function prepares the product_data by decoding the response from a request.
-
-        :param request_data: The parameter `request_data` is the product_data that is received from a request made
-        to an API or a server. It could be in the form of a JSON string or any other format
-        :return: the decoded product_data, which is a Python object obtained by parsing the response text as JSON.
+        Retrieve products data from multiple pages.
         """
-        response = product_data
-
-        decoded_data = json.loads(response.text)
-
-        return decoded_data
-
-    def get_products(self, every_product: bool = False, filters=""):
-        """
-        The function `get_data` retrieves products product_data from multiple pages and appends it to a list.
-
-        """
-        page = 0
-
         all_products = []
+        page = 0
+        async with aiohttp.ClientSession() as session:
+            while True:
+                url = f"{self.base_url}?page={page}&size=100{filters}"
+                decoded_data = await self.request_data(session, url, "GET")
 
-        products = []
+                if not decoded_data:
+                    break
 
-        uri_addon = f"?page={page}&size=100" + filters
+                for data in decoded_data["content"]:
+                    product = self.process_product(data, every_product)
+                    if product:
+                        all_products.append(product)
 
-        decoded_data = self.prepare_data(
-            self.request_data(uri_addon, "GET", {}))
+                page += 1
+                if page >= int(decoded_data["totalPages"]):
+                    break
 
-        while page < int(decoded_data["totalPages"]):
+        logger.info(f"Trendyol fetched {len(all_products)} products")
+        return all_products
 
-            for element in range(len(decoded_data["content"])):
-
-                data = decoded_data["content"][element]
-
-                item = data["stockCode"]
-
-                if item:
-
-                    pass
-
-                else:
-
-                    item = data["productMainId"]
-
-                if every_product:
-
-                    all_products.append({"sku": item, "data": data})
-
-                else:
-
-                    item_id = data["barcode"]
-
-                    if item_id is None:
-
-                        pass
-
-                    quantity = data["quantity"]
-
-                    price = data["salePrice"]
-
-                    products.append(
-                        {
-                            "id": f"{item_id}",
-                            "sku": f"{item}",
-                            "qty": quantity,
-                            "price": price,
-                        }
-                    )
-
-            page += 1
-
-            uri_addon = re.sub(r"\?page=\d", f"?page={page}", uri_addon)
-
-            decoded_data = self.prepare_data(
-                self.request_data(uri_addon, "GET", {}))
+    def process_product(self, data: Dict, every_product: bool) -> Optional[Dict]:
+        """
+        Process a single product data.
+        """
+        item = data.get("stockCode") or data.get("productMainId")
+        if not item:
+            return None
 
         if every_product:
+            return data
+        else:
+            item_id = data.get("barcode")
+            if not item_id:
+                return None
+            return {
+                "id": str(item_id),
+                "sku": str(item),
+                "qty": data.get("quantity"),
+                "price": data.get("salePrice"),
+            }
 
-            products = all_products
-
-        logger.info("Trendyol fetched %s products", len(products))
-
-        return products
-
-    def update_product(self, product: dict):
+    async def update_product(self, product: dict):
         """
         The function `post_data` sends a POST request to a specified URL with a payload containing a list of
         products.
@@ -187,17 +148,16 @@ class TrendyolAPI:
                                     product["stock_code"]}, New value: {product["quantity"]}'
                             )
 
-                            return "Success"
+                            return {"status": "Success", "barcode": product["barcode"]}
 
-                        elif request_status == "FAILED":
+                        logger.error(
+                            f"""Product with code: {
+                                product["sku"]} failed to update || Reason: {
+                                batchid_request["items"][0]["failureReasons"]}"""
+                        )
 
-                            logger.error(
-                                f"""Product with code: {
-                                    product["sku"]} failed to update || Reason: {
-                                    batchid_request["items"][0]["failureReasons"]}"""
-                            )
+                        return {"status": "Failed", "barcode": product["barcode"]}
 
-                            return "Failed"
                     else:
 
                         pass
@@ -239,7 +199,7 @@ class TrendyolAPI:
         payload = json.dumps({"items": items})
 
         response = requests.request(
-            "DELETE", url, headers=self.headers, data=payload)
+            "DELETE", url, headers=self.headers, data=payload, timeout=3000)
 
         if response.status_code == 200:
 
@@ -252,6 +212,7 @@ class TrendyolAPI:
                     batch_url + response_json["batchRequestId"],
                     headers=self.headers,
                     data=payload,
+                    timeout=3000,
                 )
 
                 if request_response.status_code == 200:
@@ -280,25 +241,17 @@ class TrendyolAPI:
 
                         if failed:
 
-                            logger.info(
-                                f"Successfully deleted products: {
-                                    batch_feedback['itemCount']-len(failed)}\t\t\tFailed to delete: {len(failed)}"
-                            )
-                            logger.error(f"Failed items:")
+                            logger.info(f"Successfully deleted products: {
+                                        batch_feedback['itemCount']-len(failed)}\t\t\tFailed to delete: {len(failed)}")
+                            logger.error("Failed items:\n")
                             for i, item in enumerate(failed):
 
-                                logger.error(
-                                    f"{i+1}. {item['barcode']
-                                              }: {item['reason']}"
-                                )
+                                logger.error(f"{i+1}. {item['barcode']}: {item['reason']}")
 
                             break
 
                         else:
 
-                            logger.info(
-                                f"Successfully deleted products: {
-                                    batch_feedback['itemCount']}"
-                            )
+                            logger.info(f"Successfully deleted products: {batch_feedback['itemCount']}")
 
                             break

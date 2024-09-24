@@ -5,7 +5,6 @@ from sqlalchemy import (
     String,
     Float,
     Boolean,
-    DECIMAL,
     DateTime,
 )
 from sqlalchemy.orm import relationship
@@ -20,22 +19,22 @@ class Product(Base):
     id = Column(Integer, primary_key=True, index=True)
     barcode = Column(String, unique=True, index=True)
     title = Column(String)
-    product_main_id = Column(String)
-    brand_id = Column(Integer)
-    category_id = Column(Integer)
-    category_name = Column(String)
+    productMainId = Column(String)
+    brandId = Column(Integer)
+    pimCategoryId = Column(Integer)
+    categoryName = Column(String)
     quantity = Column(Integer)
-    stock_code = Column(String)
-    dimensional_weight = Column(Float)
+    stockCode = Column(String)
+    dimensionalWeight = Column(Float)
     description = Column(String)
     brand = Column(String)
-    list_price = Column(Float)
-    sale_price = Column(Float)
-    vat_rate = Column(Integer)
-    has_active_campaign = Column(Boolean, default=False)
-    has_html_content = Column(Boolean, default=False)
-    created_date = Column(DateTime)
-    last_update_date = Column(DateTime)
+    listPrice = Column(Float)
+    salePrice = Column(Float)
+    vatRate = Column(Integer)
+    hasActiveCampaign = Column(Boolean, default=False)
+    hasHtmlContent = Column(Boolean, default=False)
+    createDateTime = Column(DateTime)
+    lastUpdateDate = Column(DateTime)
     blacklisted = Column(Boolean, default=False)
 
     # Relationships
@@ -46,10 +45,10 @@ class Product(Base):
         return (
             f"Product: {self.title}\n"
             f"Barcode: {self.barcode}\n"
-            f"Main ID: {self.product_main_id}\n"
-            f"Price: {self.sale_price}\n"
+            f"Main ID: {self.productMainId}\n"
+            f"Price: {self.salePrice}\n"
             f"Quantity: {self.quantity}\n"
-            f"Stock Code: {self.stock_code}\n"
+            f"Stock Code: {self.stockCode}\n"
             f"Images: {len(self.images)}\n"
             f"Attributes: {len(self.attributes)}"
         )
@@ -69,9 +68,9 @@ class Attribute(Base):
     __tablename__ = "attributes"
 
     id = Column(Integer, primary_key=True, index=True)
-    attribute_id = Column(Integer)
-    attribute_value = Column(String)
-    attribute_name = Column(String)
+    attributeId = Column(Integer)
+    attributeValue = Column(String)
+    attributeName = Column(String)
     product_id = Column(Integer, ForeignKey("products.id"))
 
     product = relationship("Product", back_populates="attributes")

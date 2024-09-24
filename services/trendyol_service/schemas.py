@@ -6,15 +6,15 @@ from pydantic import BaseModel, Field, HttpUrl
 
 
 class ImageSchema(BaseModel):
-    url: HttpUrl
+    url: Optional[HttpUrl]
 
 
 class AttributeSchema(BaseModel):
-    attribute_id: int = Field(
+    attributeId: Optional[int] = Field(
         ..., description="The unique identifier for the attribute")
-    attribute_value: Optional[int] = Field(
+    attributeValue: Optional[int] = Field(
         None, description="The value of the attribute")
-    attribute_name: Optional[str] = Field(None,
+    attributeName: Optional[str] = Field(None,
                                           description="Name of the attribute")
 
     class Config:
@@ -24,34 +24,40 @@ class AttributeSchema(BaseModel):
 class ProductBase(BaseModel):
     barcode: str
     title: str
-    product_main_id: str
-    brand_id: int
-    category_id: int
-    category_name: str
+    productMainId: str
+    brandId: int
+    pimCategoryId: int
+    categoryName: str
     quantity: int
-    stock_code: str
-    dimensional_weight: float
+    stockCode: str
+    dimensionalWeight: float
     description: Optional[str]
     brand: str
-    list_price: float
-    sale_price: float
-    vat_rate: float
-
-    class Config:
-        from_attributes = True
+    listPrice: float
+    salePrice: float
+    vatRate: float
 
     def __str__(self):
         return (f"Product: {self.title}\n"
                 f"Barcode: {self.barcode}\n"
-                f"Main ID: {self.product_main_id}\n"
-                f"Price: {self.sale_price} {self.currency_type}\n"
+                f"Main ID: {self.productMainId}\n"
+                f"Price: {self.salePrice}\n"
                 f"Quantity: {self.quantity}\n"
-                f"Stock Code: {self.stock_code}\n")
+                f"Stock Code: {self.stockCode}\n")
+
+
+class ProductInDB(ProductBase):
+    id: int
+    createDateTime: datetime
+    lastUpdateDate: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class ProductSchema(ProductBase):
-    has_active_campaign: Optional[bool] = False
-    has_html_content: Optional[bool] = False
+    hasActiveCampaign: Optional[bool] = False
+    hasHtmlContent: Optional[bool] = False
     blacklisted: Optional[bool] = False
     images: Optional[List[ImageSchema]]
     attributes: Optional[List[AttributeSchema]]
@@ -59,16 +65,16 @@ class ProductSchema(ProductBase):
 
 class ProductUpdateSchema(BaseModel):
     quantity: int
-    sale_price: float
-    list_price: float
+    listPrice: Optional[float]
+    salePrice: Optional[float]
     title: Optional[str]
-    product_main_id: Optional[str]
-    brand_id: Optional[int]
-    category_id: Optional[int]
-    stock_code: Optional[str]
-    dimensional_weight: Optional[float]
+    productMainId: Optional[str]
+    brandId: Optional[int]
+    pimCategoryId: Optional[int]
+    stockCode: Optional[str]
+    dimensionalWeight: Optional[float]
     description: Optional[str]
-    vat_rate: Optional[float]
+    vatRate: Optional[float]
     images: Optional[List[ImageSchema]]
     attributes: Optional[List[AttributeSchema]]
 
@@ -79,14 +85,14 @@ class ProductUpdateSchema(BaseModel):
     def __str__(self):
         base_info = (f"Product Update: {self.barcode}\n"
                      f"Quantity: {self.quantity}\n"
-                     f"Sale Price: {self.sale_price}\n"
-                     f"List Price: {self.list_price}")
+                     f"Sale Price: {self.salePrice}\n"
+                     f"List Price: {self.listPrice}")
 
         if self.title:  # Check if it's a full update
             additional_info = (
                 f"\nTitle: {self.title}\n"
-                f"Main ID: {self.product_main_id}\n"
-                f"Stock Code: {self.stock_code}\n"
+                f"Main ID: {self.productMainId}\n"
+                f"Stock Code: {self.stockCode}\n"
                 f"Images: {len(self.images) if self.images else 0}\n"
                 f"Attributes: {len(self.attributes) if self.attributes else 0}"
             )
@@ -95,10 +101,13 @@ class ProductUpdateSchema(BaseModel):
         return base_info
 
 
-class ProductStockPriceUpdate(BaseModel):
+class ProductStockUpdate(BaseModel):
     quantity: int
-    sale_price: float
-    list_price: float
+
+
+class ProductPriceUpdate(BaseModel):
+    salePrice: Optional[float]
+    listPrice: Optional[float]
 
 
 class ProductFullUpdate(ProductBase):
@@ -106,8 +115,8 @@ class ProductFullUpdate(ProductBase):
 
 
 class ProductUpdateBatch(BaseModel):
-    ids: List[str]  # List of barcodes or product_main_ids
-    data: Union[ProductStockPriceUpdate, ProductFullUpdate]
+    ids: List[str]  # List of barcodes or productMainIds
+    data: Union[ProductPriceUpdate, ProductPriceUpdate, ProductFullUpdate]
 
 
 class ProductDeleteSchema:
@@ -129,15 +138,6 @@ class ProductDeleteSchema:
         return cls(data.get("items", []))
 
 
-class ProductInDB(ProductBase):
-    id: int
-    created_date: datetime
-    last_update_date: datetime
-
-    class Config:
-        from_attributes = True
-
-
 class ProductGet:
 
     def __init__(self, code: str):
@@ -149,14 +149,14 @@ class ProductGet:
         self.page: Optional[int] = None
         self.date_query_type: Optional[str] = None
         self.size: Optional[int] = None
-        self.supplier_id: Optional[int] = None
-        self.stock_code: Optional[str] = None
+        self.supplierId: Optional[int] = None
+        self.stockCode: Optional[str] = None
         self.archived: Optional[bool] = None
-        self.product_main_id: Optional[str] = None
-        self.on_sale: Optional[bool] = None
+        self.productMainId: Optional[str] = None
+        self.onSale: Optional[bool] = None
         self.rejected: Optional[bool] = None
         self.blacklisted: Optional[bool] = None
-        self.brand_ids: Optional[List[int]] = None
+        self.brandIds: Optional[List[int]] = None
 
     def __str__(self):
         return f"Product Code: {self.code}"
@@ -177,20 +177,20 @@ class ProductGet:
             params["dateQueryType"] = self.date_query_type
         if self.size is not None:
             params["size"] = self.size
-        if self.supplier_id is not None:
-            params["supplierId"] = self.supplier_id
-        if self.stock_code:
-            params["stockCode"] = self.stock_code
+        if self.supplierId is not None:
+            params["supplierId"] = self.supplierId
+        if self.stockCode:
+            params["stockCode"] = self.stockCode
         if self.archived is not None:
             params["archived"] = self.archived
-        if self.product_main_id:
-            params["productMainId"] = self.product_main_id
-        if self.on_sale is not None:
-            params["onSale"] = self.on_sale
+        if self.productMainId:
+            params["productMainId"] = self.productMainId
+        if self.onSale is not None:
+            params["onSale"] = self.onSale
         if self.rejected is not None:
             params["rejected"] = self.rejected
         if self.blacklisted is not None:
             params["blacklisted"] = self.blacklisted
-        if self.brand_ids:
-            params["brandIds"] = self.brand_ids
+        if self.brandIds:
+            params["brandIds"] = self.brandIds
         return params
