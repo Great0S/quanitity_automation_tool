@@ -38,8 +38,9 @@ class Product(Base):
     blacklisted = Column(Boolean, default=False)
 
     # Relationships
-    images = relationship("Image", back_populates="product")
-    attributes = relationship("Attribute", back_populates="product")
+    images = relationship("Image", back_populates="product", cascade="all, delete-orphan")
+    attributes = relationship("Attribute", back_populates="product", cascade="all, delete-orphan")
+
 
     def __str__(self):
         return (
@@ -57,10 +58,9 @@ class Product(Base):
 class Image(Base):
     __tablename__ = "images"
 
-    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    id = Column(Integer, primary_key=True, index=True)
     url = Column(String)
     product_id = Column(Integer, ForeignKey("products.id"))
-
     product = relationship("Product", back_populates="images")
 
 
@@ -72,5 +72,4 @@ class Attribute(Base):
     attributeValue = Column(String)
     attributeName = Column(String)
     product_id = Column(Integer, ForeignKey("products.id"))
-
     product = relationship("Product", back_populates="attributes")

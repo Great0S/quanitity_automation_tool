@@ -1,7 +1,8 @@
 import os
 from datetime import datetime
 from contextlib import asynccontextmanager
-from typing import List, Optional, Type, TypeVar
+import traceback
+from typing import List, Optional, Type, TypeVar, Union
 from pydantic import BaseModel
 
 from sqlalchemy import delete
@@ -12,8 +13,8 @@ from sqlalchemy.future import select
 from box import Box
 
 from services.trendyol_service.models import Attribute, Base, Image, Product
-from services.trendyol_service.schemas import ProductSchema, ProductUpdateSchema
-from .logging import logger
+from services.trendyol_service.schemas import AttributeSchema, ImageSchema, ProductPriceUpdate, ProductSchema, ProductStockUpdate, ProductUpdateSchema
+from shared.logging import logger
 
 T = TypeVar('T', bound=BaseModel)
 
@@ -46,7 +47,7 @@ class DatabaseManager:
 
     async def init_db(self):
         async with self.engine.begin() as conn:
-            # await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
 
     @asynccontextmanager
@@ -67,7 +68,7 @@ class DatabaseManager:
             try:
                 product = Box(product)
                 # Check if the product already exists
-                existing_product = await self._get_existing_product(db, product.barcode)
+                existing_product = await self._get_existing_product(db, product.stockCode)
                 if existing_product:
                     # logger.info(f"Product with barcode {product.barcode} already exists. Skipping.")
                     return existing_product
@@ -82,9 +83,13 @@ class DatabaseManager:
             except SQLAlchemyError as e:
                 logger.error(f"Error creating product: {str(e)}")
                 raise
+            except Exception as e:
+                logger.error(f"Unexpected error creating product: {str(e)}")
+                logger.debug(traceback.format_exc())
+                raise
 
-    async def _get_existing_product(self, db: AsyncSession, barcode: str) -> Optional[Product]:
-        result = await db.execute(select(Product).filter(Product.barcode == barcode))
+    async def _get_existing_product(self, db: AsyncSession, identifier: str) -> Optional[Product]:
+        result = await db.execute(select(Product).filter(Product.stockCode == identifier))
         return result.scalar_one_or_none()
 
     async def _create_new_product(self, db: AsyncSession, product: ProductSchema) -> Product:
@@ -113,19 +118,45 @@ class DatabaseManager:
         await db.flush()
         return db_product
 
-    async def _add_images(self, db: AsyncSession, product: Product, images: list):
+    async def _add_images(self, db: AsyncSession, product: Product, images: List[ImageSchema]):
+        if not images:
+            logger.warning(f"No images provided for product {product.stockCode}")
+            return
+
         for img in images:
-            db.add(Image(url=img.url, product_id=product.id))
+            try:
+                if isinstance(img, ImageSchema):
+                    db.add(Image(url=img.url, product_id=product.id))
+                elif isinstance(img, dict) and 'url' in img:
+                    db.add(Image(url=img['url'], product_id=product.id))
+                elif isinstance(img, str):
+                    db.add(Image(url=img, product_id=product.id))
+                else:
+                    logger.warning(f"Invalid image data for product {product.stockCode}: {img}")
+            except Exception as e:
+                logger.error(f"Error adding image for product {product.stockCode}: {str(e)}")
+                logger.debug(traceback.format_exc())
 
-    async def _add_attributes(self, db: AsyncSession, product: Product, attributes: list):
+    async def _add_attributes(self, db: AsyncSession, product: Product, attributes: List[AttributeSchema]):
+        if not attributes:
+            logger.warning(f"No attributes provided for product {product.stockCode}")
+            return
+
         for attr in attributes:
-            db.add(Attribute(
-                attributeId=attr.attributeId,
-                attributeName=attr.attributeName,
-                attributeValue=attr.attributeValue,
-                product_id=product.id,
-            ))
-
+            try:
+                if isinstance(attr, AttributeSchema) or isinstance(attr, dict):
+                    db.add(Attribute(
+                        attributeId=attr.attributeId,
+                        attributeName=attr.attributeName,
+                        attributeValue=str(attr.attributeValue),  # Convert to string as per the model
+                        product_id=product.id,
+                    ))
+                else:
+                    logger.warning(f"Invalid attribute data for product {product.stockCode}: {attr}")
+            except Exception as e:
+                logger.error(f"Error adding attribute for product {product.stockCode}: {str(e)}")
+                logger.debug(traceback.format_exc())
+        
     async def get_item(self, model: Type[T], identifier: str) -> Optional[dict]:
         """Get an item from the database by code or barcode and return as a dictionary."""
         async with self.get_db() as db:
@@ -143,15 +174,15 @@ class DatabaseManager:
                 logger.error(f"Error querying item: {str(e)}")
                 raise
 
-    async def update_item(self, product_id: str, product_update: ProductUpdateSchema) -> Optional[Product]:
+    async def update_item(self, stock_code: str, product_update: Union[ProductStockUpdate, ProductPriceUpdate, ProductUpdateSchema]) -> Optional[Product]:
         """Update a product in the database based on ProductUpdateSchema."""
         async with self.get_db() as db:
             try:
-                result = await db.execute(select(Product).filter(Product.barcode == product_id))
+                result = await db.execute(select(Product).filter(Product.stockCode == stock_code))
                 db_product = result.scalar_one_or_none()
 
                 if db_product:
-                    # Update fields
+                    product_update = product_update.model_dump(exclude_none=True, exclude_unset=True)
                     for field, value in product_update.items():
                         if field == "images":
                             await self._update_images(db, db_product, value)
@@ -164,7 +195,7 @@ class DatabaseManager:
                     await db.refresh(db_product)
                     return db_product
 
-                logger.info(f"Product with id {product_id} not found for update")
+                logger.info(f"Product with stock code {stock_code} not found for update")
                 return None
 
             except SQLAlchemyError as e:
@@ -192,11 +223,11 @@ class DatabaseManager:
                 product_id=product.id,
             ))
 
-    async def delete_product(self, model: Type[T], barcode: str) -> Optional[T]:
+    async def delete_product(self, model: Type[T], identifier: str) -> Optional[T]:
         """Delete a product from the database."""
         async with self.get_db() as db:
             try:
-                result = await db.execute(select(model).filter(model.barcode == barcode))
+                result = await db.execute(select(model).filter(model.stockCode == identifier))
                 db_item = result.scalar_one_or_none()
 
                 if db_item:
@@ -204,7 +235,7 @@ class DatabaseManager:
                     await db.commit()
                     return db_item
 
-                logger.info(f"Product with barcode {barcode} not found for deletion")
+                    logger.info(f"Product with stock code {identifier} not found for deletion")
                 return None
 
             except SQLAlchemyError as e:
@@ -221,11 +252,11 @@ class DatabaseManager:
                 logger.error(f"Error querying products: {str(e)}")
                 raise
 
-    async def get_product_by_barcode(self, barcode: str) -> Optional[Product]:
-        """Retrieve a product by barcode from the database."""
+    async def get_product_by_stock_code(self, identifier: str) -> Optional[Product]:
+        """Retrieve a product by stock code from the database."""
         async with self.get_db() as db:
             try:
-                result = await db.execute(select(Product).filter(Product.barcode == barcode))
+                result = await db.execute(select(Product).filter(Product.stockCode == identifier))
                 return result.scalar_one_or_none()
             except SQLAlchemyError as e:
                 logger.error(f"Error querying product: {str(e)}")

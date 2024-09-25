@@ -6,50 +6,49 @@ from pydantic import BaseModel, Field, HttpUrl
 
 
 class ImageSchema(BaseModel):
-    url: Optional[HttpUrl]
+    url: str
+
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate_to_json
+
+    @classmethod
+    def validate_to_json(cls, value):
+        if isinstance(value, str):
+            return cls(url=value)
+        return value
 
 
 class AttributeSchema(BaseModel):
-    attributeId: Optional[int] = Field(
-        ..., description="The unique identifier for the attribute")
-    attributeValue: Optional[int] = Field(
-        None, description="The value of the attribute")
-    attributeName: Optional[str] = Field(None,
-                                          description="Name of the attribute")
+    attributeId: Optional[int] 
+    attributeValue: Optional[Union[int, str]] 
+    attributeName: Optional[str] 
 
     class Config:
         from_attributes = True
 
 
 class ProductBase(BaseModel):
-    barcode: str
-    title: str
-    productMainId: str
-    brandId: int
-    pimCategoryId: int
-    categoryName: str
-    quantity: int
-    stockCode: str
-    dimensionalWeight: float
+    barcode: Optional[str]
+    title: Optional[str]
+    productMainId: Optional[str]
+    brandId: Optional[int]
+    pimCategoryId: Optional[int]
+    categoryName: Optional[str]
+    quantity: Optional[int]
+    stockCode: Optional[str]
+    dimensionalWeight: Optional[float]
     description: Optional[str]
-    brand: str
-    listPrice: float
-    salePrice: float
-    vatRate: float
-
-    def __str__(self):
-        return (f"Product: {self.title}\n"
-                f"Barcode: {self.barcode}\n"
-                f"Main ID: {self.productMainId}\n"
-                f"Price: {self.salePrice}\n"
-                f"Quantity: {self.quantity}\n"
-                f"Stock Code: {self.stockCode}\n")
+    brand: Optional[str]
+    listPrice: Optional[float]
+    salePrice: Optional[float]
+    vatRate: Optional[float]
 
 
 class ProductInDB(ProductBase):
     id: int
-    createDateTime: datetime
-    lastUpdateDate: datetime
+    createDateTime: Optional[datetime]
+    lastUpdateDate: Optional[datetime]
 
     class Config:
         from_attributes = True
@@ -61,6 +60,9 @@ class ProductSchema(ProductBase):
     blacklisted: Optional[bool] = False
     images: Optional[List[ImageSchema]]
     attributes: Optional[List[AttributeSchema]]
+
+    class Config:
+        from_attributes = True
 
 
 class ProductUpdateSchema(BaseModel):
@@ -81,24 +83,6 @@ class ProductUpdateSchema(BaseModel):
     class Config:
         from_attributes = True
         populate_by_name = True
-
-    def __str__(self):
-        base_info = (f"Product Update: {self.barcode}\n"
-                     f"Quantity: {self.quantity}\n"
-                     f"Sale Price: {self.salePrice}\n"
-                     f"List Price: {self.listPrice}")
-
-        if self.title:  # Check if it's a full update
-            additional_info = (
-                f"\nTitle: {self.title}\n"
-                f"Main ID: {self.productMainId}\n"
-                f"Stock Code: {self.stockCode}\n"
-                f"Images: {len(self.images) if self.images else 0}\n"
-                f"Attributes: {len(self.attributes) if self.attributes else 0}"
-            )
-            return base_info + additional_info
-
-        return base_info
 
 
 class ProductStockUpdate(BaseModel):
