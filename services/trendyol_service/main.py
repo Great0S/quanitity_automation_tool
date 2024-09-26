@@ -1,11 +1,11 @@
 from enum import Enum
-from typing import Dict, List, Optional, Union
-from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Query
+from typing import Optional, Union
+from fastapi import APIRouter, Body, FastAPI, HTTPException, Query
 
 from services.trendyol_service.api.trendyol_api import TrendyolAPI
 from services.trendyol_service.models import Product
 from services.trendyol_service.database import DatabaseManager
-from .schemas import ProductInDB, ProductPriceUpdate, ProductSchema, ProductStockUpdate, ProductUpdateSchema
+from .schemas import ProductInDB, ProductPriceUpdate, ProductSchema, ProductStockUpdate, ProductBase
 
 router = APIRouter()
 app = FastAPI()
@@ -26,7 +26,7 @@ def get_update_schema(update_type: UpdateType = Query(default=UpdateType.full)):
     elif update_type == UpdateType.price:
         return ProductPriceUpdate
     else:
-        return ProductUpdateSchema
+        return ProductBase
 
 @app.get("/products", response_model=str)
 async def get_products(load_all: bool = False):
@@ -43,11 +43,17 @@ async def get_products(load_all: bool = False):
 
 
 @app.post("/update", response_model=ProductInDB)
-async def update_product_api(product: ProductUpdateSchema):
+async def update_product_by_bulk(
+    update_type: UpdateType = Query(default=UpdateType.full),
+    product_update: Union[ProductStockUpdate, ProductPriceUpdate, ProductBase] = Body(...)):
     try:
-        result = await trendyol_api.update_product(product.model_dump(exclude_none=True, exclude_unset=True))
-        updated_product = await db_manager.update_item(result["barcode"], result)
-        return {"updated_product": updated_product, "result": result}
+        update_schema = get_update_schema(update_type)
+        if not isinstance(product_update, update_schema):
+            raise ValueError(f"Invalid update type. Expected {update_schema.__name__}, got {type(product_update).__name__}")
+        
+        result = await trendyol_api.update_product(product_update.model_dump(exclude_none=True, exclude_unset=True))
+        await db_manager.update_item(result["stockCode"], product_update)
+        return "Product with sku: " + result["stockCode"] + " has been updated successfully"
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -55,13 +61,14 @@ async def update_product_api(product: ProductUpdateSchema):
 @app.post("/products/", response_model=ProductInDB)
 async def create_product(product: ProductSchema):
     try:
+        await trendyol_api.create_product(product)
         return await db_manager.create_product(product)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @app.get("/products/{stock_code}", response_model=ProductInDB)
-async def read_product(stock_code: str):
+async def read_product_by_stock_code(stock_code: str):
     product = await db_manager.get_item(Product, stock_code)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -69,10 +76,10 @@ async def read_product(stock_code: str):
 
 
 @app.put("/products/{stock_code}", response_model=Optional[ProductInDB])
-async def update_product_by_id(
+async def update_product_by_stock_code(
     stock_code: str,
     update_type: UpdateType = Query(default=UpdateType.full),
-    product_update: Union[ProductStockUpdate, ProductPriceUpdate, ProductUpdateSchema] = Body(...)
+    product_update: Union[ProductStockUpdate, ProductPriceUpdate, ProductBase] = Body(...)
 ):
     try:
         update_schema = get_update_schema(update_type)
@@ -92,7 +99,7 @@ async def update_product_by_id(
 
 
 @app.delete("/products/{stock_code}", response_model=ProductInDB)
-async def delete_product(stock_code: str):
+async def delete_product_by_stock_code(stock_code: str):
     deleted_product = await db_manager.delete_product(Product, stock_code)
     if deleted_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
