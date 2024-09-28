@@ -1,28 +1,28 @@
 """ importing necessary modules and libraries for performing various
  tasks related to handling data, making HTTP requests, and working with concurrency """
 
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
-from glob import glob
+import csv
+import gzip
+import io
 import textwrap
-from urllib import parse
 import json
 import os
 import re
-import csv
-import io
 import time
 import requests
+import aiohttp
+import asyncio
+from typing import List, Dict, Any
 from sp_api.api import DataKiosk
+from sp_api.base import ReportType, SellingApiException
 from sp_api.api import (
     ListingsItems,
     ProductTypeDefinitions,
-    CatalogItems,
-    CatalogItemsVersion,
+    Catalog,
     ReportsV2,
+    CatalogItems
 )
-from sp_api.base.reportTypes import ReportType
-from datetime import datetime
+
 from app.config import logger
 
 
@@ -41,6 +41,9 @@ credentials = {
     "lwa_client_secret": client_secret,
 }
 
+
+
+
 class AmazonListingManager:
 
     def __init__(self):
@@ -48,6 +51,11 @@ class AmazonListingManager:
         self.seller_id = os.environ.get("AMAZONSELLERACCOUNTID")
         self.listings_api = ListingsItems()
         self.product_type_api = ProductTypeDefinitions()
+        self.catalog_api = Catalog()
+        self.reports_api = ReportsV2()
+        self.catalog_items_api = CatalogItems(version="2022-04-01")
+        self.locale = 'tr_TR' 
+        
 
     def retry_with_backoff(self, func, *args, retries=5, **kwargs):
         attempt = 0
@@ -73,15 +81,28 @@ class AmazonListingManager:
 
         product_type = product_definitions.payload["productTypes"][0]["name"]
 
-        product_attrs = self.retry_with_backoff(
-            self.product_type_api.get_definitions_product_type,
-            productType=product_type,
-            marketplaceIds=[self.marketplace_id],
-            requirements="LISTING",
-            locale="tr_TR"
+        # Use the new get_categories method to fetch category information
+        category_response = self.retry_with_backoff(
+            self.catalog_api.get_categories,
+            marketplaceId=self.marketplace_id,
+            ASIN=product_type  # Assuming product_type can be used as an ASIN
         )
 
-        return self.download_attribute_schema(product_attrs.payload)
+        if not category_response.payload or 'categories' not in category_response.payload:
+            raise ValueError(f"No category information found for product type: {product_type}")
+
+        # Use the first category in the response
+        category = category_response.payload['categories'][0]
+
+        # Fetch attributes for the category
+        attributes_response = self.retry_with_backoff(
+            self.catalog_api.get_item_attributes,
+            asin=category['asin'],
+            marketplaceId=self.marketplace_id,
+            includedData=['attributes', 'dimensions', 'identifiers', 'relationships']
+        )
+
+        return self.download_attribute_schema(attributes_response.payload)
 
     def download_attribute_schema(self, raw_category_attrs):
         file_path = f'amazon_{raw_category_attrs["productType"]}_attrs.json'
@@ -288,41 +309,157 @@ class AmazonListingManager:
         except Exception as e:
             logger.error(f"Error updating listing for SKU {sku}: {str(e)}")
 
-    def get_listings_items(self):
-        try:
-            response = self.retry_with_backoff(
-                self.listings_api.get_listings_items,
-                sellerId=self.seller_id,
-                marketplaceIds=[self.marketplace_id],
-                includedData=['attributes', 'issues', 'offers', 'summaries', 'fulfillmentAvailability', 'procurement'],
-                pageSize=100  # Maximum allowed page size
-            )
-            
-            items = []
-            while True:
-                if response.payload:
-                    items.extend(response.payload)
-                    logger.info(f"Retrieved {len(response.payload)} listings")
-                
-                if response.next_token:
-                    response = self.retry_with_backoff(
-                        self.listings_api.get_listings_items,
-                        sellerId=self.seller_id,
-                        marketplaceIds=[self.marketplace_id],
-                        includedData=['attributes', 'issues', 'offers', 'summaries', 'fulfillmentAvailability', 'procurement'],
-                        pageSize=100,
-                        nextToken=response.next_token
-                    )
-                else:
-                    break
-            
-            if items:
-                logger.info(f"Successfully retrieved all {len(items)} listings")
-                return items
-            else:
-                logger.warning("No listings found")
-                return None
-        except Exception as e:
-            logger.error(f"Error retrieving listings: {str(e)}")
-            return None
+    async def get_listings(self, load_all: bool = False) -> List[Dict[str, Any]]:
+        report_data = await self._fetch_report()
 
+        products = self._process_report_data(report_data)
+
+        if load_all:
+            products = await self._enrich_product_data(products)
+
+        return products
+    
+    async def _fetch_report(self) -> List[Dict[str, str]]:
+        try:
+            report_request = self.reports_api.create_report(
+                reportType=ReportType.GET_MERCHANT_LISTINGS_ALL_DATA,
+                marketplaceIds=[self.marketplace_id],
+            )
+            report_id = report_request.payload["reportId"]
+
+            while True:
+                report_status = self.reports_api.get_report(reportId=report_id)
+                if report_status.payload["processingStatus"] == "DONE":
+                    break
+                await asyncio.sleep(5)
+
+            report_document = self.reports_api.get_report_document(
+                reportDocumentId=report_status.payload["reportDocumentId"],
+                download=True,
+                decrypt=True,
+            )
+            report_string = report_document.payload["document"]
+            # Remove BOM if present
+            report_string = report_string.lstrip('\ufeff')
+            lines = report_string.splitlines()
+            headers = lines[0].split('\t')
+            return [dict(zip(headers, line.split('\t'))) for line in lines[1:]]
+        except SellingApiException as e:
+            logger.error(f"Error fetching report: {str(e)}")
+            raise
+
+    def _process_report_data(self, report_data: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+        return [
+            {
+                "id": item["product-id"],
+                "sku": item["seller-sku"],
+                "listing-id": item["listing-id"],
+                "quantity": item["quantity"],
+            }
+            for item in report_data
+            if not re.search(r"\_fba", item["seller-sku"])]
+
+    async def _enrich_product_data(self, products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        async def fetch_catalog_data(sku_chunk):
+            try:
+                sku_strings = ",".join(sku_chunk)
+                response = self.retry_with_backoff(
+                    self.catalog_items_api.search_catalog_items,
+                    marketplaceIds=[self.marketplace_id],
+                    includedData="attributes,identifiers,images,productTypes,summaries",
+                    locale=self.locale,
+                    sellerId=self.seller_id,
+                    identifiersType="SKU",
+                    identifiers=sku_strings,
+                    pageSize=20
+                )
+                return response.payload.get("items", [])
+            except Exception as e:
+                logger.error(f"Error fetching catalog data for SKUs {sku_chunk}: {str(e)}")
+                return []
+
+        async def process_chunk(sku_chunk):
+            catalog_items = await fetch_catalog_data(sku_chunk)
+            for item in catalog_items:
+                sku = next((i['identifier'] for i in item['identifiers'][0]['identifiers'] if i['identifierType'] == 'SKU'), None)
+                if sku:
+                    product = next((p for p in products if p['sku'] == sku), None)
+                    if product:
+                        # Filter out language-specific data and convert lists to dicts
+                        filtered_item = self._filter_and_convert_item(item)
+                        product.update(filtered_item)
+
+        sku_chunks = [list(chunk) for chunk in self._chunks([product['sku'] for product in products], 20)]
+        await asyncio.gather(*[process_chunk(chunk) for chunk in sku_chunks])
+        return products
+
+    @staticmethod
+    def _chunks(iterable, size):
+        for i in range(0, len(iterable), size):
+            yield iterable[i:i + size]
+
+    def _filter_and_convert_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        filtered_item = {}
+        for key, value in item.items():
+            if key == 'attributes':
+                filtered_item[key] = self._process_attributes(value)
+            elif key in ['images', 'productTypes']:
+                filtered_item[key] = self._process_list_value(value)
+            elif key not in ['identifiers','summaries']:  # Exclude 'identifiers' as it's already processed
+                filtered_item[key] = value
+        print(filtered_item)
+        return filtered_item
+
+    def _process_attributes(self, attributes: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
+        return {
+            attr_name: self._process_attribute_values(self._clean_attribute(attr_list))
+            for attr_name, attr_list in attributes.items() if attr_list
+        }
+
+    def _clean_attribute(self, attr_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+        cleaned_attr = {}
+        for attr in attr_list:
+            for k, v in attr.items():
+                if k not in ['language_tag', 'marketplace_id', 'marketplaceId']:
+                    cleaned_attr[k] = v if k not in cleaned_attr else (
+                        [cleaned_attr[k], v] if not isinstance(cleaned_attr[k], list) 
+                        else cleaned_attr[k] + [v]
+                    )
+        return cleaned_attr
+
+    def _process_attribute_values(self, cleaned_attr: Dict[str, Any]) -> Any:
+        return (cleaned_attr['value'] if len(cleaned_attr) == 1 and 'value' in cleaned_attr
+                else self._process_nested_dict(cleaned_attr))
+
+    def _process_nested_dict(self, d: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            k: ([self._process_nested_dict(item) if isinstance(item, dict) else item for item in v]
+                if isinstance(v, list) else
+                self._process_nested_dict(v) if isinstance(v, dict) else v)
+            for k, v in d.items()
+        }
+
+    def _process_list_value(self, value: List[Any]) -> Any:
+        if not isinstance(value, list) or not value:
+            return value
+
+        filtered_value = [item for item in value if item]
+        if not filtered_value:
+            return value
+
+        first_item = filtered_value[0]
+        if isinstance(first_item, dict):
+            cleaned_dict = {k: v for k, v in first_item.items() 
+                            if k.lower() not in ['marketplaceid', 'marketplace_id', 'language_tag'] and v}
+            if 'images' in cleaned_dict:
+                return [img for img in cleaned_dict['images'] if img and img.get('height') == 1000 and img.get('width') == 1000]
+            
+            processed_dict = self._process_nested_dict(cleaned_dict)
+            return (next(iter(processed_dict.values())) 
+                    if len(processed_dict) == 1 and not isinstance(next(iter(processed_dict.values())), (list, dict))
+                    else processed_dict)
+        elif isinstance(first_item, list):
+            return [self._process_nested_dict(item) for item in first_item 
+                    if isinstance(item, dict) and any(k.lower() not in ['marketplaceid', 'marketplace_id', 'language_tag'] for k in item.keys())]
+        else:
+            return first_item

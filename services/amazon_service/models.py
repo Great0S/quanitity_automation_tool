@@ -1,14 +1,14 @@
-from sqlalchemy import Column, Integer, String, Enum, JSON, ForeignKey, DateTime, Boolean
+from sqlalchemy import Column, Float, Integer, String, Enum, JSON, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from enum import Enum as PyEnum
-from datetime import datetime
+from datetime import datetime, UTC
 
 Base = declarative_base()
 
 class ProductType(PyEnum):
     HOME_BED_AND_BATH = "HOME_BED_AND_BATH"
-    RUGS = "RUGS"
+    RUGS = "RUG"
     CARPET = "CARPET"
     AREA_RUGS = "AREA_RUGS"
     RUNNERS = "RUNNERS"
@@ -31,170 +31,192 @@ class Status(PyEnum):
     ACCEPTED = "ACCEPTED"
     INVALID = "INVALID"
 
-class Product(Base):
-    __tablename__ = "products"
+class AmazonProduct(Base):
+    __tablename__ = "amazon_products"
 
     id = Column(Integer, primary_key=True, index=True)
     sku = Column(String, unique=True, index=True)
-    product_type = Column(Enum(ProductType))
-    attributes = relationship("ProductAttribute", back_populates="product", cascade="all, delete-orphan")
-    patch_requests = relationship("PatchRequest", back_populates="product", cascade="all, delete-orphan")
-    put_requests = relationship("PutRequest", back_populates="product", cascade="all, delete-orphan")
-    delete_requests = relationship("DeleteRequest", back_populates="product", cascade="all, delete-orphan")
+    listing_id = Column(String)
+    quantity = Column(Integer)
+    asin = Column(String)
+    product_type = Column('product_type', Enum(ProductType))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+    
+    attributes = relationship("AmazonProductAttribute", back_populates="product", cascade="all, delete-orphan")
+    identifiers = relationship("AmazonProductIdentifier", back_populates="product", cascade="all, delete-orphan")
+    images = relationship("AmazonProductImage", back_populates="product", cascade="all, delete-orphan")
+    summaries = relationship("AmazonProductSummary", back_populates="product", cascade="all, delete-orphan")
+    offers = relationship("AmazonOffer", back_populates="product", cascade="all, delete-orphan")
+    fulfillment_availability = relationship("AmazonFulfillmentAvailability", back_populates="product", cascade="all, delete-orphan")
+    procurement = relationship("AmazonProcurement", back_populates="product", uselist=False, cascade="all, delete-orphan")
+    patch_requests = relationship("AmazonPatchRequest", back_populates="product", cascade="all, delete-orphan")
+    put_requests = relationship("AmazonPutRequest", back_populates="product", cascade="all, delete-orphan")
+    delete_requests = relationship("AmazonDeleteRequest", back_populates="product", cascade="all, delete-orphan")
+    issues = relationship("AmazonProductIssue", back_populates="product", cascade="all, delete-orphan")
+    
 
-class ProductAttribute(Base):
-    __tablename__ = "product_attributes"
+class AmazonProductAttribute(Base):
+    __tablename__ = "amazon_product_attributes"
 
     id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"))
+    product_id = Column(Integer, ForeignKey("amazon_products.id"))   
     name = Column(String)
     value = Column(JSON)
 
-    product = relationship("Product", back_populates="attributes")
+    product = relationship("AmazonProduct", back_populates="attributes")
 
-class PatchRequest(Base):
-    __tablename__ = "patch_requests"
+class AmazonPatchRequest(Base):
+    __tablename__ = "amazon_patch_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"))
+    product_id = Column(Integer, ForeignKey("amazon_products.id"))
     issue_locale = Column(String)
     submission_id = Column(String)
     status = Column(Enum(Status))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
-    product = relationship("Product", back_populates="patch_requests")
-    operations = relationship("PatchOperation", back_populates="patch_request", cascade="all, delete-orphan")
-    issues = relationship("Issue", back_populates="patch_request", cascade="all, delete-orphan")
+    product = relationship("AmazonProduct", back_populates="patch_requests")
+    operations = relationship("AmazonPatchOperation", back_populates="patch_request", cascade="all, delete-orphan")
+    issues = relationship("AmazonRequestIssue", back_populates="patch_request", cascade="all, delete-orphan")
 
-class PatchOperation(Base):
-    __tablename__ = "patch_operations"
+class AmazonPatchOperation(Base):
+    __tablename__ = "amazon_patch_operations"
 
     id = Column(Integer, primary_key=True, index=True)
-    patch_request_id = Column(Integer, ForeignKey("patch_requests.id"))
+    patch_request_id = Column(Integer, ForeignKey("amazon_patch_requests.id"))
     op = Column(Enum(PatchOperationType))
     path = Column(String)
     value = Column(JSON)
 
-    patch_request = relationship("PatchRequest", back_populates="operations")
+    patch_request = relationship("AmazonPatchRequest", back_populates="operations")
 
-class PutRequest(Base):
-    __tablename__ = "put_requests"
+class AmazonPutRequest(Base):
+    __tablename__ = "amazon_put_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"))
+    product_id = Column(Integer, ForeignKey("amazon_products.id"))
     issue_locale = Column(String)
     submission_id = Column(String)
     status = Column(Enum(Status))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
-    product = relationship("Product", back_populates="put_requests")
-    issues = relationship("Issue", back_populates="put_request", cascade="all, delete-orphan")
+    product = relationship("AmazonProduct", back_populates="put_requests")
+    issues = relationship("AmazonRequestIssue", back_populates="put_request", cascade="all, delete-orphan")
 
-class DeleteRequest(Base):
-    __tablename__ = "delete_requests"
+class AmazonDeleteRequest(Base):
+    __tablename__ = "amazon_delete_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"))
+    product_id = Column(Integer, ForeignKey("amazon_products.id"))
     issue_locale = Column(String)
     submission_id = Column(String)
     status = Column(Enum(Status))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
-    product = relationship("Product", back_populates="delete_requests")
-    issues = relationship("Issue", back_populates="delete_request", cascade="all, delete-orphan")
+    product = relationship("AmazonProduct", back_populates="delete_requests")
+    issues = relationship("AmazonRequestIssue", back_populates="delete_request", cascade="all, delete-orphan")
 
-class Issue(Base):
-    __tablename__ = "issues"
+class AmazonRequestIssue(Base):
+    __tablename__ = "amazon_request_issues"
 
     id = Column(Integer, primary_key=True, index=True)
-    patch_request_id = Column(Integer, ForeignKey("patch_requests.id"), nullable=True)
-    put_request_id = Column(Integer, ForeignKey("put_requests.id"), nullable=True)
-    delete_request_id = Column(Integer, ForeignKey("delete_requests.id"), nullable=True)
+    patch_request_id = Column(Integer, ForeignKey("amazon_patch_requests.id"), nullable=True)
+    put_request_id = Column(Integer, ForeignKey("amazon_put_requests.id"), nullable=True)
+    delete_request_id = Column(Integer, ForeignKey("amazon_delete_requests.id"), nullable=True)
     code = Column(String)
     message = Column(String)
     severity = Column(Enum(IssueType))
     attribute_name = Column(String, nullable=True)
 
-    patch_request = relationship("PatchRequest", back_populates="issues")
-    put_request = relationship("PutRequest", back_populates="issues")
-    delete_request = relationship("DeleteRequest", back_populates="issues")
+    patch_request = relationship("AmazonPatchRequest", back_populates="issues")
+    put_request = relationship("AmazonPutRequest", back_populates="issues")
+    delete_request = relationship("AmazonDeleteRequest", back_populates="issues")
 
-class ListingsItem(Base):
-    __tablename__ = "listings_items"
-
-    id = Column(Integer, primary_key=True, index=True)
-    sku = Column(String, unique=True, index=True)
-    summaries = relationship("ListingsSummary", back_populates="item", cascade="all, delete-orphan")
-    attributes = relationship("ListingsAttribute", back_populates="item", cascade="all, delete-orphan")
-    issues = relationship("ListingsIssue", back_populates="item", cascade="all, delete-orphan")
-    offers = relationship("ListingsOffer", back_populates="item", cascade="all, delete-orphan")
-    fulfillment_availability = relationship("FulfillmentAvailability", back_populates="item", cascade="all, delete-orphan")
-    procurement = relationship("Procurement", back_populates="item", uselist=False, cascade="all, delete-orphan")
-
-class ListingsSummary(Base):
-    __tablename__ = "listings_summaries"
+class AmazonOffer(Base):
+    __tablename__ = "amazon_offers"
 
     id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(Integer, ForeignKey("listings_items.id"))
-    marketplace_id = Column(String)
-    status = Column(String)
-    item_name = Column(String)
-    created_date = Column(DateTime)
-    last_updated_date = Column(DateTime)
-    product_type = Column(String)
-
-    item = relationship("ListingsItem", back_populates="summaries")
-
-class ListingsAttribute(Base):
-    __tablename__ = "listings_attributes"
-
-    id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(Integer, ForeignKey("listings_items.id"))
-    name = Column(String)
-    value = Column(JSON)
-
-    item = relationship("ListingsItem", back_populates="attributes")
-
-class ListingsIssue(Base):
-    __tablename__ = "listings_issues"
-
-    id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(Integer, ForeignKey("listings_items.id"))
-    code = Column(String)
-    message = Column(String)
-    severity = Column(Enum(IssueType))
-    attribute_name = Column(String, nullable=True)
-
-    item = relationship("ListingsItem", back_populates="issues")
-
-class ListingsOffer(Base):
-    __tablename__ = "listings_offers"
-
-    id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(Integer, ForeignKey("listings_items.id"))
-    marketplace_id = Column(String)
+    product_id = Column(Integer, ForeignKey("amazon_products.id"))
+    
     price = Column(JSON)
     points = Column(JSON, nullable=True)
 
-    item = relationship("ListingsItem", back_populates="offers")
+    product = relationship("AmazonProduct", back_populates="offers")
 
-class FulfillmentAvailability(Base):
-    __tablename__ = "fulfillment_availability"
+class AmazonFulfillmentAvailability(Base):
+    __tablename__ = "amazon_fulfillment_availability"
 
     id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(Integer, ForeignKey("listings_items.id"))
+    product_id = Column(Integer, ForeignKey("amazon_products.id"))
     fulfillment_channel_code = Column(String)
     quantity = Column(Integer)
-    marketplace_id = Column(String)
 
-    item = relationship("ListingsItem", back_populates="fulfillment_availability")
+    product = relationship("AmazonProduct", back_populates="fulfillment_availability")
 
-class Procurement(Base):
-    __tablename__ = "procurement"
+class AmazonProcurement(Base):
+    __tablename__ = "amazon_procurement"
 
     id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(Integer, ForeignKey("listings_items.id"), unique=True)
+    product_id = Column(Integer, ForeignKey("amazon_products.id"))
     cost_price = Column(JSON)
+    minimum_order_quantity = Column(Integer, nullable=True)
 
-    item = relationship("ListingsItem", back_populates="procurement")
+    product = relationship("AmazonProduct", back_populates="procurement")
 
+class AmazonProductSummary(Base):
+    __tablename__ = "amazon_product_summaries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("amazon_products.id"))
+    
+    adult_product = Column(Boolean)
+    autographed = Column(Boolean)
+    brand = Column(String)
+    browse_classification = Column(JSON)
+    color = Column(String)
+    item_classification = Column(String)
+    item_name = Column(String)
+    memorabilia = Column(Boolean)
+    size = Column(String)
+    trade_in_eligible = Column(Boolean)
+    website_display_group = Column(String)
+    website_display_group_name = Column(String)
+
+    product = relationship("AmazonProduct", back_populates="summaries")
+
+class AmazonProductIssue(Base):
+    __tablename__ = "amazon_product_issues"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("amazon_products.id"))
+    code = Column(String)
+    message = Column(String)
+    severity = Column(Enum(IssueType))
+    attribute_name = Column(String, nullable=True)
+
+    product = relationship("AmazonProduct", back_populates="issues")
+
+class AmazonProductIdentifier(Base):
+    __tablename__ = "amazon_product_identifiers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("amazon_products.id"))
+    
+    identifier_type = Column(String)
+    identifier = Column(String)
+
+    product = relationship("AmazonProduct", back_populates="identifiers")
+
+class AmazonProductImage(Base):
+    __tablename__ = "amazon_product_images"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("amazon_products.id"))
+    
+    variant = Column(String)
+    link = Column(String)
+    height = Column(Integer)
+    width = Column(Integer)
+
+    product = relationship("AmazonProduct", back_populates="images")

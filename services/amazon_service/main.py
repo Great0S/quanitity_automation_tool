@@ -1,9 +1,10 @@
+from contextlib import asynccontextmanager
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
-from app.api.amazon_seller_api import AmazonListingManager
+from services.amazon_service.api.amazon_seller_api import AmazonListingManager
 from services.amazon_service.database import DatabaseManager
 from services.amazon_service.schemas import (
     GetListingsItemRequest, GetListingsItemResponse,
@@ -14,9 +15,22 @@ from services.amazon_service.schemas import (
 from services.amazon_service.models import ProductType
 from shared.logging import logger
 
-router = APIRouter()
+db_manager = DatabaseManager()
 
-@router.get("/listings/2021-08-01/items/{sku}", response_model=GetListingsItemResponse)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await db_manager.init_db()
+    yield
+    # Shutdown
+    # Add any cleanup code here if needed
+    await db_manager.close_db()
+
+app = FastAPI(lifespan=lifespan)
+router = APIRouter()
+app.include_router(router)
+
+@app.get("/listings/2021-08-01/items/{sku}", response_model=GetListingsItemResponse)
 async def get_listings_item(
     sku: str,
     marketplaceIds: List[str] = Query(...),
@@ -39,7 +53,7 @@ async def get_listings_item(
         logger.error(f"Error getting listings item: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.put("/listings/2021-08-01/items/{sku}", response_model=ListingsItemPutResponse)
+@app.put("/listings/2021-08-01/items/{sku}", response_model=ListingsItemPutResponse)
 async def put_listings_item(
     sku: str,
     item: ListingsItemPutRequest,
@@ -59,7 +73,7 @@ async def put_listings_item(
         logger.error(f"Error creating listings item: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.patch("/listings/2021-08-01/items/{sku}", response_model=ListingsPatchResponse)
+@app.patch("/listings/2021-08-01/items/{sku}", response_model=ListingsPatchResponse)
 async def patch_listings_item(
     sku: str,
     patch_request: ListingsPatchRequest,
@@ -81,7 +95,7 @@ async def patch_listings_item(
         logger.error(f"Error patching listings item: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/listings/2021-08-01/items/{sku}", response_model=DeleteListingsItemResponse)
+@app.delete("/listings/2021-08-01/items/{sku}", response_model=DeleteListingsItemResponse)
 async def delete_listings_item(
     sku: str,
     marketplaceIds: List[str] = Query(...),
@@ -102,20 +116,29 @@ async def delete_listings_item(
         logger.error(f"Error deleting listings item: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/listings/2021-08-01/items", response_model=List[GetListingsItemResponse])
+@app.get("/listings/2021-08-01/items", response_model=List[GetListingsItemResponse])
 async def get_listings_items(
     marketplaceIds: Optional[List[str]] = Query(None),
     sellerId: Optional[str] = Query(None),
     issueLocale: Optional[str] = Query(None),
     includedData: Optional[List[str]] = Query(None),
     skus: Optional[List[str]] = Query(None),
+    load_all: bool = Query(False, description="If True, load all products data"),
     db_manager: DatabaseManager = Depends(DatabaseManager),
     amazon_api: AmazonListingManager = Depends(AmazonListingManager)
 ):
+    db_listings = []
     try:
         # First, try to get the listings from the database
         async with db_manager.get_db() as session:
-            db_listings = await db_manager.get_products(skus)
+            # Fetch all products without considering skus or load_all
+            db_listings = await db_manager.get_products()
+            
+            # Check if data exists
+            if db_listings:
+                return db_listings
+            else:
+                db_listings = []
 
         if db_listings:
             # If listings are found in the database, return them
@@ -133,12 +156,12 @@ async def get_listings_items(
             ]
         else:
             # If no listings found in the database, fetch from SP API
-            sp_api_listings = await amazon_api.get_listings_items(skus)
+            sp_api_listings = await amazon_api.get_listings(load_all=load_all)
             
             if sp_api_listings:
                 # Save the retrieved listings to the database
                 async with db_manager.get_db() as session:
-                    await db_manager.save_products(sp_api_listings)
+                    await db_manager.create_product(sp_api_listings)
                 
                 # Return the listings from SP API
                 return [
@@ -160,9 +183,6 @@ async def get_listings_items(
         logger.error(f"Error retrieving listings items: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Add the router to your FastAPI app
-app = FastAPI()
-app.include_router(router)
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):

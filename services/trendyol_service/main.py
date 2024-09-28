@@ -1,6 +1,8 @@
 from enum import Enum
 from typing import Optional, Union
 from fastapi import APIRouter, Body, FastAPI, HTTPException, Query
+from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 
 from services.trendyol_service.api.trendyol_api import TrendyolAPI
 from services.trendyol_service.models import Product
@@ -8,10 +10,18 @@ from services.trendyol_service.database import DatabaseManager
 from .schemas import ProductInDB, ProductPriceUpdate, ProductSchema, ProductStockUpdate, ProductBase
 
 router = APIRouter()
-app = FastAPI()
-
 trendyol_api = TrendyolAPI()
 db_manager = DatabaseManager()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await db_manager.init_db()
+    yield
+    # Shutdown
+    # Add any cleanup code here if needed
+
+app = FastAPI(lifespan=lifespan)
 
 app.include_router(router)
 
@@ -104,3 +114,11 @@ async def delete_product_by_stock_code(stock_code: str):
     if deleted_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     return deleted_product
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"errors": [{"code": str(exc.status_code), "message": exc.detail}]}
+    )
+

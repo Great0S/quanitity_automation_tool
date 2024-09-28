@@ -1,11 +1,8 @@
-from enum import Enum
 from pydantic import BaseModel, Field
-from typing import List, Optional, Union, Dict, Any
+from typing import List, Optional, Union, Dict, Any, Literal
 from datetime import datetime
 
 from services.amazon_service.models import IssueType, PatchOperationType, ProductType, Status
-
-
 
 class PatchOperation(BaseModel):
     op: PatchOperationType
@@ -41,7 +38,7 @@ class ListingsOfferPriceType(BaseModel):
     minimumAdvertisedPrice: Optional[Money] = None
 
 class ListingsOfferType(BaseModel):
-    marketplaceId: str
+    
     offerType: str
     price: ListingsOfferPriceType
     points: Optional[Points] = None
@@ -79,21 +76,110 @@ class ListingsItemDeleteResponse(BaseModel):
     issues: Optional[List[Issue]] = None
 
 class ListingsSummaries(BaseModel):
-    marketplaceId: str
     status: str
     itemName: str
     createdDate: datetime
     lastUpdatedDate: datetime
     productType: Optional[str] = None
 
-class ListingsItem(BaseModel):
+class AmazonProductSchema(BaseModel):
+    id: Optional[int] = None
     sku: str
-    summaries: List[ListingsSummaries]
-    attributes: Optional[Dict[str, List[AttributeValue]]] = None
-    issues: Optional[List[Issue]] = None
-    offers: Optional[List[ListingsOfferType]] = None
-    fulfillmentAvailability: Optional[List[FulfillmentAvailability]] = None
-    procurement: Optional[Procurement] = None
+    listing_id: str
+    quantity: int
+    asin: str
+    product_type: ProductType
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+class AmazonProductAttributeSchema(BaseModel):
+    id: Optional[int] = None
+    product_id: int
+    
+    name: str
+    value: Any
+    language_tag: Optional[str] = None
+
+class AmazonProductIdentifierSchema(BaseModel):
+    id: Optional[int] = None
+    product_id: int
+    
+    identifier_type: str
+    identifier: str
+
+class AmazonProductImageSchema(BaseModel):
+    id: Optional[int] = None
+    product_id: int
+    
+    variant: str
+    link: str
+    height: int
+    width: int
+
+class BrowseClassificationSchema(BaseModel):
+    display_name: str
+    classification_id: str
+
+class AmazonProductSummarySchema(BaseModel):
+    id: Optional[int] = None
+    product_id: int
+    
+    adult_product: bool
+    autographed: bool
+    brand: str
+    browse_classification: BrowseClassificationSchema
+    color: str
+    item_classification: str
+    item_name: str
+    memorabilia: bool
+    size: str
+    trade_in_eligible: bool
+    website_display_group: str
+    website_display_group_name: str
+
+class AmazonPatchRequestSchema(BaseModel):
+    id: Optional[int] = None
+    product_id: int
+    patch_data: Dict[str, Any]
+    status: Status
+    submission_id: str
+    created_at: Optional[datetime] = None
+
+class AmazonPutRequestSchema(BaseModel):
+    id: Optional[int] = None
+    product_id: int
+    put_data: Dict[str, Any]
+    status: Status
+    submission_id: str
+    created_at: Optional[datetime] = None
+
+class AmazonDeleteRequestSchema(BaseModel):
+    id: Optional[int] = None
+    product_id: int
+    status: Status
+    submission_id: str
+    created_at: Optional[datetime] = None
+
+class AmazonProductIssueSchema(BaseModel):
+    id: Optional[int] = None
+    product_id: int
+    code: str
+    message: str
+    severity: IssueType
+    attribute_name: Optional[str] = None
+
+class AmazonOfferSchema(BaseModel):
+    id: Optional[int] = None
+    product_id: int
+    
+    price: Dict[str, Any]
+    points: Optional[Dict[str, Any]] = None
+
+class AmazonFulfillmentAvailabilitySchema(BaseModel):
+    id: Optional[int] = None
+    product_id: int
+    fulfillment_channel_code: str
+    quantity: int
 
 class ErrorList(BaseModel):
     errors: List[Issue]
@@ -106,12 +192,14 @@ class GetListingsItemRequest(BaseModel):
 
 class GetListingsItemResponse(BaseModel):
     sku: str
-    summaries: List[ListingsSummaries]
-    attributes: Optional[Dict[str, List[AttributeValue]]] = None
-    issues: Optional[List[Issue]] = None
-    offers: Optional[List[ListingsOfferType]] = None
-    fulfillmentAvailability: Optional[List[FulfillmentAvailability]] = None
-    procurement: Optional[Procurement] = None
+    listing_id: str
+    quantity: int
+    asin: str
+    attributes: Dict[str, List[AttributeValue]]
+    identifiers: List[Dict[str, Union[str, List[Dict[str, str]]]]]
+    images: List[Dict[str, Union[str, List[Dict[str, Union[str, int]]]]]]
+    productTypes: List[Dict[str, str]]
+    summaries: List[Dict[str, Any]]
 
 class PutListingsItemRequest(ListingsItemPutRequest):
     pass

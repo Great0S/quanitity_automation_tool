@@ -6,16 +6,17 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import update, delete
 from datetime import datetime
-from typing import List, Optional, Dict, Any, TypeVar
+from typing import List, Optional, Dict, Any, TypeVar, Union
 from contextlib import asynccontextmanager
+from sqlalchemy import inspect as sa_inspect
 
 from services.amazon_service.models import (
-    Base, PatchOperationType, Product, ProductAttribute, PatchRequest, PutRequest, DeleteRequest,
-    PatchOperation, Issue, ListingsItem, ListingsSummary, ListingsAttribute,
-    ListingsIssue, ListingsOffer, FulfillmentAvailability, Procurement
+    Base, PatchOperationType, AmazonProduct, AmazonProductAttribute, AmazonPatchRequest, AmazonPutRequest, AmazonDeleteRequest,
+    AmazonPatchOperation, AmazonProductIssue, AmazonProductSummary, AmazonOffer,
+    AmazonFulfillmentAvailability, AmazonProcurement, AmazonProductIdentifier, AmazonProductImage, ProductType
 )
 from services.amazon_service.schemas import (
-    ListingsPatchRequest, ListingsItemPutRequest, GetListingsItemRequest
+    ListingsPatchRequest, ListingsItemPutRequest, GetListingsItemRequest, GetListingsItemResponse
 )
 from services.amazon_service.models import Status
 from shared.logging import logger
@@ -52,7 +53,29 @@ class DatabaseManager:
 
     async def init_db(self):
         async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+            # Check if tables exist
+            def get_table_names(connection):
+                inspector = sa_inspect(connection)
+                return inspector.get_table_names()
+
+            existing_tables = await conn.run_sync(get_table_names)
+            # await conn.run_sync(Base.metadata.drop_all)
+
+            
+            if not existing_tables:
+                logger.info("No existing tables found. Creating tables...")
+                await conn.run_sync(Base.metadata.create_all)
+                logger.info("Tables created successfully.")
+            else:
+                model_tables = set(Base.metadata.tables.keys())
+                existing_tables_set = set(existing_tables)
+                if model_tables.issubset(existing_tables_set):
+                    pass
+                else:
+                    missing_tables = model_tables - existing_tables_set
+                    logger.info(f"Creating missing tables: {missing_tables}")
+                    await conn.run_sync(Base.metadata.create_all)
+                    logger.info("Tables created successfully.")
 
     @asynccontextmanager
     async def get_db(self):
@@ -66,124 +89,234 @@ class DatabaseManager:
             finally:
                 await session.close()
 
-    async def create_product(self, product_data: ListingsItemPutRequest) -> Product:
+    async def create_product(self, products_data: List[Dict]) -> List[AmazonProduct]:
         async with self.get_db() as session:
-            new_product = Product(
-                sku=product_data.sku,
-                product_type=product_data.productType
-            )
-            session.add(new_product)
-            await session.flush()
+            new_products = []
+            for product_data in products_data:
+                new_product = AmazonProduct(
+                    sku=product_data['sku'],
+                    listing_id=product_data.get('listing-id'),
+                    quantity=int(product_data.get('quantity', 0)),
+                    asin=product_data.get('asin'),
+                    product_type=ProductType(product_data.get('productType')) if product_data.get('productType') else None
+                )
+                session.add(new_product)
+                await session.flush()
 
-            for name, values in product_data.attributes.items():
-                for value in values:
-                    attr = ProductAttribute(
+                # Add attributes
+                for name, values in product_data.get('attributes', {}).items():
+                    for value in values:
+                        attr = AmazonProductAttribute(
+                            product_id=new_product.id,
+                            name=name,
+                            value=value['value'],
+                        )
+                        session.add(attr)
+
+                # Add identifiers
+                for identifier_group in product_data.get('identifiers', []):
+                    for identifier in identifier_group.get('identifiers', []):
+                        ident = AmazonProductIdentifier(
+                            product_id=new_product.id,
+                            identifier_type=identifier.get('identifierType'),
+                            identifier=identifier.get('identifier')
+                        )
+                        session.add(ident)
+
+                # Add images
+                for image_group in product_data.get('images', []):
+                    for image in image_group.get('images', []):
+                        img = AmazonProductImage(
+                            product_id=new_product.id,
+                            variant=image.get('variant'),
+                            link=image.get('link'),
+                            height=image.get('height'),
+                            width=image.get('width')
+                        )
+                        session.add(img)
+
+                # Add summaries
+                for summary_data in product_data.get('summaries', []):
+                    summary = AmazonProductSummary(
                         product_id=new_product.id,
-                        name=name,
-                        value=value
+                        adult_product=summary_data.get('adultProduct'),
+                        autographed=summary_data.get('autographed'),
+                        brand=summary_data.get('brand'),
+                        browse_classification=summary_data.get('browseClassification'),
+                        color=summary_data.get('color'),
+                        item_classification=summary_data.get('itemClassification'),
+                        item_name=summary_data.get('itemName'),
+                        memorabilia=summary_data.get('memorabilia'),
+                        size=summary_data.get('size'),
+                        trade_in_eligible=summary_data.get('tradeInEligible'),
+                        website_display_group=summary_data.get('websiteDisplayGroup'),
+                        website_display_group_name=summary_data.get('websiteDisplayGroupName')
                     )
-                    session.add(attr)
+                    session.add(summary)
+
+                new_products.append(new_product)
 
             await session.commit()
-            return new_product
+            return new_products
 
-    async def get_product(self, sku: str, request: GetListingsItemRequest) -> Optional[ListingsItem]:
+    async def get_products(self, sku: Optional[str] = None, request: GetListingsItemRequest = None) -> Union[List[GetListingsItemResponse], GetListingsItemResponse]:
         async with self.get_db() as session:
-            query = select(Product).options(
-                selectinload(Product.attributes),
-                selectinload(Product.offers),
-                selectinload(Product.fulfillment_availability),
-                selectinload(Product.procurement)
-            ).filter(Product.sku == sku)
-
-            result = await session.execute(query)
-            product = result.scalar_one_or_none()
-
-            if not product:
-                return None
-
-            return ListingsItem(
-                sku=product.sku,
-                summaries=[ListingsSummary(
-                    marketplace_id=marketplace_id,
-                    status="BUYABLE",  # This should be determined based on your business logic
-                    item_name=next((attr.value for attr in product.attributes if attr.name == "item_name"), None),
-                    created_date=product.created_at,
-                    last_updated_date=product.updated_at,
-                    product_type=product.product_type
-                ) for marketplace_id in request.marketplaceIds],
-                attributes={attr.name: [attr.value] for attr in product.attributes},
-                offers=[ListingsOffer.from_orm(offer) for offer in product.offers] if 'offers' in request.includedData else None,
-                fulfillment_availability=[FulfillmentAvailability.from_orm(fa) for fa in product.fulfillment_availability] if 'fulfillmentAvailability' in request.includedData else None,
-                procurement=Procurement.from_orm(product.procurement) if product.procurement and 'procurement' in request.includedData else None
+            query = select(AmazonProduct).options(
+                selectinload(AmazonProduct.attributes),
+                selectinload(AmazonProduct.identifiers),
+                selectinload(AmazonProduct.images),
+                selectinload(AmazonProduct.summaries),
+                selectinload(AmazonProduct.offers),
+                selectinload(AmazonProduct.fulfillment_availability),
+                selectinload(AmazonProduct.procurement)
             )
 
-    async def update_product(self, sku: str, patch_request: ListingsPatchRequest) -> PatchRequest:
+            if sku:
+                query = query.filter(AmazonProduct.sku == sku)
+
+            result = await session.execute(query)
+            products = result.scalars().all()
+
+            if not products:
+                return [] if not sku else None
+
+            def create_response(product):
+                item_response = GetListingsItemResponse(
+                    sku=product.sku,
+                    listing_id=product.listing_id,
+                    quantity=product.quantity,
+                    asin=product.asin,
+                    attributes={attr.name: [{"value": attr.value, "marketplace_id": attr.marketplace_id, "language_tag": attr.language_tag}] for attr in product.attributes},
+                    identifiers=[{
+                        "marketplaceId": identifier.marketplace_id,
+                        "identifiers": [{"identifierType": identifier.identifier_type, "identifier": identifier.identifier}]
+                    } for identifier in product.identifiers],
+                    images=[{
+                        "marketplaceId": image.marketplace_id,
+                        "images": [{"variant": image.variant, "link": image.link, "height": image.height, "width": image.width}]
+                    } for image in product.images],
+                    productTypes=[{"marketplaceId": summary.marketplace_id, "productType": product.product_type} for summary in product.summaries],
+                    summaries=[{
+                        "marketplaceId": summary.marketplace_id,
+                        "adultProduct": summary.adult_product,
+                        "autographed": summary.autographed,
+                        "brand": summary.brand,
+                        "browseClassification": summary.browse_classification,
+                        "color": summary.color,
+                        "itemClassification": summary.item_classification,
+                        "itemName": summary.item_name,
+                        "memorabilia": summary.memorabilia,
+                        "size": summary.size,
+                        "tradeInEligible": summary.trade_in_eligible,
+                        "websiteDisplayGroup": summary.website_display_group,
+                        "websiteDisplayGroupName": summary.website_display_group_name
+                    } for summary in product.summaries]
+                )
+                return item_response
+            responses = [create_response(product) for product in products]
+            return responses if not sku else responses[0] if responses else None
+
+    async def update_product(self, sku: str, patch_request: ListingsPatchRequest) -> AmazonPatchRequest:
         async with self.get_db() as session:
-            product = await session.execute(select(Product).filter(Product.sku == sku))
+            product = await session.execute(select(AmazonProduct).filter(AmazonProduct.sku == sku))
             product = product.scalar_one_or_none()
 
             if not product:
                 raise ValueError(f"Product with SKU {sku} not found")
 
-            patch_req = PatchRequest(
+            patch_req = AmazonPatchRequest(
                 product_id=product.id,
                 issue_locale=patch_request.issueLocale,
-                status=Status.ACCEPTED,
+                status=Status.PENDING,
                 submission_id=f"submission_{datetime.utcnow().timestamp()}",
                 created_at=datetime.utcnow()
             )
             session.add(patch_req)
 
-            for patch in patch_request.patches:
-                operation = PatchOperation(
-                    patch_request_id=patch_req.id,
-                    op=patch.op,
-                    path=patch.path,
-                    value=patch.value
-                )
-                session.add(operation)
+            try:
+                for patch in patch_request.patches:
+                    operation = AmazonPatchOperation(
+                        patch_request_id=patch_req.id,
+                        op=patch.op,
+                        path=patch.path,
+                        value=patch.value
+                    )
+                    session.add(operation)
 
-                # Apply the patch operation to the product
-                await self._apply_patch(session, product, patch)
+                    # Apply the patch operation to the product
+                    await self._apply_patch(session, product, patch)
 
-            await session.commit()
+                patch_req.status = Status.ACCEPTED
+                await session.commit()
+            except Exception as e:
+                patch_req.status = Status.REJECTED
+                await session.commit()
+                logger.error(f"Error updating product {sku}: {str(e)}")
+                raise
+
             return patch_req
 
-    async def _apply_patch(self, session: AsyncSession, product: Product, patch: PatchOperation):
+    async def _apply_patch(self, session: AsyncSession, product: AmazonProduct, patch: AmazonPatchOperation):
         path_parts = patch.path.split('/')
         if path_parts[1] == 'attributes':
-            attr_name = path_parts[2]
-            if patch.op == PatchOperationType.REPLACE:
-                stmt = select(ProductAttribute).filter(
-                    ProductAttribute.product_id == product.id,
-                    ProductAttribute.name == attr_name
-                )
-                result = await session.execute(stmt)
-                attr = result.scalar_one_or_none()
-                if attr:
-                    attr.value = patch.value
-                else:
-                    new_attr = ProductAttribute(product_id=product.id, name=attr_name, value=patch.value)
-                    session.add(new_attr)
-            elif patch.op == PatchOperationType.DELETE:
-                stmt = delete(ProductAttribute).filter(
-                    ProductAttribute.product_id == product.id,
-                    ProductAttribute.name == attr_name
-                )
-                await session.execute(stmt)
-        # Add more conditions for other patch operations as needed
+            await self._update_attribute(session, product, patch, path_parts[2])
+        elif path_parts[1] == 'offers':
+            await self._update_offer(session, product, patch)
+        elif path_parts[1] == 'fulfillmentAvailability':
+            await self._update_fulfillment_availability(session, product, patch)
+        else:
+            raise ValueError(f"Unsupported patch path: {patch.path}")
 
-    async def delete_product(self, sku: str) -> DeleteRequest:
+    async def _update_attribute(self, session: AsyncSession, product: AmazonProduct, patch: AmazonPatchOperation, attr_name: str):
+        if patch.op == PatchOperationType.REPLACE:
+            stmt = select(AmazonProductAttribute).filter(
+                AmazonProductAttribute.product_id == product.id,
+                AmazonProductAttribute.name == attr_name
+            )
+            result = await session.execute(stmt)
+            attr = result.scalar_one_or_none()
+            if attr:
+                attr.value = patch.value
+                # Update marketplace_id and language_tag if provided
+                if isinstance(patch.value, dict):
+                    attr.marketplace_id = patch.value.get('marketplace_id', attr.marketplace_id)
+                    attr.language_tag = patch.value.get('language_tag', attr.language_tag)
+            else:
+                new_attr = AmazonProductAttribute(
+                    product_id=product.id,
+                    name=attr_name,
+                    value=patch.value if not isinstance(patch.value, dict) else patch.value['value'],
+                    marketplace_id=patch.value.get('marketplace_id') if isinstance(patch.value, dict) else None,
+                    language_tag=patch.value.get('language_tag') if isinstance(patch.value, dict) else None
+                )
+                session.add(new_attr)
+        elif patch.op == PatchOperationType.DELETE:
+            stmt = delete(AmazonProductAttribute).filter(
+                AmazonProductAttribute.product_id == product.id,
+                AmazonProductAttribute.name == attr_name
+            )
+            await session.execute(stmt)
+        else:
+            raise ValueError(f"Unsupported operation for attributes: {patch.op}")
+
+    async def _update_offer(self, session: AsyncSession, product: AmazonProduct, patch: AmazonPatchOperation):
+        # Implement offer updates here
+        pass
+
+    async def _update_fulfillment_availability(self, session: AsyncSession, product: AmazonProduct, patch: AmazonPatchOperation):
+        # Implement fulfillment availability updates here
+        pass
+
+    async def delete_product(self, sku: str) -> AmazonDeleteRequest:
         async with self.get_db() as session:
-            stmt = select(Product).filter(Product.sku == sku)
+            stmt = select(AmazonProduct).filter(AmazonProduct.sku == sku)
             result = await session.execute(stmt)
             product = result.scalar_one_or_none()
 
             if not product:
                 raise ValueError(f"Product with SKU {sku} not found")
 
-            delete_req = DeleteRequest(
+            delete_req = AmazonDeleteRequest(
                 product_id=product.id,
                 status=Status.ACCEPTED,
                 submission_id=f"deletion_{datetime.utcnow().timestamp()}",
