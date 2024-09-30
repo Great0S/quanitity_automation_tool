@@ -4,10 +4,6 @@ import os
 import re
 import requests
 from app.config import logger
-from api.n11_soap_api import N11SoapAPI
-
-
-n11Soap = N11SoapAPI()
 
 
 class N11RestAPI:
@@ -188,12 +184,12 @@ class N11RestAPI:
         if post_response.status_code == 200:
 
             task_payload = {
-                "taskId": post_response.json()["taskId"],
+                "taskId": post_response.json()["id"],
                 "pageable": {"page": 0, "size": 1000},
             }
 
             while True:
-                task_response = requests.get(
+                task_response = requests.post(
                     self.base_url + "ms/product/task-details/page-query",
                     headers=self.headers,
                     json=task_payload,
@@ -205,7 +201,7 @@ class N11RestAPI:
                         task_response_json = task_response.json()
 
                         logger.info(
-                            f"Request for product {product['sku']} is successful | Response: {task_response_json['skus']['content'][0]['status']} - {task_response_json['skus']['content']['reasons']}"
+                            f"Request for product {product['sku']} is successful | Response: {task_response_json['skus']['content'][0]['status']} - {task_response_json['skus']['content'][0]['reasons']}"
                         )
 
                         return

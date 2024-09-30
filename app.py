@@ -9,7 +9,6 @@ import os
 from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
 from api.n11_rest_api import N11RestAPI
-from api.n11_soap_api import N11SoapAPI
 from tui import ProductManagerApp
 from rich.prompt import Prompt
 from typing import Dict, List, Any, Optional, Tuple
@@ -28,7 +27,6 @@ from api.wordpress_api import (
 
 hpApi = Hb_API()
 n11Api = N11RestAPI()
-n11SApi = N11SoapAPI()
 amznApi = AmazonListingManager()
 pazaramaApi = PazaramaAPIClient()
 
