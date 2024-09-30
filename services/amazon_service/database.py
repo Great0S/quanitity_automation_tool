@@ -52,30 +52,42 @@ class DatabaseManager:
         )
 
     async def init_db(self):
-        async with self.engine.begin() as conn:
-            # Check if tables exist
-            def get_table_names(connection):
-                inspector = sa_inspect(connection)
-                return inspector.get_table_names()
+        try:
+            async with self.engine.begin() as conn:
+                # Check if tables exist
+                def get_table_names(connection):
+                    inspector = sa_inspect(connection)
+                    return inspector.get_table_names()
 
-            existing_tables = await conn.run_sync(get_table_names)
-            # await conn.run_sync(Base.metadata.drop_all)
+                existing_tables = await conn.run_sync(get_table_names)
+                # await conn.run_sync(Base.metadata.drop_all)
 
-            
-            if not existing_tables:
-                logger.info("No existing tables found. Creating tables...")
-                await conn.run_sync(Base.metadata.create_all)
-                logger.info("Tables created successfully.")
-            else:
-                model_tables = set(Base.metadata.tables.keys())
-                existing_tables_set = set(existing_tables)
-                if model_tables.issubset(existing_tables_set):
-                    pass
-                else:
-                    missing_tables = model_tables - existing_tables_set
-                    logger.info(f"Creating missing tables: {missing_tables}")
+                
+                if not existing_tables:
+                    logger.info("No existing tables found. Creating tables...")
                     await conn.run_sync(Base.metadata.create_all)
                     logger.info("Tables created successfully.")
+                else:
+                    model_tables = set(Base.metadata.tables.keys())
+                    existing_tables_set = set(existing_tables)
+                    if model_tables.issubset(existing_tables_set):
+                        pass
+                    else:
+                        missing_tables = model_tables - existing_tables_set
+                        logger.info(f"Creating missing tables: {missing_tables}")
+                        await conn.run_sync(Base.metadata.create_all)
+                        logger.info("Tables created successfully.")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize database: {str(e)}")
+            logger.error(f"Database URL: {self.database_url}")
+            logger.error("Please check if the database server is running and accessible.")
+            logger.error("Ensure that the following environment variables are set correctly:")
+            logger.error(f"DB_USER: {self.db_user}")
+            logger.error(f"DB_HOST: {self.db_host}")
+            logger.error(f"DB_PORT: {self.db_port}")
+            logger.error(f"DB_NAME: {self.db_name}")
+            raise
 
     @asynccontextmanager
     async def get_db(self):
@@ -187,30 +199,14 @@ class DatabaseManager:
                     quantity=product.quantity,
                     asin=product.asin,
                     attributes={attr.name: [{"value": attr.value, "marketplace_id": attr.marketplace_id, "language_tag": attr.language_tag}] for attr in product.attributes},
-                    identifiers=[{
-                        "marketplaceId": identifier.marketplace_id,
-                        "identifiers": [{"identifierType": identifier.identifier_type, "identifier": identifier.identifier}]
-                    } for identifier in product.identifiers],
                     images=[{
                         "marketplaceId": image.marketplace_id,
                         "images": [{"variant": image.variant, "link": image.link, "height": image.height, "width": image.width}]
                     } for image in product.images],
-                    productTypes=[{"marketplaceId": summary.marketplace_id, "productType": product.product_type} for summary in product.summaries],
-                    summaries=[{
-                        "marketplaceId": summary.marketplace_id,
-                        "adultProduct": summary.adult_product,
-                        "autographed": summary.autographed,
-                        "brand": summary.brand,
-                        "browseClassification": summary.browse_classification,
-                        "color": summary.color,
-                        "itemClassification": summary.item_classification,
-                        "itemName": summary.item_name,
-                        "memorabilia": summary.memorabilia,
-                        "size": summary.size,
-                        "tradeInEligible": summary.trade_in_eligible,
-                        "websiteDisplayGroup": summary.website_display_group,
-                        "websiteDisplayGroupName": summary.website_display_group_name
-                    } for summary in product.summaries]
+                    productTypes= product.product_type,
+                    browseClassification = product.summaries.browse_classification,
+                    color = product.summaries.color,
+                    size = product.summaries.size,
                 )
                 return item_response
             responses = [create_response(product) for product in products]

@@ -195,11 +195,12 @@ class GetListingsItemResponse(BaseModel):
     listing_id: str
     quantity: int
     asin: str
-    attributes: Dict[str, List[AttributeValue]]
-    identifiers: List[Dict[str, Union[str, List[Dict[str, str]]]]]
-    images: List[Dict[str, Union[str, List[Dict[str, Union[str, int]]]]]]
-    productTypes: List[Dict[str, str]]
-    summaries: List[Dict[str, Any]]
+    browseClassification: Optional[BrowseClassificationSchema] = None
+    attributes: Optional[Dict[str, List[AttributeValue]]] = None
+    images: Optional[List[Dict[str, Union[str, List[Dict[str, Union[str, int]]]]]]] = None  
+    productTypes: Optional[str] = None
+    color: Optional[str] = None
+    size: Optional[str] = None
 
 class PutListingsItemRequest(ListingsItemPutRequest):
     pass

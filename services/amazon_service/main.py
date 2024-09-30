@@ -122,43 +122,30 @@ async def get_listings_items(
     sellerId: Optional[str] = Query(None),
     issueLocale: Optional[str] = Query(None),
     includedData: Optional[List[str]] = Query(None),
-    skus: Optional[List[str]] = Query(None),
+    sku: Optional[str] = Query(None),
     load_all: bool = Query(False, description="If True, load all products data"),
     db_manager: DatabaseManager = Depends(DatabaseManager),
     amazon_api: AmazonListingManager = Depends(AmazonListingManager)
 ):
-    db_listings = []
     try:
         # First, try to get the listings from the database
         async with db_manager.get_db() as session:
-            # Fetch all products without considering skus or load_all
-            db_listings = await db_manager.get_products()
-            
-            # Check if data exists
-            if db_listings:
-                return db_listings
-            else:
-                db_listings = []
-
+            db_listings = await db_manager.get_products(sku=sku)
+        
         if db_listings:
             # If listings are found in the database, return them
             return [
-                GetListingsItemResponse(
-                    sku=listing.sku,
-                    status=listing.status,
-                    summaries=listing.summaries,
-                    attributes=listing.attributes,
-                    issues=listing.issues,
-                    offers=listing.offers,
-                    fulfillmentAvailability=listing.fulfillmentAvailability,
-                    procurement=listing.procurement
-                ) for listing in db_listings
+                GetListingsItemResponse(**listing) for listing in db_listings
             ]
         else:
             # If no listings found in the database, fetch from SP API
             sp_api_listings = await amazon_api.get_listings(load_all=load_all)
             
             if sp_api_listings:
+                # Filter listings if skus were provided
+                if sku:
+                    sp_api_listings = [listing for listing in sp_api_listings if listing['sku'] in sku]
+                
                 # Save the retrieved listings to the database
                 async with db_manager.get_db() as session:
                     await db_manager.create_product(sp_api_listings)
@@ -166,14 +153,16 @@ async def get_listings_items(
                 # Return the listings from SP API
                 return [
                     GetListingsItemResponse(
-                        sku=listing.sku,
-                        status=listing.status,
-                        summaries=listing.summaries,
-                        attributes=listing.attributes,
-                        issues=listing.issues,
-                        offers=listing.offers,
-                        fulfillmentAvailability=listing.fulfillmentAvailability,
-                        procurement=listing.procurement
+                        sku=listing['sku'],
+                        listing_id=listing['listing_id'],
+                        quantity=listing['quantity'],
+                        asin=listing['asin'],
+                        attributes=listing['attributes'],
+                        images=listing['images'],
+                        productTypes=listing['productTypes'],
+                        browseClassification=listing['browseClassification'],
+                        color=listing['color'],
+                        size=listing['size'],                           
                     ) for listing in sp_api_listings
                 ]
             else:

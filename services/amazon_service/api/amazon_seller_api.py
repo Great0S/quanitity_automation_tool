@@ -398,11 +398,11 @@ class AmazonListingManager:
         for key, value in item.items():
             if key == 'attributes':
                 filtered_item[key] = self._process_attributes(value)
-            elif key in ['images', 'productTypes']:
+            elif key in ['images', 'productTypes','summaries']:
                 filtered_item[key] = self._process_list_value(value)
                 if key == 'images' and filtered_item[key] == []:
                     filtered_item[key] = None
-            elif key not in ['identifiers','summaries']:  # Exclude 'identifiers' as it's already processed
+            elif key not in ['identifiers']:  # Exclude 'identifiers' as it's already processed
                 filtered_item[key] = value
         return filtered_item
 
