@@ -1,16 +1,12 @@
 """ importing necessary modules and libraries for performing various
  tasks related to handling data, making HTTP requests, and working with concurrency """
 
-import csv
-import gzip
-import io
 import textwrap
 import json
 import os
 import re
 import time
 import requests
-import aiohttp
 import asyncio
 from typing import List, Dict, Any
 from sp_api.api import DataKiosk
@@ -56,7 +52,6 @@ class AmazonListingManager:
         self.catalog_items_api = CatalogItems(version="2022-04-01")
         self.locale = 'tr_TR' 
         
-
     def retry_with_backoff(self, func, *args, retries=5, **kwargs):
         attempt = 0
         while attempt < retries:
