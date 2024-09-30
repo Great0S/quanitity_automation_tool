@@ -405,9 +405,10 @@ class AmazonListingManager:
                 filtered_item[key] = self._process_attributes(value)
             elif key in ['images', 'productTypes']:
                 filtered_item[key] = self._process_list_value(value)
+                if key == 'images' and filtered_item[key] == []:
+                    filtered_item[key] = None
             elif key not in ['identifiers','summaries']:  # Exclude 'identifiers' as it's already processed
                 filtered_item[key] = value
-        print(filtered_item)
         return filtered_item
 
     def _process_attributes(self, attributes: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
@@ -452,7 +453,7 @@ class AmazonListingManager:
             cleaned_dict = {k: v for k, v in first_item.items() 
                             if k.lower() not in ['marketplaceid', 'marketplace_id', 'language_tag'] and v}
             if 'images' in cleaned_dict:
-                return [img for img in cleaned_dict['images'] if img and img.get('height') == 1000 and img.get('width') == 1000]
+                return [img for img in cleaned_dict['images'] if img and (img.get('height') in [1000, 1500] and img.get('width') in [1000, 1500])]
             
             processed_dict = self._process_nested_dict(cleaned_dict)
             return (next(iter(processed_dict.values())) 
