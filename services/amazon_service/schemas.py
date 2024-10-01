@@ -52,8 +52,6 @@ class Procurement(BaseModel):
 
 class AttributeValue(BaseModel):
     value: Any
-    marketplace_id: Optional[str] = None
-    language_tag: Optional[str] = None
 
 class ListingsItemPutRequest(BaseModel):
     productType: ProductType
@@ -88,7 +86,10 @@ class AmazonProductSchema(BaseModel):
     listing_id: str
     quantity: int
     asin: str
-    product_type: ProductType
+    productTypes: Optional[ProductType] = None
+    browseClassification: Optional[Dict[str, Any]] = None
+    color: Optional[str] = None
+    size: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -98,19 +99,16 @@ class AmazonProductAttributeSchema(BaseModel):
     
     name: str
     value: Any
-    language_tag: Optional[str] = None
 
 class AmazonProductIdentifierSchema(BaseModel):
     id: Optional[int] = None
     product_id: int
-    
     identifier_type: str
     identifier: str
 
 class AmazonProductImageSchema(BaseModel):
     id: Optional[int] = None
     product_id: int
-    
     variant: str
     link: str
     height: int
@@ -196,8 +194,9 @@ class GetListingsItemResponse(BaseModel):
     quantity: int
     asin: str
     browseClassification: Optional[BrowseClassificationSchema] = None
-    attributes: Optional[Dict[str, List[AttributeValue]]] = None
+    attributes: Optional[Dict[str, List[Any]]] = None
     images: Optional[List[Dict[str, Union[str, List[Dict[str, Union[str, int]]]]]]] = None  
+    summaries: Optional[Dict[str, Any]] = None
     productTypes: Optional[str] = None
     color: Optional[str] = None
     size: Optional[str] = None

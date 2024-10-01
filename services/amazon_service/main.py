@@ -24,7 +24,8 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     # Add any cleanup code here if needed
-    await db_manager.close_db()
+    # No need to close the database connection explicitly
+    pass
 
 app = FastAPI(lifespan=lifespan)
 router = APIRouter()
@@ -154,20 +155,23 @@ async def get_listings_items(
                 return [
                     GetListingsItemResponse(
                         sku=listing['sku'],
-                        listing_id=listing['listing_id'],
-                        quantity=listing['quantity'],
+                        listing_id=listing['listing-id'],
+                        quantity=int(listing['quantity']),
                         asin=listing['asin'],
-                        attributes=listing['attributes'],
-                        images=listing['images'],
-                        productTypes=listing['productTypes'],
-                        browseClassification=listing['browseClassification'],
-                        color=listing['color'],
-                        size=listing['size'],                           
+                        attributes=listing.get('attributes', {}),
+                        images=listing.get('images', []),
+                        productTypes=ProductType(listing.get('productTypes')) if listing.get('productTypes') else "OTHER",  # Convert to ProductType enum or None if not present
+                        browseClassification=listing.get('summaries', {}).get('browseClassification', None),
+                        color=listing.get('summaries', {}).get('color', None),
+                        size=listing.get('summaries', {}).get('size', None),                           
                     ) for listing in sp_api_listings
                 ]
             else:
                 # If no listings found in SP API, return an empty list
                 return []
+    except ValueError as ve:
+        logger.error(f"Error retrieving listings items: {str(ve)}")
+        raise HTTPException(status_code=400, detail=f"Invalid data: {str(ve)}")
     except Exception as e:
         logger.error(f"Error retrieving listings items: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

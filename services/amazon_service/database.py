@@ -16,7 +16,7 @@ from services.amazon_service.models import (
     AmazonFulfillmentAvailability, AmazonProcurement, AmazonProductIdentifier, AmazonProductImage, ProductType
 )
 from services.amazon_service.schemas import (
-    ListingsPatchRequest, ListingsItemPutRequest, GetListingsItemRequest, GetListingsItemResponse
+    AttributeValue, ListingsPatchRequest, ListingsItemPutRequest, GetListingsItemRequest, GetListingsItemResponse
 )
 from services.amazon_service.models import Status
 from shared.logging import logger
@@ -110,61 +110,75 @@ class DatabaseManager:
                     listing_id=product_data.get('listing-id'),
                     quantity=int(product_data.get('quantity', 0)),
                     asin=product_data.get('asin'),
-                    product_type=ProductType(product_data.get('productType')) if product_data.get('productType') else None
+                    productTypes=ProductType(product_data.get('productTypes', None)),
+                    browseClassification=product_data.get('browseClassification', None),
+                    color=product_data.get('color', None),
+                    size=product_data.get('size', None)
                 )
                 session.add(new_product)
                 await session.flush()
 
                 # Add attributes
                 for name, values in product_data.get('attributes', {}).items():
-                    for value in values:
+                    if isinstance(values, list):
+                        if isinstance(values[0], str):
+                            # If the values are a list of strings
+                            for value in values:
+                                attr = AmazonProductAttribute(
+                                    product_id=new_product.id,
+                                    name=name,
+                                    value=value,
+                                )
+                                session.add(attr)
+                        else:
+                            # If the values are a list of dictionaries
+                            for value in values:
+                                attr = AmazonProductAttribute(
+                                    product_id=new_product.id,
+                                    name=name,
+                                    value=value['value'],
+                                )
+                                session.add(attr)
+                    else:
                         attr = AmazonProductAttribute(
                             product_id=new_product.id,
                             name=name,
-                            value=value['value'],
+                            value=values,
                         )
                         session.add(attr)
 
-                # Add identifiers
-                for identifier_group in product_data.get('identifiers', []):
-                    for identifier in identifier_group.get('identifiers', []):
-                        ident = AmazonProductIdentifier(
-                            product_id=new_product.id,
-                            identifier_type=identifier.get('identifierType'),
-                            identifier=identifier.get('identifier')
-                        )
-                        session.add(ident)
-
                 # Add images
-                for image_group in product_data.get('images', []):
-                    for image in image_group.get('images', []):
-                        img = AmazonProductImage(
-                            product_id=new_product.id,
-                            variant=image.get('variant'),
-                            link=image.get('link'),
-                            height=image.get('height'),
-                            width=image.get('width')
-                        )
-                        session.add(img)
+                if product_data.get('images') is not None:
+                    for image_group in product_data.get('images', []):
+                        if image_group.get('images') is not None:
+                            for image in image_group.get('images', []):
+                                img = AmazonProductImage(
+                                    product_id=new_product.id,
+                                    variant=image.get('variant'),
+                                    link=image.get('link'),
+                                    height=image.get('height'),
+                                    width=image.get('width')
+                                )
+                                session.add(img)
 
                 # Add summaries
-                for summary_data in product_data.get('summaries', []):
-                    summary = AmazonProductSummary(
-                        product_id=new_product.id,
-                        adult_product=summary_data.get('adultProduct'),
-                        autographed=summary_data.get('autographed'),
-                        brand=summary_data.get('brand'),
-                        browse_classification=summary_data.get('browseClassification'),
-                        color=summary_data.get('color'),
-                        item_classification=summary_data.get('itemClassification'),
-                        item_name=summary_data.get('itemName'),
-                        memorabilia=summary_data.get('memorabilia'),
-                        size=summary_data.get('size'),
-                        trade_in_eligible=summary_data.get('tradeInEligible'),
-                        website_display_group=summary_data.get('websiteDisplayGroup'),
-                        website_display_group_name=summary_data.get('websiteDisplayGroupName')
-                    )
-                    session.add(summary)
+                summary_data = product_data.get('summaries', {})
+                summary = AmazonProductSummary(
+                    product_id=new_product.id,
+                    adult_product=summary_data.get('adultProduct', None),
+                    autographed=summary_data.get('autographed', None),
+                    brand=summary_data.get('brand', None),
+                    browse_classification=summary_data.get('browseClassification', None),
+                    color=summary_data.get('color', None),
+                    item_classification=summary_data.get('itemClassification', None),
+                    item_name=summary_data.get('itemName', None),
+                    memorabilia=summary_data.get('memorabilia', None),
+                    size=summary_data.get('size', None),
+                    trade_in_eligible=summary_data.get('tradeInEligible', None),
+                    website_display_group=summary_data.get('websiteDisplayGroup', None),
+                    website_display_group_name=summary_data.get('websiteDisplayGroupName', None)
+                )
+                session.add(summary)
 
                 new_products.append(new_product)
 
@@ -198,15 +212,17 @@ class DatabaseManager:
                     listing_id=product.listing_id,
                     quantity=product.quantity,
                     asin=product.asin,
-                    attributes={attr.name: [{"value": attr.value, "marketplace_id": attr.marketplace_id, "language_tag": attr.language_tag}] for attr in product.attributes},
+                    attributes={attr.name: [AttributeValue(value=attr.value)] for attr in product.attributes},
                     images=[{
-                        "marketplaceId": image.marketplace_id,
-                        "images": [{"variant": image.variant, "link": image.link, "height": image.height, "width": image.width}]
+                        "variant": image.variant,
+                        "link": image.link,
+                        "height": image.height,
+                        "width": image.width
                     } for image in product.images],
-                    productTypes= product.product_type,
-                    browseClassification = product.summaries.browse_classification,
-                    color = product.summaries.color,
-                    size = product.summaries.size,
+                    productTypes= product.productTypes,
+                    browseClassification = product.browseClassification,
+                    color = product.color,
+                    size = product.size,
                 )
                 return item_response
             responses = [create_response(product) for product in products]
@@ -273,17 +289,11 @@ class DatabaseManager:
             attr = result.scalar_one_or_none()
             if attr:
                 attr.value = patch.value
-                # Update marketplace_id and language_tag if provided
-                if isinstance(patch.value, dict):
-                    attr.marketplace_id = patch.value.get('marketplace_id', attr.marketplace_id)
-                    attr.language_tag = patch.value.get('language_tag', attr.language_tag)
             else:
                 new_attr = AmazonProductAttribute(
                     product_id=product.id,
                     name=attr_name,
-                    value=patch.value if not isinstance(patch.value, dict) else patch.value['value'],
-                    marketplace_id=patch.value.get('marketplace_id') if isinstance(patch.value, dict) else None,
-                    language_tag=patch.value.get('language_tag') if isinstance(patch.value, dict) else None
+                    value=patch.value,
                 )
                 session.add(new_attr)
         elif patch.op == PatchOperationType.DELETE:

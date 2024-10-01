@@ -448,7 +448,7 @@ class AmazonListingManager:
             cleaned_dict = {k: v for k, v in first_item.items() 
                             if k.lower() not in ['marketplaceid', 'marketplace_id', 'language_tag'] and v}
             if 'images' in cleaned_dict:
-                return [img for img in cleaned_dict['images'] if img and (img.get('height') in [1000, 1500] and img.get('width') in [1000, 1500])]
+                return [img for img in cleaned_dict['images'] if img]
             
             processed_dict = self._process_nested_dict(cleaned_dict)
             return (next(iter(processed_dict.values())) 

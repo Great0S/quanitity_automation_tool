@@ -11,12 +11,31 @@ class ProductType(PyEnum):
     RUGS = "RUG"
     CARPET = "CARPET"
     AREA_RUGS = "AREA_RUGS"
-    RUNNERS = "RUNNERS"
+    BATHTUB_SHOWER_MAT = "BATHTUB_SHOWER_MAT"
     DOOR_MATS = "DOOR_MATS"
     BATH_RUGS = "BATH_RUGS"
     OUTDOOR_RUGS = "OUTDOOR_RUGS"
     CARPET_TILES = "CARPET_TILES"
     STAIR_TREADS = "STAIR_TREADS"
+    DOLL_CLOTHING = "DOLL_CLOTHING"
+    ANTI_FATIGUE_FLOOR_MAT = "ANTI_FATIGUE_FLOOR_MAT"
+    LADDER = "LADDER"
+    CARPETING = "CARPETING"
+    UTILITY_KNIFE = "UTILITY_KNIFE"
+    TOY_FIGURE = "TOY_FIGURE"
+    SHOE_TREE = "SHOE_TREE"
+    VEHICLE_MAT = "VEHICLE_MAT"
+    CABIENT = "CABIENT"
+    DEHUMIDIFIER = "DEHUMIDIFIER"
+    DRAFT_STOPPER = "DRAFT_STOPPER"
+    GAME_DICE = "GAME_DICE"
+    MINIATURE_TOY_FURNISHING = "MINIATURE_TOY_FURNISHING"
+    RUG_PAD = "RUG_PAD"
+    SHOES = "SHOES"
+    SLIPPER = "SLIPPER"
+    SWEATSHIRT = "SWEATSHIRT"
+    WALL_ART = "WALL_ART"
+    OTHER = "OTHER"
 
 class PatchOperationType(PyEnum):
     ADD = "add"
@@ -39,7 +58,10 @@ class AmazonProduct(Base):
     listing_id = Column(String)
     quantity = Column(Integer)
     asin = Column(String)
-    product_type = Column('product_type', Enum(ProductType))
+    productTypes = Column('product_type', Enum(ProductType))
+    browseClassification = Column(JSON)
+    color = Column(String)
+    size = Column(String)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     
