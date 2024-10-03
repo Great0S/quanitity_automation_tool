@@ -14,7 +14,7 @@ from app.config import logger
 products = []
 
 
-class Hb_API:
+class HepsiburadaAPI:
 
     def __init__(self):
 

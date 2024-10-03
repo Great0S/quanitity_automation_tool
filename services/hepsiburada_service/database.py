@@ -12,8 +12,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.future import select
 from box import Box
 
-from services.trendyol_service.models import Attribute, Base, Image, Product
-from services.trendyol_service.schemas import AttributeSchema, ImageSchema, ProductPriceUpdate, ProductSchema, ProductStockUpdate, ProductBase
+from services.hepsiburada_service.models import Attribute, Base, Image, Product
+from services.hepsiburada_service.schemas import AttributeSchema, ImageSchema, ProductPriceUpdate, ProductSchema, ProductStockUpdate, ProductBase
 from shared.logging import logger
 
 T = TypeVar('T', bound=BaseModel)
@@ -47,7 +47,7 @@ class DatabaseManager:
 
     async def init_db(self):
         async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
+            # await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
 
     @asynccontextmanager

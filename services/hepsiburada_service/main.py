@@ -2,15 +2,15 @@ from enum import Enum
 from typing import Optional, Union
 from fastapi import APIRouter, Body, FastAPI, HTTPException, Query
 
-from services.trendyol_service.api.trendyol_api import TrendyolAPI
-from services.trendyol_service.models import Product
-from services.trendyol_service.database import DatabaseManager
+from services.hepsiburada_service.api.hepsiburada_api import HepsiburadaAPI
+from services.hepsiburada_service.models import Product
+from services.hepsiburada_service.database import DatabaseManager
 from .schemas import ProductInDB, ProductPriceUpdate, ProductSchema, ProductStockUpdate, ProductBase
 
 router = APIRouter()
 app = FastAPI()
 
-trendyol_api = TrendyolAPI()
+hepsiburada_api = HepsiburadaAPI()
 db_manager = DatabaseManager()
 
 app.include_router(router)
@@ -32,7 +32,7 @@ def get_update_schema(update_type: UpdateType = Query(default=UpdateType.full)):
 async def get_products(load_all: bool = False):
     try:
         await db_manager.init_db()
-        products = await trendyol_api.get_products(load_all)
+        products = await hepsiburada_api.get_products(load_all)
         db_products = []
         for product in products:
             db_product = await db_manager.create_product(product)
@@ -51,7 +51,7 @@ async def update_product_by_bulk(
         if not isinstance(product_update, update_schema):
             raise ValueError(f"Invalid update type. Expected {update_schema.__name__}, got {type(product_update).__name__}")
         
-        result = await trendyol_api.update_product(product_update.model_dump(exclude_none=True, exclude_unset=True))
+        result = await hepsiburada_api.update_product(product_update.model_dump(exclude_none=True, exclude_unset=True))
         await db_manager.update_item(result["stockCode"], product_update)
         return "Product with sku: " + result["stockCode"] + " has been updated successfully"
     except Exception as e:
@@ -61,7 +61,7 @@ async def update_product_by_bulk(
 @app.post("/products/", response_model=ProductInDB)
 async def create_product(product: ProductSchema):
     try:
-        await trendyol_api.create_product(product)
+        await hepsiburada_api.create_product(product)
         return await db_manager.create_product(product)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

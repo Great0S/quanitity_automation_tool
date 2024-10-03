@@ -14,7 +14,7 @@ Base = declarative_base()
 
 
 class Product(Base):
-    __tablename__ = "products"
+    __tablename__ = "trendyol_products"
 
     id = Column(Integer, primary_key=True, index=True)
     barcode = Column(String, unique=True, index=True)
@@ -56,7 +56,7 @@ class Product(Base):
 
 
 class Image(Base):
-    __tablename__ = "images"
+    __tablename__ = "trendyol_images"
 
     id = Column(Integer, primary_key=True, index=True)
     url = Column(String)
@@ -65,7 +65,7 @@ class Image(Base):
 
 
 class Attribute(Base):
-    __tablename__ = "attributes"
+    __tablename__ = "trendyol_attributes"
 
     id = Column(Integer, primary_key=True, index=True)
     attributeId = Column(Integer)

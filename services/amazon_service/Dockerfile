@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["uvicorn", "trendyol_service:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "amazon_service:app", "--host", "0.0.0.0", "--port", "8000"]
