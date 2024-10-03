@@ -1,75 +1,51 @@
-from sqlalchemy import (
-    Column,
-    ForeignKey,
-    Integer,
-    String,
-    Float,
-    Boolean,
-    DateTime,
-)
+from sqlalchemy import Column, Integer, String, Numeric, Text, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
+class HepsiburadaProduct(Base):
+    __tablename__ = 'hepsiburada_products'
 
-class Product(Base):
-    __tablename__ = "hepsiburada_products"
+    id = Column(Integer, primary_key=True)
+    merchantSku = Column(String(100), unique=True, index=True)
+    barcode = Column(String(100))
+    hbSku = Column(String(100))
+    variantGroupId = Column(String(100))
+    productName = Column(String(255))
+    brand = Column(String(100))
+    categoryId = Column(Integer)
+    categoryName = Column(String(100))
+    tax = Column(Numeric(5, 2))
+    price = Column(Numeric(10, 2))
+    description = Column(Text)
+    status = Column(String(50))
+    stock = Column(Integer, default=0)
 
-    id = Column(Integer, primary_key=True, index=True)
-    barcode = Column(String, unique=True, index=True)
-    title = Column(String)
-    productMainId = Column(String)
-    brandId = Column(Integer)
-    pimCategoryId = Column(Integer)
-    categoryName = Column(String)
-    quantity = Column(Integer)
-    stockCode = Column(String)
-    dimensionalWeight = Column(Float)
-    description = Column(String)
-    brand = Column(String)
-    listPrice = Column(Float)
-    salePrice = Column(Float)
-    vatRate = Column(Integer)
-    hasActiveCampaign = Column(Boolean, default=False)
-    hasHtmlContent = Column(Boolean, default=False)
-    createDateTime = Column(DateTime)
-    lastUpdateDate = Column(DateTime)
-    blacklisted = Column(Boolean, default=False)
+    images = relationship("HepsiburadaProductImage", back_populates="product", cascade="all, delete-orphan")
+    baseAttributes = relationship("HepsiburadaProductAttribute", back_populates="product", cascade="all, delete-orphan")
+    
 
-    # Relationships
-    images = relationship("Image", back_populates="product", cascade="all, delete-orphan")
-    attributes = relationship("Attribute", back_populates="product", cascade="all, delete-orphan")
+class HepsiburadaProductImage(Base):
+    __tablename__ = 'hepsiburada_product_images'
 
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey('hepsiburada_products.id'))
+    imageUrl = Column(String(255))
+    order = Column(Integer, default=0)
 
-    def __str__(self):
-        return (
-            f"Product: {self.title}\n"
-            f"Barcode: {self.barcode}\n"
-            f"Main ID: {self.productMainId}\n"
-            f"Price: {self.salePrice}\n"
-            f"Quantity: {self.quantity}\n"
-            f"Stock Code: {self.stockCode}\n"
-            f"Images: {len(self.images)}\n"
-            f"Attributes: {len(self.attributes)}"
-        )
+    product = relationship("HepsiburadaProduct", back_populates="images")
 
 
-class Image(Base):
-    __tablename__ = "hepsiburada_images"
+class HepsiburadaProductAttribute(Base):
+    __tablename__ = 'hepsiburada_product_attributes'
 
-    id = Column(Integer, primary_key=True, index=True)
-    url = Column(String)
-    product_id = Column(Integer, ForeignKey("products.id"))
-    product = relationship("Product", back_populates="images")
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey('hepsiburada_products.id'))
+    name = Column(String(100))
+    value = Column(Text)
+    mandatory = Column(Boolean, default=False)
 
+    product = relationship("HepsiburadaProduct", back_populates="baseAttributes")
 
-class Attribute(Base):
-    __tablename__ = "hepsiburada_attributes"
-
-    id = Column(Integer, primary_key=True, index=True)
-    attributeId = Column(Integer)
-    attributeValue = Column(String)
-    attributeName = Column(String)
-    product_id = Column(Integer, ForeignKey("products.id"))
-    product = relationship("Product", back_populates="attributes")
+    

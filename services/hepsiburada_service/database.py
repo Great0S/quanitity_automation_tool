@@ -1,20 +1,21 @@
 import os
-from datetime import datetime
 from contextlib import asynccontextmanager
-import traceback
-from typing import List, Optional, Type, TypeVar, Union
+from typing import Optional, TypeVar
 from pydantic import BaseModel
 
 from sqlalchemy import delete
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.future import select
-from box import Box
+from sqlalchemy.exc import SQLAlchemyError
 
-from services.hepsiburada_service.models import Attribute, Base, Image, Product
-from services.hepsiburada_service.schemas import AttributeSchema, ImageSchema, ProductPriceUpdate, ProductSchema, ProductStockUpdate, ProductBase
+from services.hepsiburada_service.schemas import HepsiburadaProductSchema, ProductAttributeSchema, ProductImageSchema
+from sqlalchemy.orm import sessionmaker, selectinload
+from box import Box
+from contextlib import asynccontextmanager
+from sqlalchemy import inspect as sa_inspect
+
 from shared.logging import logger
+from services.hepsiburada_service.models import Base, HepsiburadaProduct, HepsiburadaProductAttribute, HepsiburadaProductImage
 
 T = TypeVar('T', bound=BaseModel)
 
@@ -46,9 +47,42 @@ class DatabaseManager:
         )
 
     async def init_db(self):
-        async with self.engine.begin() as conn:
-            # await conn.run_sync(Base.metadata.drop_all)
-            await conn.run_sync(Base.metadata.create_all)
+        try:
+            async with self.engine.begin() as conn:
+                # Check if tables exist
+                def get_table_names(connection):
+                    inspector = sa_inspect(connection)
+                    return inspector.get_table_names()
+
+                existing_tables = await conn.run_sync(get_table_names)
+                await conn.run_sync(Base.metadata.drop_all)
+
+                
+                if not existing_tables:
+                    logger.info("No existing tables found. Creating tables...")
+                    await conn.run_sync(Base.metadata.create_all)
+                    logger.info("Tables created successfully.")
+                else:
+                    model_tables = set(Base.metadata.tables.keys())
+                    existing_tables_set = set(existing_tables)
+                    if model_tables.issubset(existing_tables_set):
+                        pass
+                    else:
+                        missing_tables = model_tables - existing_tables_set
+                        logger.info(f"Creating missing tables: {missing_tables}")
+                        await conn.run_sync(Base.metadata.create_all)
+                        logger.info("Tables created successfully.")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize database: {str(e)}")
+            logger.error(f"Database URL: {self.database_url}")
+            logger.error("Please check if the database server is running and accessible.")
+            logger.error("Ensure that the following environment variables are set correctly:")
+            logger.error(f"DB_USER: {self.db_user}")
+            logger.error(f"DB_HOST: {self.db_host}")
+            logger.error(f"DB_PORT: {self.db_port}")
+            logger.error(f"DB_NAME: {self.db_name}")
+            raise
 
     @asynccontextmanager
     async def get_db(self):
@@ -62,202 +96,129 @@ class DatabaseManager:
             finally:
                 await session.close()
 
-    async def create_product(self, product: ProductSchema) -> Product:
-        """Function to create a new product in the database."""
+    async def create_product(self, product: HepsiburadaProductSchema) -> Optional[HepsiburadaProduct]:
         async with self.get_db() as db:
             try:
-                product = Box(product)
-                # Check if the product already exists
-                existing_product = await self._get_existing_product(db, product.stockCode)
-                if existing_product:
-                    # logger.info(f"Product with barcode {product.barcode} already exists. Skipping.")
-                    return existing_product
+                db_product = HepsiburadaProduct(
+                    merchantSku=product.merchantSku,
+                barcode=product.barcode,
+                hbSku=product.hbSku,
+                variantGroupId=product.variantGroupId,
+                productName=product.productName,
+                brand=product.brand,
+                categoryId=product.categoryId,
+                categoryName=product.categoryName,
+                tax=product.tax,
+                price=product.price,
+                description=product.description,
+                status=product.status,
+                stock=product.stock
+            )
+                db.add(db_product)
+                await db.flush()
 
-                db_product = await self._create_new_product(db, product)
-                await self._add_images(db, db_product, product.images)
-                await self._add_attributes(db, db_product, product.attributes)
+                for img in product.images:
+                    db_image = HepsiburadaProductImage(url=img.imageUrl, order=img.order, product_id=db_product.id)
+                    db.add(db_image)
 
+                for attr in product.baseAttributes + product.variantTypeAttributes + product.productAttributes:
+                    db_attribute = HepsiburadaProductAttribute(
+                        name=attr.name,
+                        value=attr.value,
+                        mandatory=attr.mandatory,
+                        product_id=db_product.id
+                    )
+                    db.add(db_attribute)
+
+                await db.commit()
                 await db.refresh(db_product)
                 return db_product
-
             except SQLAlchemyError as e:
                 logger.error(f"Error creating product: {str(e)}")
-                raise
-            except Exception as e:
-                logger.error(f"Unexpected error creating product: {str(e)}")
-                logger.debug(traceback.format_exc())
-                raise
-
-    async def _get_existing_product(self, db: AsyncSession, identifier: str) -> Optional[Product]:
-        result = await db.execute(select(Product).filter(Product.stockCode == identifier))
-        return result.scalar_one_or_none()
-
-    async def _create_new_product(self, db: AsyncSession, product: ProductSchema) -> Product:
-        db_product = Product(
-            barcode=product.barcode,
-            title=product.title,
-            productMainId=product.productMainId,
-            brandId=product.brandId,
-            pimCategoryId=product.pimCategoryId,
-            categoryName=product.categoryName,
-            quantity=product.quantity,
-            stockCode=product.stockCode,
-            dimensionalWeight=product.dimensionalWeight,
-            description=product.description,
-            brand=product.brand,
-            listPrice=product.listPrice,
-            salePrice=product.salePrice,
-            vatRate=product.vatRate,
-            hasActiveCampaign=product.hasActiveCampaign,
-            hasHtmlContent=product.hasHtmlContent,
-            createDateTime=datetime.now(),
-            lastUpdateDate=datetime.now(),
-            blacklisted=product.blacklisted,
-        )
-        db.add(db_product)
-        await db.flush()
-        return db_product
-
-    async def _add_images(self, db: AsyncSession, product: Product, images: List[ImageSchema]):
-        if not images:
-            logger.warning(f"No images provided for product {product.stockCode}")
-            return
-
-        for img in images:
-            try:
-                if isinstance(img, ImageSchema):
-                    db.add(Image(url=img.url, product_id=product.id))
-                elif isinstance(img, dict) and 'url' in img:
-                    db.add(Image(url=img['url'], product_id=product.id))
-                elif isinstance(img, str):
-                    db.add(Image(url=img, product_id=product.id))
-                else:
-                    logger.warning(f"Invalid image data for product {product.stockCode}: {img}")
-            except Exception as e:
-                logger.error(f"Error adding image for product {product.stockCode}: {str(e)}")
-                logger.debug(traceback.format_exc())
-
-    async def _add_attributes(self, db: AsyncSession, product: Product, attributes: List[AttributeSchema]):
-        if not attributes:
-            logger.warning(f"No attributes provided for product {product.stockCode}")
-            return
-
-        for attr in attributes:
-            try:
-                if isinstance(attr, AttributeSchema) or isinstance(attr, dict):
-                    db.add(Attribute(
-                        attributeId=attr.attributeId,
-                        attributeName=attr.attributeName,
-                        attributeValue=str(attr.attributeValue),  # Convert to string as per the model
-                        product_id=product.id,
-                    ))
-                else:
-                    logger.warning(f"Invalid attribute data for product {product.stockCode}: {attr}")
-            except Exception as e:
-                logger.error(f"Error adding attribute for product {product.stockCode}: {str(e)}")
-                logger.debug(traceback.format_exc())
-        
-    async def get_item(self, model: Type[T], identifier: str) -> Optional[dict]:
-        """Get an item from the database by code or barcode and return as a dictionary."""
-        async with self.get_db() as db:
-            try:
-                result = await db.execute(select(model).filter(model.stockCode == identifier))
-                item = result.scalar_one_or_none()
-
-                if item:
-                    return {column.name: getattr(item, column.name) for column in item.__table__.columns}
-                else:
-                    logger.info(f"Item with identifier {identifier} not found")
-                    return None
-
-            except SQLAlchemyError as e:
-                logger.error(f"Error querying item: {str(e)}")
-                raise
-
-    async def update_item(self, stock_code: str, product_update: Union[ProductStockUpdate, ProductPriceUpdate, ProductBase]) -> Optional[Product]:
-        """Update a product in the database based on ProductBase."""
-        async with self.get_db() as db:
-            try:
-                result = await db.execute(select(Product).filter(Product.stockCode == stock_code))
-                db_product = result.scalar_one_or_none()
-
-                if db_product:
-                    product_update = product_update.model_dump(exclude_none=True, exclude_unset=True)
-                    for field, value in product_update.items():
-                        if field == "images":
-                            await self._update_images(db, db_product, value)
-                        elif field == "attributes":
-                            await self._update_attributes(db, db_product, value)
-                        else:
-                            setattr(db_product, field, value)
-
-                    await db.commit()
-                    await db.refresh(db_product)
-                    return db_product
-
-                logger.info(f"Product with stock code {stock_code} not found for update")
+                await db.rollback()
                 return None
 
+    async def get_product(self, merchantSku: str) -> Optional[HepsiburadaProductSchema]:
+        async with self.get_db() as db:
+            try:
+                query = select(HepsiburadaProduct).filter(HepsiburadaProduct.merchantSku == merchantSku)
+                
+                query = query.options(
+                    selectinload(HepsiburadaProduct.images),
+                    selectinload(HepsiburadaProduct.baseAttributes),
+                )
+                result = await db.execute(query)
+                db_product = result.scalar_one_or_none()
+                if db_product:
+                    product = HepsiburadaProductSchema(
+                        merchantSku=db_product.merchantSku,
+                        barcode=db_product.barcode,
+                        hbSku=db_product.hbSku,
+                        variantGroupId=db_product.variantGroupId,
+                        productName=db_product.productName,
+                        brand=db_product.brand,
+                        images=[ProductImageSchema(imageUrl=img.imageUrl, order=img.order) for img in db_product.images],
+                        categoryId=db_product.categoryId,
+                        categoryName=db_product.categoryName,
+                        tax=db_product.tax,
+                        price=db_product.price,
+                        description=db_product.description,
+                        status=db_product.status,
+                        baseAttributes=[ProductAttributeSchema(name=attr.name, value=attr.value, mandatory=attr.mandatory) 
+                                        for attr in db_product.baseAttributes],
+                        stock=db_product.stock
+                    )
+                    return product
+                return None
+            except SQLAlchemyError as e:
+                logger.error(f"Error getting product: {str(e)}")
+                return None
+
+    async def update_product(self, merchantSku: str, product_update: HepsiburadaProductSchema) -> Optional[HepsiburadaProduct]:
+        async with self.get_db() as db:
+            try:
+                result = await db.execute(select(HepsiburadaProduct).filter(HepsiburadaProduct.merchantSku == merchantSku))
+                db_product = result.scalar_one_or_none()
+                if db_product:
+                    for key, value in product_update.dict(exclude_unset=True).items():
+                        if key not in ['images', 'baseAttributes', 'variantTypeAttributes', 'productAttributes']:
+                            setattr(db_product, key, value)
+
+                # Update images
+                await db.execute(delete(HepsiburadaProductImage).where(HepsiburadaProductImage.product_id == db_product.id))
+                for img in product_update.images:
+                    db_image = HepsiburadaProductImage(url=img.imageUrl, order=img.order, product_id=db_product.id)
+                    db.add(db_image)
+
+                # Update attributes
+                await db.execute(delete(HepsiburadaProductAttribute).where(HepsiburadaProductAttribute.product_id == db_product.id))
+                for attr in product_update.baseAttributes + product_update.variantTypeAttributes + product_update.productAttributes:
+                    db_attribute = HepsiburadaProductAttribute(
+                        name=attr.name,
+                        value=attr.value,
+                        mandatory=attr.mandatory,
+                        product_id=db_product.id
+                    )
+                    db.add(db_attribute)
+
+                await db.commit()
+                return db_product
             except SQLAlchemyError as e:
                 logger.error(f"Error updating product: {str(e)}")
-                raise
-
-    async def _update_images(self, db, product: Product, images: List[dict]):
-        # Remove existing images
-        await db.execute(delete(Image).where(Image.product_id == product.id))
-
-        # Add new images
-        for img in images:
-            db.add(Image(url=img["url"], product_id=product.id))
-
-    async def _update_attributes(self, db, product: Product, attributes: List[dict]):
-        # Remove existing attributes
-        await db.execute(delete(Attribute).where(Attribute.product_id == product.id))
-
-        # Add new attributes
-        for attr in attributes:
-            db.add(Attribute(
-                attributeId=attr["attributeId"],
-                attributeName=attr["attributeName"],
-                attributeValue=attr["attributeValue"],
-                product_id=product.id,
-            ))
-
-    async def delete_product(self, model: Type[T], identifier: str) -> Optional[T]:
-        """Delete a product from the database."""
-        async with self.get_db() as db:
-            try:
-                result = await db.execute(select(model).filter(model.stockCode == identifier))
-                db_item = result.scalar_one_or_none()
-
-                if db_item:
-                    await db.delete(db_item)
-                    await db.commit()
-                    return db_item
-
-                    logger.info(f"Product with stock code {identifier} not found for deletion")
+                await db.rollback()
                 return None
 
+    async def delete_product(self, merchantSku: str) -> bool:
+        async with self.get_db() as db:
+            try:
+                result = await db.execute(select(HepsiburadaProduct).filter(HepsiburadaProduct.merchantSku == merchantSku))
+                db_product = result.scalar_one_or_none()
+                if db_product:
+                    await db.delete(db_product)
+                    await db.commit()
+                    return True
+                return False
             except SQLAlchemyError as e:
                 logger.error(f"Error deleting product: {str(e)}")
-                raise
-
-    async def get_all_products(self) -> List[Product]:
-        """Retrieve all products from the database."""
-        async with self.get_db() as db:
-            try:
-                result = await db.execute(select(Product))
-                return result.scalars().all()
-            except SQLAlchemyError as e:
-                logger.error(f"Error querying products: {str(e)}")
-                raise
-
-    async def get_product_by_stock_code(self, identifier: str) -> Optional[Product]:
-        """Retrieve a product by stock code from the database."""
-        async with self.get_db() as db:
-            try:
-                result = await db.execute(select(Product).filter(Product.stockCode == identifier))
-                return result.scalar_one_or_none()
-            except SQLAlchemyError as e:
-                logger.error(f"Error querying product: {str(e)}")
-                raise
+                await db.rollback()
+                return False

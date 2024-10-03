@@ -350,7 +350,7 @@ class HepsiburadaAPI:
                         delay} seconds""")
             time.sleep(delay)
 
-    def get_listings(self, everyproduct: bool = False) -> list:
+    async def get_listings(self, everyproduct: bool = False) -> list:
         """
         Retrieves stock data for products from HepsiBurada.
 
@@ -408,7 +408,7 @@ class HepsiburadaAPI:
                             else:
 
                                 data['stock'] = listing.get('availableStock', 0)
-                                listings_list.append({"sku": data["merchantSku"], "data": data})                    
+                                listings_list.append(data)                    
 
                 page += 1         
 
