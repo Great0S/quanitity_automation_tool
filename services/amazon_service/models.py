@@ -8,7 +8,7 @@ Base = declarative_base()
 
 class ProductType(PyEnum):
     HOME_BED_AND_BATH = "HOME_BED_AND_BATH"
-    RUGS = "RUG"
+    RUG = "RUG"
     CARPET = "CARPET"
     AREA_RUGS = "AREA_RUGS"
     BATHTUB_SHOWER_MAT = "BATHTUB_SHOWER_MAT"
@@ -25,7 +25,7 @@ class ProductType(PyEnum):
     TOY_FIGURE = "TOY_FIGURE"
     SHOE_TREE = "SHOE_TREE"
     VEHICLE_MAT = "VEHICLE_MAT"
-    CABIENT = "CABIENT"
+    CABINET = "CABINET"
     DEHUMIDIFIER = "DEHUMIDIFIER"
     DRAFT_STOPPER = "DRAFT_STOPPER"
     GAME_DICE = "GAME_DICE"
@@ -55,13 +55,13 @@ class AmazonProduct(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     sku = Column(String, unique=True, index=True)
-    listing_id = Column(String)
-    quantity = Column(Integer)
-    asin = Column(String)
-    productTypes = Column('product_type', Enum(ProductType))
-    browseClassification = Column(JSON)
-    color = Column(String)
-    size = Column(String)
+    listing_id = Column(String, default="N/A")
+    quantity = Column(Integer, default=0)
+    asin = Column(String, default="N/A")
+    productTypes = Column('product_type', Enum(ProductType), default=ProductType.OTHER)
+    browseClassification = Column(JSON, default={})
+    color = Column(String, default="N/A")
+    size = Column(String, default="N/A")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     
@@ -76,7 +76,30 @@ class AmazonProduct(Base):
     put_requests = relationship("AmazonPutRequest", back_populates="product", cascade="all, delete-orphan")
     delete_requests = relationship("AmazonDeleteRequest", back_populates="product", cascade="all, delete-orphan")
     issues = relationship("AmazonProductIssue", back_populates="product", cascade="all, delete-orphan")
-    
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.attributes is None:
+            self.attributes = []
+        if self.identifiers is None:
+            self.identifiers = []
+        if self.images is None:
+            self.images = []
+        if self.summaries is None:
+            self.summaries = []
+        if self.offers is None:
+            self.offers = []
+        if self.fulfillment_availability is None:
+            self.fulfillment_availability = []
+        if self.patch_requests is None:
+            self.patch_requests = []
+        if self.put_requests is None:
+            self.put_requests = []
+        if self.delete_requests is None:
+            self.delete_requests = []
+        if self.issues is None:
+            self.issues = []
+        # Note: procurement is a single object relationship, so we don't initialize it with a list
 
 class AmazonProductAttribute(Base):
     __tablename__ = "amazon_product_attributes"
@@ -192,16 +215,12 @@ class AmazonProductSummary(Base):
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("amazon_products.id"))
     
-    adult_product = Column(Boolean)
-    autographed = Column(Boolean)
     brand = Column(String)
     browse_classification = Column(JSON)
     color = Column(String)
     item_classification = Column(String)
     item_name = Column(String)
-    memorabilia = Column(Boolean)
     size = Column(String)
-    trade_in_eligible = Column(Boolean)
     website_display_group = Column(String)
     website_display_group_name = Column(String)
 

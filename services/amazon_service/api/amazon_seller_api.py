@@ -58,7 +58,7 @@ class AmazonListingManager:
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying...")
+                # logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying...")
                 time.sleep(2 ** attempt)
                 attempt += 1
         raise Exception(f"All {retries} retries failed for function {func.__name__}")
@@ -376,13 +376,24 @@ class AmazonListingManager:
         async def process_chunk(sku_chunk):
             catalog_items = await fetch_catalog_data(sku_chunk)
             for item in catalog_items:
-                sku = next((i['identifier'] for i in item['identifiers'][0]['identifiers'] if i['identifierType'] == 'SKU'), None)
+                sku = next((i['identifier'] for i in item['identifiers'][0]['identifiers'] if i['identifierType'] == 'SKU'), "None")
+                if sku in [product['sku'] for product in products]:
+                    pass
+                else:
+                    print(f"SKU {sku} not found in products")
                 if sku:
-                    product = next((p for p in products if p['sku'] == sku), None)
+                    product = next((p for p in products if p['sku'] == sku), {"sku": sku})
                     if product:
                         # Filter out language-specific data and convert lists to dicts
                         filtered_item = self._filter_and_convert_item(item)
-                        product.update(filtered_item)
+                        if not filtered_item:
+                            pass
+                        else:
+                            product.update(filtered_item)
+                    else:
+                        logger.warning(f"Product with SKU {sku} not found in catalog data")
+                else:
+                    logger.warning(f"Product with SKU {sku} not found in report data")
 
         sku_chunks = [list(chunk) for chunk in self._chunks([product['sku'] for product in products], 20)]
         await asyncio.gather(*[process_chunk(chunk) for chunk in sku_chunks])
@@ -401,9 +412,10 @@ class AmazonListingManager:
             elif key in ['images', 'productTypes','summaries']:
                 filtered_item[key] = self._process_list_value(value)
                 if key == 'images' and filtered_item[key] == []:
-                    filtered_item[key] = None
+                    filtered_item[key] = [{"url": None}]
             elif key not in ['identifiers']:  # Exclude 'identifiers' as it's already processed
                 filtered_item[key] = value
+            
         return filtered_item
 
     def _process_attributes(self, attributes: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:

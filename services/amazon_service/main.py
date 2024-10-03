@@ -1,18 +1,14 @@
 from contextlib import asynccontextmanager
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
 from services.amazon_service.api.amazon_seller_api import AmazonListingManager
 from services.amazon_service.database import DatabaseManager
 from services.amazon_service.schemas import (
-    GetListingsItemRequest, GetListingsItemResponse,
-    ListingsItemPutRequest, ListingsItemPutResponse,
-    ListingsPatchRequest, ListingsPatchResponse,
-    DeleteListingsItemResponse, ErrorList
+    AmazonProductSchema, AmazonPutRequestSchema, GetListingsItemRequest, GetListingsItemResponse, 
+    AmazonPatchRequestSchema, AmazonDeleteRequestSchema
 )
-from services.amazon_service.models import ProductType
 from shared.logging import logger
 
 db_manager = DatabaseManager()
@@ -34,30 +30,30 @@ app.include_router(router)
 @app.get("/listings/2021-08-01/items/{sku}", response_model=GetListingsItemResponse)
 async def get_listings_item(
     sku: str,
-    marketplaceIds: List[str] = Query(...),
-    issueLocale: str = Query(None),
+    # marketplaceIds: List[str] = Query(...),
+    # issueLocale: str = Query(None),
     includedData: List[str] = Query(None),
     db_manager: DatabaseManager = Depends(DatabaseManager)
 ):
     try:
-        request = GetListingsItemRequest(
-            marketplaceIds=marketplaceIds,
-            issueLocale=issueLocale,
-            includedData=includedData
-        )
+        # request = GetListingsItemRequest(
+        #     marketplaceIds=marketplaceIds,
+        #     issueLocale=issueLocale,
+        #     includedData=includedData
+        # )
         async with db_manager.get_db() as session:
-            item = await db_manager.get_product(sku, request)
+            item = await db_manager.get_products(sku)
         if item is None:
             raise HTTPException(status_code=404, detail=f"Product with SKU {sku} not found")
         return item
     except Exception as e:
         logger.error(f"Error getting listings item: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(status_code=500, content={"errors": [{"code": "500", "message": str(e)}]})
 
-@app.put("/listings/2021-08-01/items/{sku}", response_model=ListingsItemPutResponse)
+@app.put("/listings/2021-08-01/items/{sku}", response_model=AmazonPutRequestSchema)
 async def put_listings_item(
     sku: str,
-    item: ListingsItemPutRequest,
+    item: AmazonPutRequestSchema,
     marketplaceIds: List[str] = Query(...),
     issueLocale: str = Query(None),
     db_manager: DatabaseManager = Depends(DatabaseManager)
@@ -65,7 +61,7 @@ async def put_listings_item(
     try:
         async with db_manager.get_db() as session:
             product = await db_manager.create_product(item)
-        return ListingsItemPutResponse(
+            return AmazonPutRequestSchema(
             sku=product.sku,
             status="ACCEPTED",
             submissionId=f"submission_{product.id}"
@@ -74,10 +70,10 @@ async def put_listings_item(
         logger.error(f"Error creating listings item: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.patch("/listings/2021-08-01/items/{sku}", response_model=ListingsPatchResponse)
+@app.patch("/listings/2021-08-01/items/{sku}", response_model=AmazonPatchRequestSchema)
 async def patch_listings_item(
     sku: str,
-    patch_request: ListingsPatchRequest,
+    patch_request: AmazonPatchRequestSchema,
     marketplaceIds: List[str] = Query(...),
     issueLocale: str = Query(None),
     db_manager: DatabaseManager = Depends(DatabaseManager)
@@ -85,7 +81,7 @@ async def patch_listings_item(
     try:
         async with db_manager.get_db() as session:
             patch_response = await db_manager.update_product(sku, patch_request)
-        return ListingsPatchResponse(
+        return AmazonPatchRequestSchema(
             sku=sku,
             status=patch_response.status,
             submissionId=patch_response.submission_id
@@ -96,7 +92,7 @@ async def patch_listings_item(
         logger.error(f"Error patching listings item: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/listings/2021-08-01/items/{sku}", response_model=DeleteListingsItemResponse)
+@app.delete("/listings/2021-08-01/items/{sku}", response_model=AmazonDeleteRequestSchema)
 async def delete_listings_item(
     sku: str,
     marketplaceIds: List[str] = Query(...),
@@ -106,7 +102,7 @@ async def delete_listings_item(
     try:
         async with db_manager.get_db() as session:
             delete_response = await db_manager.delete_product(sku)
-        return DeleteListingsItemResponse(
+        return AmazonDeleteRequestSchema(
             sku=sku,
             status=delete_response.status,
             submissionId=delete_response.submission_id
@@ -117,7 +113,7 @@ async def delete_listings_item(
         logger.error(f"Error deleting listings item: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/listings/2021-08-01/items", response_model=List[GetListingsItemResponse])
+@app.get("/listings/2021-08-01/items", response_model=List[AmazonProductSchema])
 async def get_listings_items(
     marketplaceIds: Optional[List[str]] = Query(None),
     sellerId: Optional[str] = Query(None),
@@ -135,11 +131,11 @@ async def get_listings_items(
         
         if db_listings:
             # If listings are found in the database, return them
-            return [
-                GetListingsItemResponse(**listing) for listing in db_listings
-            ]
+            logger.info(f"Listings found in the database: {len(db_listings)}")
+            return db_listings
         else:
             # If no listings found in the database, fetch from SP API
+            logger.info("No listings found in the database, fetching from SP API")
             sp_api_listings = await amazon_api.get_listings(load_all=load_all)
             
             if sp_api_listings:
@@ -149,23 +145,12 @@ async def get_listings_items(
                 
                 # Save the retrieved listings to the database
                 async with db_manager.get_db() as session:
-                    await db_manager.create_product(sp_api_listings)
+                    created_listings = await db_manager.create_product(sp_api_listings)
+
+                logger.info(f"Listings found in SP API: {len(sp_api_listings)}")
+                logger.info(f"Listings saved to the database: {len(created_listings)}")
                 
-                # Return the listings from SP API
-                return [
-                    GetListingsItemResponse(
-                        sku=listing['sku'],
-                        listing_id=listing['listing-id'],
-                        quantity=int(listing['quantity']),
-                        asin=listing['asin'],
-                        attributes=listing.get('attributes', {}),
-                        images=listing.get('images', []),
-                        productTypes=ProductType(listing.get('productTypes')) if listing.get('productTypes') else "OTHER",  # Convert to ProductType enum or None if not present
-                        browseClassification=listing.get('summaries', {}).get('browseClassification', None),
-                        color=listing.get('summaries', {}).get('color', None),
-                        size=listing.get('summaries', {}).get('size', None),                           
-                    ) for listing in sp_api_listings
-                ]
+                return created_listings
             else:
                 # If no listings found in SP API, return an empty list
                 return []

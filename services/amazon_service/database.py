@@ -1,4 +1,5 @@
 import os
+from box import Box
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -11,12 +12,11 @@ from contextlib import asynccontextmanager
 from sqlalchemy import inspect as sa_inspect
 
 from services.amazon_service.models import (
-    Base, PatchOperationType, AmazonProduct, AmazonProductAttribute, AmazonPatchRequest, AmazonPutRequest, AmazonDeleteRequest,
-    AmazonPatchOperation, AmazonProductIssue, AmazonProductSummary, AmazonOffer,
-    AmazonFulfillmentAvailability, AmazonProcurement, AmazonProductIdentifier, AmazonProductImage, ProductType
+    Base, PatchOperationType, AmazonProduct, AmazonProductAttribute, AmazonPatchRequest, AmazonDeleteRequest,
+    AmazonPatchOperation, AmazonProductSummary, AmazonProductImage, ProductType
 )
 from services.amazon_service.schemas import (
-    AttributeValue, ListingsPatchRequest, ListingsItemPutRequest, GetListingsItemRequest, GetListingsItemResponse
+    AmazonProductSchema, AttributeValue, GetListingsItemRequest, GetListingsItemResponse
 )
 from services.amazon_service.models import Status
 from shared.logging import logger
@@ -101,107 +101,122 @@ class DatabaseManager:
             finally:
                 await session.close()
 
-    async def create_product(self, products_data: List[Dict]) -> List[AmazonProduct]:
-        async with self.get_db() as session:
-            new_products = []
-            for product_data in products_data:
-                new_product = AmazonProduct(
-                    sku=product_data['sku'],
-                    listing_id=product_data.get('listing-id'),
-                    quantity=int(product_data.get('quantity', 0)),
-                    asin=product_data.get('asin'),
-                    productTypes=ProductType(product_data.get('productTypes', None)),
-                    browseClassification=product_data.get('browseClassification', None),
-                    color=product_data.get('color', None),
-                    size=product_data.get('size', None)
-                )
-                session.add(new_product)
-                await session.flush()
+    async def create_product(self, products_data: List[AmazonProductSchema]) -> List[AmazonProduct]:
+        try:
+            async with self.get_db() as session:
+                new_products = []
+                for product_item in products_data:
+                    product_data = Box(product_item)
+                    if not product_data.get('summaries'):
+                        continue
+                    new_product = AmazonProduct(
+                        sku=product_data.sku,
+                        listing_id=product_data.get('listing-id', "N/A"),
+                        quantity=int(product_data.get('quantity', 0)),
+                        asin=product_data.get('asin', "N/A"),
+                        productTypes=product_data.get('productTypes', ProductType.OTHER),
+                        browseClassification=product_data.summaries.get('browseClassification', {}),
+                        color=product_data.summaries.get('color', "N/A"),
+                        size=product_data.summaries.get('size', "N/A")
+                    )
+                    session.add(new_product)
+                    await session.flush()
 
-                # Add attributes
-                for name, values in product_data.get('attributes', {}).items():
-                    if isinstance(values, list):
-                        if isinstance(values[0], str):
-                            # If the values are a list of strings
+                    # Add attributes
+                    for name, values in product_data.get('attributes', {}).items():
+                        if isinstance(values, list):
                             for value in values:
                                 attr = AmazonProductAttribute(
                                     product_id=new_product.id,
                                     name=name,
-                                    value=value,
+                                    value=str(value) if value is not None else "N/A",
                                 )
                                 session.add(attr)
                         else:
-                            # If the values are a list of dictionaries
-                            for value in values:
-                                attr = AmazonProductAttribute(
-                                    product_id=new_product.id,
-                                    name=name,
-                                    value=value['value'],
-                                )
-                                session.add(attr)
-                    else:
-                        attr = AmazonProductAttribute(
-                            product_id=new_product.id,
-                            name=name,
-                            value=values,
-                        )
-                        session.add(attr)
+                            attr = AmazonProductAttribute(
+                                product_id=new_product.id,
+                                name=name,
+                                value=str(values) if values is not None else "N/A",
+                            )
+                            session.add(attr)
 
-                # Add images
-                if product_data.get('images') is not None:
+                    # Add images
                     for image_group in product_data.get('images', []):
-                        if image_group.get('images') is not None:
-                            for image in image_group.get('images', []):
-                                img = AmazonProductImage(
-                                    product_id=new_product.id,
-                                    variant=image.get('variant'),
-                                    link=image.get('link'),
-                                    height=image.get('height'),
-                                    width=image.get('width')
-                                )
-                                session.add(img)
+                        img = AmazonProductImage(
+                            product_id=new_product.id,
+                            variant=image_group.get('variant', "N/A"),
+                            link=image_group.get('link', "N/A"),
+                            height=image_group.get('height', 0),
+                            width=image_group.get('width', 0)
+                        )
+                        session.add(img)
 
-                # Add summaries
-                summary_data = product_data.get('summaries', {})
-                summary = AmazonProductSummary(
-                    product_id=new_product.id,
-                    adult_product=summary_data.get('adultProduct', None),
-                    autographed=summary_data.get('autographed', None),
-                    brand=summary_data.get('brand', None),
-                    browse_classification=summary_data.get('browseClassification', None),
-                    color=summary_data.get('color', None),
-                    item_classification=summary_data.get('itemClassification', None),
-                    item_name=summary_data.get('itemName', None),
-                    memorabilia=summary_data.get('memorabilia', None),
-                    size=summary_data.get('size', None),
-                    trade_in_eligible=summary_data.get('tradeInEligible', None),
-                    website_display_group=summary_data.get('websiteDisplayGroup', None),
-                    website_display_group_name=summary_data.get('websiteDisplayGroupName', None)
-                )
-                session.add(summary)
+                    # Add summaries
+                    summary_data = product_data.get('summaries', {})
+                    if summary_data:
+                        summary = AmazonProductSummary(
+                            product_id=new_product.id,
+                            brand=summary_data.get('brand', "N/A"),
+                            browse_classification=summary_data.get('browseClassification', {}),
+                            color=summary_data.get('color', "N/A"),
+                            item_classification=summary_data.get('itemClassification', "N/A"),
+                            item_name=summary_data.get('itemName', "N/A"),
+                            size=summary_data.get('size', "N/A"),
+                            website_display_group=summary_data.get('websiteDisplayGroup', "N/A"),
+                            website_display_group_name=summary_data.get('websiteDisplayGroupName', "N/A")
+                        )
+                        session.add(summary)
 
-                new_products.append(new_product)
+                    new_products.append(new_product)
 
-            await session.commit()
-            return new_products
+                await session.commit()
+                return new_products
+        except Exception as e:
+            logger.error(f"Error creating products: {str(e)}")
+            await session.rollback()
+            raise
 
-    async def get_products(self, sku: Optional[str] = None, request: GetListingsItemRequest = None) -> Union[List[GetListingsItemResponse], GetListingsItemResponse]:
+    async def get_products(self, sku: Optional[str] = None) -> Union[List[GetListingsItemResponse], GetListingsItemResponse]:
         async with self.get_db() as session:
             query = select(AmazonProduct).options(
                 selectinload(AmazonProduct.attributes),
-                selectinload(AmazonProduct.identifiers),
                 selectinload(AmazonProduct.images),
                 selectinload(AmazonProduct.summaries),
+                selectinload(AmazonProduct.identifiers),
                 selectinload(AmazonProduct.offers),
                 selectinload(AmazonProduct.fulfillment_availability),
-                selectinload(AmazonProduct.procurement)
+                selectinload(AmazonProduct.procurement),
+                selectinload(AmazonProduct.patch_requests),
+                selectinload(AmazonProduct.put_requests),
+                selectinload(AmazonProduct.delete_requests),
+                selectinload(AmazonProduct.issues)
             )
 
             if sku:
                 query = query.filter(AmazonProduct.sku == sku)
 
-            result = await session.execute(query)
-            products = result.scalars().all()
+            try:
+                result = await session.execute(query)
+                products = result.scalars().all()
+
+                # Define default values for product attributes
+                default_values = {
+                    'attributes': [], 'identifiers': [], 'images': [], 'summaries': [],
+                    'offers': [], 'fulfillment_availability': [], 'procurement': None,
+                    'patch_requests': [], 'put_requests': [], 'delete_requests': [],
+                    'issues': [], 'productTypes': ProductType.OTHER,
+                    'browseClassification': {}, 'color': "N/A", 'size': "N/A",
+                    'listing_id': "N/A", 'quantity': 0, 'asin': "N/A"
+                }
+
+                # Handle potentially missing attributes for each product
+                for product in products:
+                    for attr, default in default_values.items():
+                        setattr(product, attr, getattr(product, attr) or default)
+
+            except Exception as e:
+                logger.error(f"Error fetching products: {str(e)}")
+                products = []
 
             if not products:
                 return [] if not sku else None
@@ -214,6 +229,7 @@ class DatabaseManager:
                     asin=product.asin,
                     attributes={attr.name: [AttributeValue(value=attr.value)] for attr in product.attributes},
                     images=[{
+                        "product_id": image.product_id,
                         "variant": image.variant,
                         "link": image.link,
                         "height": image.height,
@@ -228,7 +244,7 @@ class DatabaseManager:
             responses = [create_response(product) for product in products]
             return responses if not sku else responses[0] if responses else None
 
-    async def update_product(self, sku: str, patch_request: ListingsPatchRequest) -> AmazonPatchRequest:
+    async def update_product(self, sku: str, patch_request: AmazonPatchRequest) -> AmazonPatchRequest:
         async with self.get_db() as session:
             product = await session.execute(select(AmazonProduct).filter(AmazonProduct.sku == sku))
             product = product.scalar_one_or_none()
