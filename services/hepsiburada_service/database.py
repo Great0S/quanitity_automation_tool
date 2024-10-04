@@ -55,7 +55,7 @@ class DatabaseManager:
                     return inspector.get_table_names()
 
                 existing_tables = await conn.run_sync(get_table_names)
-                await conn.run_sync(Base.metadata.drop_all)
+                # await conn.run_sync(Base.metadata.drop_all)
 
                 
                 if not existing_tables:
@@ -101,24 +101,24 @@ class DatabaseManager:
             try:
                 db_product = HepsiburadaProduct(
                     merchantSku=product.merchantSku,
-                barcode=product.barcode,
-                hbSku=product.hbSku,
-                variantGroupId=product.variantGroupId,
-                productName=product.productName,
-                brand=product.brand,
-                categoryId=product.categoryId,
-                categoryName=product.categoryName,
-                tax=product.tax,
-                price=product.price,
-                description=product.description,
-                status=product.status,
-                stock=product.stock
+                    barcode=product.barcode,
+                    hbSku=product.hbSku,
+                    variantGroupId=product.variantGroupId,
+                    productName=product.productName,
+                    brand=product.brand,
+                    categoryId=product.categoryId,
+                    categoryName=product.categoryName,
+                    tax=float(product.tax),
+                    price=float(product.price),
+                    description=product.description,
+                    status=product.status,
+                    stock=product.stock
             )
                 db.add(db_product)
                 await db.flush()
 
-                for img in product.images:
-                    db_image = HepsiburadaProductImage(url=img.imageUrl, order=img.order, product_id=db_product.id)
+                for img_url in product.images:
+                    db_image = HepsiburadaProductImage(url=img_url, product_id=db_product.id)
                     db.add(db_image)
 
                 for attr in product.baseAttributes + product.variantTypeAttributes + product.productAttributes:
@@ -141,35 +141,64 @@ class DatabaseManager:
     async def get_product(self, merchantSku: str) -> Optional[HepsiburadaProductSchema]:
         async with self.get_db() as db:
             try:
-                query = select(HepsiburadaProduct).filter(HepsiburadaProduct.merchantSku == merchantSku)
-                
-                query = query.options(
-                    selectinload(HepsiburadaProduct.images),
-                    selectinload(HepsiburadaProduct.baseAttributes),
-                )
-                result = await db.execute(query)
-                db_product = result.scalar_one_or_none()
-                if db_product:
-                    product = HepsiburadaProductSchema(
-                        merchantSku=db_product.merchantSku,
-                        barcode=db_product.barcode,
-                        hbSku=db_product.hbSku,
-                        variantGroupId=db_product.variantGroupId,
-                        productName=db_product.productName,
-                        brand=db_product.brand,
-                        images=[ProductImageSchema(imageUrl=img.imageUrl, order=img.order) for img in db_product.images],
-                        categoryId=db_product.categoryId,
-                        categoryName=db_product.categoryName,
-                        tax=db_product.tax,
-                        price=db_product.price,
-                        description=db_product.description,
-                        status=db_product.status,
-                        baseAttributes=[ProductAttributeSchema(name=attr.name, value=attr.value, mandatory=attr.mandatory) 
-                                        for attr in db_product.baseAttributes],
-                        stock=db_product.stock
+                if merchantSku:
+                    query = select(HepsiburadaProduct).filter(HepsiburadaProduct.merchantSku == merchantSku)
+                    
+                    query = query.options(
+                        selectinload(HepsiburadaProduct.images),
+                        selectinload(HepsiburadaProduct.baseAttributes),
                     )
-                    return product
-                return None
+                    result = await db.execute(query)
+                    db_product = result.scalar_one_or_none()
+                    if db_product:
+                        product = HepsiburadaProductSchema(
+                            merchantSku=db_product.merchantSku,
+                            barcode=db_product.barcode,
+                            hbSku=db_product.hbSku,
+                            variantGroupId=db_product.variantGroupId,
+                            productName=db_product.productName,
+                            brand=db_product.brand,
+                            images=[ProductImageSchema(url=img.url) for img in db_product.images],
+                            categoryId=db_product.categoryId,
+                            categoryName=db_product.categoryName,
+                            tax=db_product.tax,
+                            price=db_product.price,
+                            description=db_product.description,
+                            status=db_product.status,
+                            baseAttributes=[ProductAttributeSchema(name=attr.name, value=attr.value, mandatory=attr.mandatory) 
+                                            for attr in db_product.baseAttributes],
+                            stock=db_product.stock
+                        )
+                        return product
+                else:
+                    query = select(HepsiburadaProduct).options(
+                        selectinload(HepsiburadaProduct.images),
+                        selectinload(HepsiburadaProduct.baseAttributes),
+                    )
+                    result = await db.execute(query)
+                    db_products = result.scalars().all()
+                    products = []
+                    for db_product in db_products:
+                        product = HepsiburadaProductSchema(
+                            merchantSku=db_product.merchantSku,
+                            barcode=db_product.barcode,
+                            hbSku=db_product.hbSku,
+                            variantGroupId=db_product.variantGroupId,
+                            productName=db_product.productName,
+                            brand=db_product.brand,
+                            images=[ProductImageSchema(url=img.url) for img in db_product.images],
+                            categoryId=db_product.categoryId,
+                            categoryName=db_product.categoryName,
+                            tax=db_product.tax,
+                            price=db_product.price,
+                            description=db_product.description,
+                            status=db_product.status,
+                            baseAttributes=[ProductAttributeSchema(name=attr.name, value=attr.value, mandatory=attr.mandatory) 
+                                            for attr in db_product.baseAttributes],
+                            stock=db_product.stock
+                        )
+                        products.append(product)
+                    return products
             except SQLAlchemyError as e:
                 logger.error(f"Error getting product: {str(e)}")
                 return None
@@ -180,19 +209,25 @@ class DatabaseManager:
                 result = await db.execute(select(HepsiburadaProduct).filter(HepsiburadaProduct.merchantSku == merchantSku))
                 db_product = result.scalar_one_or_none()
                 if db_product:
-                    for key, value in product_update.dict(exclude_unset=True).items():
-                        if key not in ['images', 'baseAttributes', 'variantTypeAttributes', 'productAttributes']:
-                            setattr(db_product, key, value)
+                    for key, value in product_update.model_dump(exclude_unset=True).items():
+                        if key not in ['images', 'baseAttributes']:
+                            if key in ['tax', 'price']:
+                                setattr(db_product, key, float(value))
+                            else:
+                                setattr(db_product, key, value)
 
                 # Update images
                 await db.execute(delete(HepsiburadaProductImage).where(HepsiburadaProductImage.product_id == db_product.id))
                 for img in product_update.images:
-                    db_image = HepsiburadaProductImage(url=img.imageUrl, order=img.order, product_id=db_product.id)
+                    if isinstance(img, ProductImageSchema):
+                        db_image = HepsiburadaProductImage(url=img.url, product_id=db_product.id)
+                    else:
+                        db_image = HepsiburadaProductImage(url=img, product_id=db_product.id)
                     db.add(db_image)
 
                 # Update attributes
                 await db.execute(delete(HepsiburadaProductAttribute).where(HepsiburadaProductAttribute.product_id == db_product.id))
-                for attr in product_update.baseAttributes + product_update.variantTypeAttributes + product_update.productAttributes:
+                for attr in product_update.baseAttributes:
                     db_attribute = HepsiburadaProductAttribute(
                         name=attr.name,
                         value=attr.value,

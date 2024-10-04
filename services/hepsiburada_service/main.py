@@ -37,7 +37,7 @@ async def create_product(product: HepsiburadaProductSchema):
 
 @app.get("/products/{merchantSku}", response_model=HepsiburadaProductSchema)
 async def read_product(merchantSku: str):
-    db_product = await db_manager.get_item(HepsiburadaProduct, merchantSku)
+    db_product = await db_manager.get_product(merchantSku)
     if db_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     return db_product
@@ -50,12 +50,12 @@ async def update_product(
     try:
         
         # First, update the product on Hepsiburada
-        api_response = await hepsiburada_api.update_product(merchantSku, product_update.dict(exclude_unset=True))
+        api_response = hepsiburada_api.update_listing(product_data=product_update.model_dump(exclude_unset=True))
         if not api_response:
             raise HTTPException(status_code=400, detail="Failed to update product on Hepsiburada")
         
         # Then, update the product in our database
-        db_product = await db_manager.update_item(HepsiburadaProduct, merchantSku, product_update)
+        db_product = await db_manager.update_product(merchantSku, product_update)
         if db_product is None:
             raise HTTPException(status_code=404, detail="Product not found in database")
         return db_product
@@ -83,8 +83,8 @@ async def delete_product(merchantSku: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/products/", response_model=List[HepsiburadaProductSchema])
-async def read_products(skip: int = 0, limit: int = 100):
-    products = await db_manager.get_products(skip=skip, limit=limit)
+async def read_products(merchantSku: Optional[str] = None):
+    products = await db_manager.get_product(merchantSku)   
     return products
 
 @app.post("/sync-products/")
@@ -99,10 +99,10 @@ async def sync_products(load_all: bool = False):
             db_product = await db_manager.get_product(product.merchantSku)
             if db_product:
                 # Update existing product
-                await db_manager.update_item(HepsiburadaProduct, product.merchantSku, product)
+                await db_manager.update_product(product.merchantSku, product)
             else:
                 # Create new product
-                await db_manager.create_item(HepsiburadaProduct, product)
+                await db_manager.create_product(product)
         
         return {"message": "Products synchronized successfully"}
     except Exception as e:

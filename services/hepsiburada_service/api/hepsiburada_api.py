@@ -408,6 +408,8 @@ class HepsiburadaAPI:
                             else:
 
                                 data['stock'] = listing.get('availableStock', 0)
+                                data['price'] = listing.get('price', 0)
+                                data['tax'] = listing.get('commissionRate', 0)
                                 listings_list.append(data)                    
 
                 page += 1         
@@ -554,9 +556,9 @@ class HepsiburadaAPI:
             update_payload = json.dumps(
                 [
                     {
-                        "hepsiburadaSku": product_data["id"],
-                        "merchantSku": product_data["sku"],
-                        "availableStock": product_data["qty"],
+                        "hepsiburadaSku": product_data["hbSku"],
+                        "merchantSku": product_data["merchantSku"],
+                        "availableStock": product_data["stock"],
                     }
                 ]
             )
@@ -586,17 +588,18 @@ class HepsiburadaAPI:
 
                             self.logger.info(
                                 f"""Product with code: {
-                                    product_data["sku"]}, New value: {product_data["qty"]}"""
+                                    product_data["merchantSku"]}, New value: {product_data["stock"]}"""
                             )
-                            break
+                            return True
+                                
 
                         if check_status["errors"]:
 
                             self.logger.error(
-                                f"""Product with code: {product_data["sku"]} failed to update || Reason: {
+                                f"""Product with code: {product_data["merchantSku"]} failed to update || Reason: {
                                     check_status["errors"]}"""
                             )
-                            break
+                            return False
 
                     else:
 

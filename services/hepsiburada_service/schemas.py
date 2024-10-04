@@ -3,8 +3,7 @@ from typing import List, Optional
 from decimal import Decimal
 
 class ProductImageSchema(BaseModel):
-    imageUrl: HttpUrl
-    order: int = 0
+    url: str
 
 class ProductAttributeSchema(BaseModel):
     name: str
@@ -21,8 +20,8 @@ class HepsiburadaProductSchema(BaseModel):
     images: List[ProductImageSchema]
     categoryId: int
     categoryName: str
-    tax: Decimal = Field(..., ge=0, le=100)
-    price: Optional[Decimal] = Field(None, ge=0)
+    tax: float = Field(default=0, ge=0, le=100)
+    price: float = Field(default=0, ge=0)
     description: str
     status: str
     baseAttributes: List[ProductAttributeSchema]
@@ -36,7 +35,7 @@ class HepsiburadaProductBasicSchema(BaseModel):
     hbSku: str
     productName: str
     brand: str
-    price: Optional[Decimal] = Field(None, ge=0)
+    price: float = Field(default=0, ge=0)
     status: str
     stock: int = 0
 

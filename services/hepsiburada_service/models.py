@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, Text, Boolean, ForeignKey
+from sqlalchemy import Column, Float, Integer, String, Numeric, Text, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -16,8 +16,8 @@ class HepsiburadaProduct(Base):
     brand = Column(String(100))
     categoryId = Column(Integer)
     categoryName = Column(String(100))
-    tax = Column(Numeric(5, 2))
-    price = Column(Numeric(10, 2))
+    tax = Column(Float(10, 2), default=0)
+    price = Column(Float(10, 2), default=0)
     description = Column(Text)
     status = Column(String(50))
     stock = Column(Integer, default=0)
@@ -31,8 +31,7 @@ class HepsiburadaProductImage(Base):
 
     id = Column(Integer, primary_key=True)
     product_id = Column(Integer, ForeignKey('hepsiburada_products.id'))
-    imageUrl = Column(String(255))
-    order = Column(Integer, default=0)
+    url = Column(String(255))
 
     product = relationship("HepsiburadaProduct", back_populates="images")
 
