@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from typing import Optional, TypeVar
 from pydantic import BaseModel
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.future import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -206,9 +206,17 @@ class DatabaseManager:
     async def update_product(self, merchantSku: str, product_update: HepsiburadaProductSchema) -> Optional[HepsiburadaProduct]:
         async with self.get_db() as db:
             try:
-                result = await db.execute(select(HepsiburadaProduct).filter(HepsiburadaProduct.merchantSku == merchantSku))
+                # Use selectinload to eagerly load related entities
+                query = select(HepsiburadaProduct).options(
+                    selectinload(HepsiburadaProduct.images),
+                    selectinload(HepsiburadaProduct.baseAttributes)
+                ).filter(HepsiburadaProduct.merchantSku == merchantSku)
+                
+                result = await db.execute(query)
                 db_product = result.scalar_one_or_none()
+                
                 if db_product:
+                    # Update scalar fields
                     for key, value in product_update.model_dump(exclude_unset=True).items():
                         if key not in ['images', 'baseAttributes']:
                             if key in ['tax', 'price']:
@@ -216,28 +224,36 @@ class DatabaseManager:
                             else:
                                 setattr(db_product, key, value)
 
-                # Update images
-                await db.execute(delete(HepsiburadaProductImage).where(HepsiburadaProductImage.product_id == db_product.id))
-                for img in product_update.images:
-                    if isinstance(img, ProductImageSchema):
-                        db_image = HepsiburadaProductImage(url=img.url, product_id=db_product.id)
-                    else:
-                        db_image = HepsiburadaProductImage(url=img, product_id=db_product.id)
-                    db.add(db_image)
+                    # Update images
+                    await db.execute(delete(HepsiburadaProductImage).where(HepsiburadaProductImage.product_id == db_product.id))
+                    db_product.images = []  # Clear the images list in the ORM object
+                    for img in product_update.images:
+                        if isinstance(img, ProductImageSchema):
+                            db_image = HepsiburadaProductImage(url=img.url, product_id=db_product.id)
+                        else:
+                            db_image = HepsiburadaProductImage(url=img, product_id=db_product.id)
+                        db_product.images.append(db_image)
+                        db.add(db_image)
 
-                # Update attributes
-                await db.execute(delete(HepsiburadaProductAttribute).where(HepsiburadaProductAttribute.product_id == db_product.id))
-                for attr in product_update.baseAttributes:
-                    db_attribute = HepsiburadaProductAttribute(
-                        name=attr.name,
-                        value=attr.value,
-                        mandatory=attr.mandatory,
-                        product_id=db_product.id
-                    )
-                    db.add(db_attribute)
+                    # Update attributes
+                    await db.execute(delete(HepsiburadaProductAttribute).where(HepsiburadaProductAttribute.product_id == db_product.id))
+                    db_product.baseAttributes = []  # Clear the attributes list in the ORM object
+                    for attr in product_update.baseAttributes:
+                        db_attribute = HepsiburadaProductAttribute(
+                            name=attr.name,
+                            value=attr.value,
+                            mandatory=attr.mandatory,
+                            product_id=db_product.id
+                        )
+                        db_product.baseAttributes.append(db_attribute)
+                        db.add(db_attribute)
 
-                await db.commit()
-                return db_product
+                    await db.commit()
+                    await db.refresh(db_product)  # Refresh the object to ensure all relationships are loaded
+                    return db_product
+                else:
+                    logger.warning(f"Product with merchantSku {merchantSku} not found")
+                    return None
             except SQLAlchemyError as e:
                 logger.error(f"Error updating product: {str(e)}")
                 await db.rollback()
@@ -246,13 +262,28 @@ class DatabaseManager:
     async def delete_product(self, merchantSku: str) -> bool:
         async with self.get_db() as db:
             try:
-                result = await db.execute(select(HepsiburadaProduct).filter(HepsiburadaProduct.merchantSku == merchantSku))
-                db_product = result.scalar_one_or_none()
-                if db_product:
-                    await db.delete(db_product)
-                    await db.commit()
-                    return True
-                return False
+                # First, fetch the product to get its ID
+                query = select(HepsiburadaProduct).filter(HepsiburadaProduct.merchantSku == merchantSku)
+                result = await db.execute(query)
+                product = result.scalar_one_or_none()
+
+                if not product:
+                    logger.warning(f"Product with merchantSku {merchantSku} not found")
+                    return False
+
+                # Delete associated images
+                await db.execute(delete(HepsiburadaProductImage).where(HepsiburadaProductImage.product_id == product.id))
+
+                # Delete associated attributes
+                await db.execute(delete(HepsiburadaProductAttribute).where(HepsiburadaProductAttribute.product_id == product.id))
+
+                # Now delete the product
+                await db.execute(delete(HepsiburadaProduct).where(HepsiburadaProduct.merchantSku == merchantSku))
+
+                await db.commit()
+                logger.info(f"Successfully deleted product with merchantSku {merchantSku}")
+                return True
+
             except SQLAlchemyError as e:
                 logger.error(f"Error deleting product: {str(e)}")
                 await db.rollback()

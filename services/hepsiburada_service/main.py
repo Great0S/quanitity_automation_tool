@@ -69,12 +69,12 @@ async def update_product(
 async def delete_product(merchantSku: str):
     try:
         # First, delete the product on Hepsiburada
-        api_response = await hepsiburada_api.delete_product(merchantSku)
-        if not api_response:
-            raise HTTPException(status_code=400, detail="Failed to delete product on Hepsiburada")
+        # # api_response = await hepsiburada_api.delete_listing(merchantSku)
+        # if not api_response:
+        #     raise HTTPException(status_code=400, detail="Failed to delete product on Hepsiburada")
         
         # Then, delete the product from our database
-        success = await db_manager.delete_item(HepsiburadaProduct, merchantSku)
+        success = await db_manager.delete_product(merchantSku)
         if not success:
             raise HTTPException(status_code=404, detail="Product not found in database")
         return True
