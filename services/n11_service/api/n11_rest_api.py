@@ -4,10 +4,6 @@ import os
 import re
 import requests
 from app.config import logger
-from api.n11_soap_api import N11SoapAPI
-
-
-n11Soap = N11SoapAPI()
 
 
 class N11RestAPI:
@@ -123,7 +119,7 @@ class N11RestAPI:
             logger.error(f"An error occurred: {e}")
             return None
 
-    def get_products(self, stock_code=None, page=1, page_size=50, raw_data=False):
+    async def get_products(self, stock_code=None, page=1, page_size=50, raw_data=False):
         """Retrieve products from the API with optional filters."""
         page = 1
         products = []
@@ -224,3 +220,4 @@ class N11RestAPI:
                    product['sku']} is unsuccessful | Response: {
                        post_response.text}"""
             )
+

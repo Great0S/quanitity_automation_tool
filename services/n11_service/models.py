@@ -1,75 +1,43 @@
-from sqlalchemy import (
-    Column,
-    ForeignKey,
-    Integer,
-    String,
-    Float,
-    Boolean,
-    DateTime,
-)
+from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
+class N11Product(Base):
+    __tablename__ = 'n11_products'
 
-class Product(Base):
-    __tablename__ = "products"
-
-    id = Column(Integer, primary_key=True, index=True)
-    barcode = Column(String, unique=True, index=True)
-    title = Column(String)
-    productMainId = Column(String)
-    brandId = Column(Integer)
-    pimCategoryId = Column(Integer)
-    categoryName = Column(String)
-    quantity = Column(Integer)
+    id = Column(Integer, primary_key=True)
+    n11ProductId = Column(Integer)
+    sellerId = Column(Integer)
+    sellerNickname = Column(String)
     stockCode = Column(String)
-    dimensionalWeight = Column(Float)
+    title = Column(String)
     description = Column(String)
-    brand = Column(String)
-    listPrice = Column(Float)
+    categoryId = Column(Integer)
+    productMainId = Column(String)
+    status = Column(String)
+    saleStatus = Column(String)
+    preparingDay = Column(Integer)
+    shipmentTemplate = Column(String)
+    maxPurchaseQuantity = Column(Integer)
+    catalogId = Column(Integer)
+    barcode = Column(String)
+    groupId = Column(Integer)
+    currencyType = Column(String)
     salePrice = Column(Float)
-    vatRate = Column(Integer)
-    hasActiveCampaign = Column(Boolean, default=False)
-    hasHtmlContent = Column(Boolean, default=False)
-    createDateTime = Column(DateTime)
-    lastUpdateDate = Column(DateTime)
-    blacklisted = Column(Boolean, default=False)
+    listPrice = Column(Float)
+    quantity = Column(Integer)
 
-    # Relationships
-    images = relationship("Image", back_populates="product", cascade="all, delete-orphan")
-    attributes = relationship("Attribute", back_populates="product", cascade="all, delete-orphan")
+    attributes = relationship("N11ProductAttribute", back_populates="product")
 
+class N11ProductAttribute(Base):
+    __tablename__ = 'n11_product_attributes'
 
-    def __str__(self):
-        return (
-            f"Product: {self.title}\n"
-            f"Barcode: {self.barcode}\n"
-            f"Main ID: {self.productMainId}\n"
-            f"Price: {self.salePrice}\n"
-            f"Quantity: {self.quantity}\n"
-            f"Stock Code: {self.stockCode}\n"
-            f"Images: {len(self.images)}\n"
-            f"Attributes: {len(self.attributes)}"
-        )
-
-
-class Image(Base):
-    __tablename__ = "images"
-
-    id = Column(Integer, primary_key=True, index=True)
-    url = Column(String)
-    product_id = Column(Integer, ForeignKey("products.id"))
-    product = relationship("Product", back_populates="images")
-
-
-class Attribute(Base):
-    __tablename__ = "attributes"
-
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey('n11_products.id'))
     attributeId = Column(Integer)
-    attributeValue = Column(String)
     attributeName = Column(String)
-    product_id = Column(Integer, ForeignKey("products.id"))
-    product = relationship("Product", back_populates="attributes")
+    attributeValue = Column(String)
+
+    product = relationship("N11Product", back_populates="attributes")

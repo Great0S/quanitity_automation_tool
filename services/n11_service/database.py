@@ -5,15 +5,15 @@ import traceback
 from typing import List, Optional, Type, TypeVar, Union
 from pydantic import BaseModel
 
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.future import select
 from box import Box
 
-from services.trendyol_service.models import Attribute, Base, Image, Product
-from services.trendyol_service.schemas import AttributeSchema, ImageSchema, ProductPriceUpdate, ProductSchema, ProductStockUpdate, ProductBase
+from services.n11_service.schemas import N11ProductCreateSchema, N11ProductSchema, N11ProductUpdateSchema
+from services.n11_service.models import Base, N11Product, N11ProductAttribute
 from shared.logging import logger
 
 T = TypeVar('T', bound=BaseModel)
@@ -47,7 +47,6 @@ class DatabaseManager:
 
     async def init_db(self):
         async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
 
     @asynccontextmanager
@@ -62,24 +61,25 @@ class DatabaseManager:
             finally:
                 await session.close()
 
-    async def create_product(self, product: ProductSchema) -> Product:
-        """Function to create a new product in the database."""
-        async with self.get_db() as db:
+    async def create_n11_product(self, product_json: N11ProductCreateSchema) -> N11Product:
+        async with self.get_db() as session:
             try:
-                product = Box(product)
-                # Check if the product already exists
-                existing_product = await self._get_existing_product(db, product.stockCode)
+                product = Box(product_json)
+                existing_product = await self._get_existing_product(session, product.stockCode)
                 if existing_product:
-                    # logger.info(f"Product with barcode {product.barcode} already exists. Skipping.")
+                    await session.refresh(existing_product, ['attributes'])
                     return existing_product
+                
+                product_model = N11ProductCreateSchema(**product_json)
+                db_product = await self._create_new_product(session, product_model)
+                await self._add_attributes(session, db_product, product.attributes)
 
-                db_product = await self._create_new_product(db, product)
-                await self._add_images(db, db_product, product.images)
-                await self._add_attributes(db, db_product, product.attributes)
+                await session.commit()
+                
+                # Reload the product with its attributes
+                await session.refresh(db_product, ['attributes'])
 
-                await db.refresh(db_product)
                 return db_product
-
             except SQLAlchemyError as e:
                 logger.error(f"Error creating product: {str(e)}")
                 raise
@@ -88,176 +88,96 @@ class DatabaseManager:
                 logger.debug(traceback.format_exc())
                 raise
 
-    async def _get_existing_product(self, db: AsyncSession, identifier: str) -> Optional[Product]:
-        result = await db.execute(select(Product).filter(Product.stockCode == identifier))
+    async def _get_existing_product(self, session: AsyncSession, stock_code: str) -> Optional[N11Product]:
+        result = await session.execute(select(N11Product).filter(N11Product.stockCode == stock_code))
         return result.scalar_one_or_none()
 
-    async def _create_new_product(self, db: AsyncSession, product: ProductSchema) -> Product:
-        db_product = Product(
-            barcode=product.barcode,
-            title=product.title,
-            productMainId=product.productMainId,
-            brandId=product.brandId,
-            pimCategoryId=product.pimCategoryId,
-            categoryName=product.categoryName,
-            quantity=product.quantity,
-            stockCode=product.stockCode,
-            dimensionalWeight=product.dimensionalWeight,
-            description=product.description,
-            brand=product.brand,
-            listPrice=product.listPrice,
-            salePrice=product.salePrice,
-            vatRate=product.vatRate,
-            hasActiveCampaign=product.hasActiveCampaign,
-            hasHtmlContent=product.hasHtmlContent,
-            createDateTime=datetime.now(),
-            lastUpdateDate=datetime.now(),
-            blacklisted=product.blacklisted,
-        )
-        db.add(db_product)
-        await db.flush()
+    async def _create_new_product(self, session: AsyncSession, product: N11ProductCreateSchema) -> N11Product:
+        db_product = N11Product(**product.model_dump(exclude={'attributes'}))
+        session.add(db_product)
+        await session.flush()
         return db_product
 
-    async def _add_images(self, db: AsyncSession, product: Product, images: List[ImageSchema]):
-        if not images:
-            logger.warning(f"No images provided for product {product.stockCode}")
-            return
-
-        for img in images:
-            try:
-                if isinstance(img, ImageSchema):
-                    db.add(Image(url=img.url, product_id=product.id))
-                elif isinstance(img, dict) and 'url' in img:
-                    db.add(Image(url=img['url'], product_id=product.id))
-                elif isinstance(img, str):
-                    db.add(Image(url=img, product_id=product.id))
-                else:
-                    logger.warning(f"Invalid image data for product {product.stockCode}: {img}")
-            except Exception as e:
-                logger.error(f"Error adding image for product {product.stockCode}: {str(e)}")
-                logger.debug(traceback.format_exc())
-
-    async def _add_attributes(self, db: AsyncSession, product: Product, attributes: List[AttributeSchema]):
+    async def _add_attributes(self, session: AsyncSession, product: N11Product, attributes: List[dict]):
         if not attributes:
             logger.warning(f"No attributes provided for product {product.stockCode}")
             return
 
         for attr in attributes:
             try:
-                if isinstance(attr, AttributeSchema) or isinstance(attr, dict):
-                    db.add(Attribute(
-                        attributeId=attr.attributeId,
-                        attributeName=attr.attributeName,
-                        attributeValue=str(attr.attributeValue),  # Convert to string as per the model
-                        product_id=product.id,
-                    ))
-                else:
-                    logger.warning(f"Invalid attribute data for product {product.stockCode}: {attr}")
+                db_attribute = N11ProductAttribute(**attr, product_id=product.id)
+                session.add(db_attribute)
             except Exception as e:
                 logger.error(f"Error adding attribute for product {product.stockCode}: {str(e)}")
                 logger.debug(traceback.format_exc())
-        
-    async def get_item(self, model: Type[T], identifier: str) -> Optional[dict]:
-        """Get an item from the database by code or barcode and return as a dictionary."""
-        async with self.get_db() as db:
+
+    async def get_n11_product(self, stock_code: str) -> Optional[N11ProductSchema]:
+        async with self.get_db() as session:
             try:
-                result = await db.execute(select(model).filter(model.stockCode == identifier))
-                item = result.scalar_one_or_none()
-
-                if item:
-                    return {column.name: getattr(item, column.name) for column in item.__table__.columns}
-                else:
-                    logger.info(f"Item with identifier {identifier} not found")
-                    return None
-
-            except SQLAlchemyError as e:
-                logger.error(f"Error querying item: {str(e)}")
-                raise
-
-    async def update_item(self, stock_code: str, product_update: Union[ProductStockUpdate, ProductPriceUpdate, ProductBase]) -> Optional[Product]:
-        """Update a product in the database based on ProductBase."""
-        async with self.get_db() as db:
-            try:
-                result = await db.execute(select(Product).filter(Product.stockCode == stock_code))
-                db_product = result.scalar_one_or_none()
-
-                if db_product:
-                    product_update = product_update.model_dump(exclude_none=True, exclude_unset=True)
-                    for field, value in product_update.items():
-                        if field == "images":
-                            await self._update_images(db, db_product, value)
-                        elif field == "attributes":
-                            await self._update_attributes(db, db_product, value)
-                        else:
-                            setattr(db_product, field, value)
-
-                    await db.commit()
-                    await db.refresh(db_product)
-                    return db_product
-
-                logger.info(f"Product with stock code {stock_code} not found for update")
+                result = await session.execute(select(N11Product).filter(N11Product.stockCode == stock_code))
+                product = result.scalar_one_or_none()
+                if product:
+                    return N11ProductSchema.model_validate(product)
                 return None
-
             except SQLAlchemyError as e:
-                logger.error(f"Error updating product: {str(e)}")
+                logger.error(f"Error querying product: {str(e)}")
                 raise
 
-    async def _update_images(self, db, product: Product, images: List[dict]):
-        # Remove existing images
-        await db.execute(delete(Image).where(Image.product_id == product.id))
-
-        # Add new images
-        for img in images:
-            db.add(Image(url=img["url"], product_id=product.id))
-
-    async def _update_attributes(self, db, product: Product, attributes: List[dict]):
-        # Remove existing attributes
-        await db.execute(delete(Attribute).where(Attribute.product_id == product.id))
-
-        # Add new attributes
-        for attr in attributes:
-            db.add(Attribute(
-                attributeId=attr["attributeId"],
-                attributeName=attr["attributeName"],
-                attributeValue=attr["attributeValue"],
-                product_id=product.id,
-            ))
-
-    async def delete_product(self, model: Type[T], identifier: str) -> Optional[T]:
-        """Delete a product from the database."""
-        async with self.get_db() as db:
+    async def get_n11_products(self, skip: int = 0, limit: int = 100) -> List[N11ProductSchema]:
+        async with self.get_db() as session:
             try:
-                result = await db.execute(select(model).filter(model.stockCode == identifier))
-                db_item = result.scalar_one_or_none()
-
-                if db_item:
-                    await db.delete(db_item)
-                    await db.commit()
-                    return db_item
-
-                    logger.info(f"Product with stock code {identifier} not found for deletion")
-                return None
-
-            except SQLAlchemyError as e:
-                logger.error(f"Error deleting product: {str(e)}")
-                raise
-
-    async def get_all_products(self) -> List[Product]:
-        """Retrieve all products from the database."""
-        async with self.get_db() as db:
-            try:
-                result = await db.execute(select(Product))
-                return result.scalars().all()
+                result = await session.execute(select(N11Product).offset(skip).limit(limit))
+                products = result.scalars().all()
+                return [N11ProductSchema.model_validate(product) for product in products]
             except SQLAlchemyError as e:
                 logger.error(f"Error querying products: {str(e)}")
                 raise
 
-    async def get_product_by_stock_code(self, identifier: str) -> Optional[Product]:
-        """Retrieve a product by stock code from the database."""
-        async with self.get_db() as db:
+    async def update_n11_product(self, stock_code: str, product_update: N11ProductUpdateSchema) -> Optional[N11ProductSchema]:
+        async with self.get_db() as session:
             try:
-                result = await db.execute(select(Product).filter(Product.stockCode == identifier))
-                return result.scalar_one_or_none()
+                result = await session.execute(select(N11Product).filter(N11Product.stockCode == stock_code))
+                db_product = result.scalar_one_or_none()
+
+                if db_product:
+                    update_data = product_update.dict(exclude_unset=True)
+                    attributes = update_data.pop('attributes', None)
+
+                    for field, value in update_data.items():
+                        setattr(db_product, field, value)
+
+                    if attributes is not None:
+                        await self._update_attributes(session, db_product, attributes)
+
+                    await session.commit()
+                    await session.refresh(db_product)
+                    return N11ProductSchema.model_validate(db_product)
+
+                logger.info(f"Product with stock code {stock_code} not found for update")
+                return None
             except SQLAlchemyError as e:
-                logger.error(f"Error querying product: {str(e)}")
+                logger.error(f"Error updating product: {str(e)}")
+                raise
+
+    async def _update_attributes(self, session: AsyncSession, product: N11Product, attributes: List[dict]):
+        await session.execute(delete(N11ProductAttribute).where(N11ProductAttribute.product_id == product.id))
+        for attr in attributes:
+            db_attribute = N11ProductAttribute(**attr, product_id=product.id)
+            session.add(db_attribute)
+
+    async def delete_n11_product(self, stock_code: str) -> bool:
+        async with self.get_db() as session:
+            try:
+                result = await session.execute(select(N11Product).filter(N11Product.stockCode == stock_code))
+                db_product = result.scalar_one_or_none()
+
+                if db_product:
+                    await session.delete(db_product)
+                    await session.commit()
+                    return True
+
+                logger.info(f"Product with stock code {stock_code} not found for deletion")
+                return False
+            except SQLAlchemyError as e:
+                logger.error(f"Error deleting product: {str(e)}")
                 raise
