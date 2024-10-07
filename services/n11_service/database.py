@@ -7,12 +7,12 @@ from pydantic import BaseModel
 
 from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, selectinload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.future import select
 from box import Box
 
-from services.n11_service.schemas import N11ProductCreateSchema, N11ProductSchema, N11ProductUpdateSchema
+from services.n11_service.schemas import N11ProductCreateSchema, N11ProductResponseSchema, N11ProductSchema, N11ProductUpdateSchema
 from services.n11_service.models import Base, N11Product, N11ProductAttribute
 from shared.logging import logger
 
@@ -114,7 +114,11 @@ class DatabaseManager:
     async def get_n11_product(self, stock_code: str) -> Optional[N11ProductSchema]:
         async with self.get_db() as session:
             try:
-                result = await session.execute(select(N11Product).filter(N11Product.stockCode == stock_code))
+                result = await session.execute(
+                    select(N11Product)
+                    .options(selectinload(N11Product.attributes))
+                    .filter(N11Product.stockCode == stock_code)
+                )
                 product = result.scalar_one_or_none()
                 if product:
                     return N11ProductSchema.model_validate(product)
@@ -123,11 +127,17 @@ class DatabaseManager:
                 logger.error(f"Error querying product: {str(e)}")
                 raise
 
-    async def get_n11_products(self, skip: int = 0, limit: int = 100) -> List[N11ProductSchema]:
+    async def get_n11_products(self, limit: int = 100) -> List[N11ProductSchema]:
         async with self.get_db() as session:
             try:
-                result = await session.execute(select(N11Product).offset(skip).limit(limit))
+                result = await session.execute(
+                    select(N11Product)
+                    .options(selectinload(N11Product.attributes))
+                    .limit(limit)
+                )
                 products = result.scalars().all()
+                
+                # Convert to Pydantic models within the session context
                 return [N11ProductSchema.model_validate(product) for product in products]
             except SQLAlchemyError as e:
                 logger.error(f"Error querying products: {str(e)}")
@@ -136,18 +146,21 @@ class DatabaseManager:
     async def update_n11_product(self, stock_code: str, product_update: N11ProductUpdateSchema) -> Optional[N11ProductSchema]:
         async with self.get_db() as session:
             try:
-                result = await session.execute(select(N11Product).filter(N11Product.stockCode == stock_code))
+                result = await session.execute(
+                    select(N11Product)
+                    .options(selectinload(N11Product.attributes))
+                    .filter(N11Product.stockCode == stock_code)
+                )
                 db_product = result.scalar_one_or_none()
 
                 if db_product:
-                    update_data = product_update.dict(exclude_unset=True)
-                    attributes = update_data.pop('attributes', None)
-
+                    update_data = product_update.model_dump(exclude_unset=True)
+                    
                     for field, value in update_data.items():
-                        setattr(db_product, field, value)
-
-                    if attributes is not None:
-                        await self._update_attributes(session, db_product, attributes)
+                        if field == 'attributes':
+                            await self._update_attributes(session, db_product, value)
+                        else:
+                            setattr(db_product, field, value)
 
                     await session.commit()
                     await session.refresh(db_product)

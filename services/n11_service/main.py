@@ -39,9 +39,9 @@ def get_update_schema(update_type: UpdateType = Query(default=UpdateType.full)):
     return N11ProductUpdateSchema
 
 @app.get("/products", response_model=N11ProductListResponseSchema)
-async def get_products(skip: int = 0, limit: int = 100):
+async def get_products(limit: int = 100):
     try:
-        db_products = await db_manager.get_n11_products(skip=skip, limit=limit)
+        db_products = await db_manager.get_n11_products(limit=limit)
         return N11ProductListResponseSchema(
             status_code=200,
             message="Products retrieved successfully",
@@ -65,12 +65,9 @@ async def create_product(product: N11ProductCreateSchema):
 
 @app.get("/products/{stock_code}", response_model=N11ProductResponseSchema)
 async def read_product_by_stock_code(stock_code: str):
-    api_product = await n11_api.get_product(stock_code)
-    if api_product is None:
-        raise HTTPException(status_code=404, detail="Product not found")
     db_product = await db_manager.get_n11_product(stock_code)
     if db_product is None:
-        db_product = await db_manager.create_n11_product(api_product)
+        raise HTTPException(status_code=404, detail="Product not found")
     return N11ProductResponseSchema(
         status_code=200,
         message="Product retrieved successfully",
@@ -88,11 +85,11 @@ async def update_product_by_stock_code(
         if not isinstance(product_update, update_schema):
             raise ValueError(f"Invalid update type. Expected {update_schema.__name__}, got {type(product_update).__name__}")
 
-        api_updated_product = await n11_api.update_product(stock_code, product_update)
+        api_updated_product = n11_api.update_product(product_update)
         if api_updated_product is None:
             raise HTTPException(status_code=404, detail="Product not found")
 
-        updated_product = await db_manager.update_n11_product(stock_code, api_updated_product)
+        updated_product = await db_manager.update_n11_product(stock_code, product_update)
 
         return N11ProductResponseSchema(
             status_code=200,

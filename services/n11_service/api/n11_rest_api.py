@@ -121,48 +121,47 @@ class N11RestAPI:
 
     async def get_products(self, stock_code=None, page=1, page_size=50, raw_data=False):
         """Retrieve products from the API with optional filters."""
-        page = 1
         products = []
         headers = self.headers
 
-        while True:
+        if stock_code:
+            # If a specific stock code is provided, use the single product query endpoint
+            product_request_url = f"{self.base_url}ms/product-query"
+            params = {"stockCode": stock_code}
+        else:
+            # If no stock code is provided, use the paginated product query endpoint
+            product_request_url = f"{self.base_url}ms/product-query"
             params = {"page": page, "size": page_size}
 
-            product_request_url = self.base_url + "ms/product-query"
+        try:
+            response = requests.get(
+                product_request_url, params=params, headers=headers
+            )
+            response.raise_for_status()  # Raise an error for bad responses
+            data = response.json()
 
-            try:
-                response = requests.get(
-                    product_request_url, params=params, headers=headers
-                )
-                response.raise_for_status()  # Raise an error for bad responses
-                data = response.json()
-                products.extend(data.get("content", []))
+            products = data.get("content", [])
 
-                if data.get("totalPages", 0) == page:
-                    break  # No more pages, exit the loop
+            logger.info(f"N11 fetched {len(products)} products")
 
-                page += 1
+            if not raw_data:
+                # Return filtered data: stock code, quantity, and sale price
+                return [
+                    {
+                        "id": product.get("n11ProductId"),
+                        "sku": product.get("stockCode"),
+                        "qty": product.get("quantity"),
+                        "price": product.get("salePrice"),
+                    }
+                    for product in products
+                ]
+            else:
+                # Return full product data
+                return products
 
-            except requests.exceptions.RequestException as e:
-                logger.error(f"An error occurred: {e}")
-                return None
-
-        logger.info(f"N11 fetched {len(products)} products")
-
-        if not raw_data:
-            # Return filtered data: stock code, quantity, and sale price
-            return [
-                {
-                    "id": product.get("n11ProductId"),
-                    "sku": product.get("stockCode"),
-                    "qty": product.get("quantity"),
-                    "price": product.get("salePrice"),
-                }
-                for product in products
-            ]
-        else:
-            # Return full product data
-            return products
+        except requests.exceptions.RequestException as e:
+            logger.error(f"An error occurred: {e}")
+            return None
 
     def update_product(self, product: dict):
 
@@ -172,7 +171,7 @@ class N11RestAPI:
             "payload": {
                 "integrator": "QAT 1.0",
                 "skus": [
-                    {"stockCode": product["sku"], "quantity": int(product["qty"])}
+                    {"stockCode": product.stockCode, "quantity": int(product.quantity)}
                 ],
             }
         }
@@ -184,12 +183,12 @@ class N11RestAPI:
         if post_response.status_code == 200:
 
             task_payload = {
-                "taskId": post_response.json()["taskId"],
+                "taskId": post_response.json()["id"],
                 "pageable": {"page": 0, "size": 1000},
             }
 
             while True:
-                task_response = requests.get(
+                task_response = requests.post(
                     self.base_url + "ms/product/task-details/page-query",
                     headers=self.headers,
                     json=task_payload,
@@ -201,10 +200,10 @@ class N11RestAPI:
                         task_response_json = task_response.json()
 
                         logger.info(
-                            f"Request for product {product['sku']} is successful | Response: {task_response_json['skus']['content'][0]['status']} - {task_response_json['skus']['content']['reasons']}"
+                            f"Request for product {product.stockCode} is successful | Response: {task_response_json['skus']['content'][0]['status']} - {task_response_json['skus']['content'][0]['reasons']}"
                         )
 
-                        return
+                        return True
 
                     continue
 
@@ -217,7 +216,8 @@ class N11RestAPI:
 
             logger.error(
                 f"""Request for product {
-                   product['sku']} is unsuccessful | Response: {
+                   product.stockCode} is unsuccessful | Response: {
                        post_response.text}"""
             )
 
+            return False

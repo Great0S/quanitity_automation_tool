@@ -62,27 +62,8 @@ class N11ProductCreateSchema(BaseModel):
     attributes: List[N11ProductAttributeSchema]
 
 class N11ProductUpdateSchema(BaseModel):
-    n11ProductId: Optional[int] = None
-    sellerId: Optional[int] = None
-    sellerNickname: Optional[str] = None
     stockCode: Optional[str] = None
-    title: Optional[str] = None
-    description: Optional[str] = None
-    categoryId: Optional[int] = None
-    productMainId: Optional[str] = None
-    status: Optional[str] = None
-    saleStatus: Optional[str] = None
-    preparingDay: Optional[int] = None
-    shipmentTemplate: Optional[str] = None
-    maxPurchaseQuantity: Optional[int] = None
-    catalogId: Optional[int] = None
-    barcode: Optional[str] = None
-    groupId: Optional[int] = None
-    currencyType: Optional[str] = None
-    salePrice: Optional[float] = None
-    listPrice: Optional[float] = None
     quantity: Optional[int] = None
-    attributes: Optional[List[N11ProductAttributeSchema]] = None
 
 class ResponseSchema(BaseModel, Generic[T]):
     status_code: int
