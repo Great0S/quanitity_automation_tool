@@ -4,11 +4,14 @@ import re
 import requests
 import json
 import time
-from app.config import logger
+# from app.config import logger
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
-
-class PazaramaAPIClient:
+class PazaramaAPI:
     """
     A client for interacting with the Pazarama API.
 
@@ -423,9 +426,7 @@ class PazaramaAPIClient:
                             }
                         )
                     else:
-                        products_items.append(
-                            {"sku": product.get("stockCode"), "data": product}
-                        )
+                        products_items.append(product)
 
             logger.info(
                 f"Pazarama fetched {len(products_items)} products in {elapsed_time:.2f} seconds."
@@ -445,11 +446,10 @@ class PazaramaAPIClient:
         to be a dictionary containing the following keys:
         """
 
-        product_id = product_data["id"]
-        sku = product_data["sku"]
-        qty = product_data["qty"]
+        product_code = product_data["code"]
+        qty = product_data["stockCount"]
 
-        update_payload = {"items": [{"code": product_id, "stockCount": int(qty)}]}
+        update_payload = {"items": [{"code": product_code, "stockCount": int(qty)}]}
 
         update_request, elapsed_time = self.request_processing(
             uri="product/updateStock-v2", payload=update_payload, method="POST"
@@ -460,11 +460,16 @@ class PazaramaAPIClient:
             if update_request["success"] == True:
 
                 logger.info(
-                    f"""Product with code: {product_data["sku"]}, New value: {product_data["qty"]}, Elapsed time: {elapsed_time:.2f} seconds."""
+                    f"""Product with code: {product_code}, New value: {qty}, Elapsed time: {elapsed_time:.2f} seconds."""
                 )
+
+                return True
 
             else:
 
                 logger.error(
-                    f'Product with code: {sku} failed to update || Reason: {update_request["data"][0]["error"]} || Elapsed time: {elapsed_time:.2f} seconds.'
+                    f'Product with code: {product_code} failed to update || Reason: {update_request["data"][0]["error"]} || Elapsed time: {elapsed_time:.2f} seconds.'
                 )
+
+                return False
+    

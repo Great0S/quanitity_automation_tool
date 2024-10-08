@@ -1,106 +1,127 @@
+from contextlib import asynccontextmanager
 from enum import Enum
-from typing import Optional, Union
-from fastapi import APIRouter, Body, FastAPI, HTTPException, Query
+from typing import List, Optional, Union
+from fastapi import APIRouter, Body, FastAPI, HTTPException
 
-from services.trendyol_service.api.trendyol_api import TrendyolAPI
-from services.trendyol_service.models import Product
-from services.trendyol_service.database import DatabaseManager
-from .schemas import ProductInDB, ProductPriceUpdate, ProductSchema, ProductStockUpdate, ProductBase
+from .api.pazarama_api import PazaramaAPI
+from .models import PazaramaProduct
+from .database import DatabaseManager
+from .schemas import PazaramaProductCreateSchema, PazaramaProductResponseSchema, PazaramaProductSchema, PazaramaProductUpdateSchema, ResponseSchema, PazaramaProductBaseSchema
 
-router = APIRouter()
-app = FastAPI()
 
-trendyol_api = TrendyolAPI()
+pazarama_api = PazaramaAPI()
 db_manager = DatabaseManager()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await db_manager.init_db()
+    yield
+
+router = APIRouter()
+app = FastAPI(lifespan=lifespan)    
 app.include_router(router)
 
-class UpdateType(str, Enum):
-    qty = "qty"
-    price = "price"
-    full = "full"
 
-def get_update_schema(update_type: UpdateType = Query(default=UpdateType.full)):
-    if update_type == UpdateType.qty:
-        return ProductStockUpdate
-    elif update_type == UpdateType.price:
-        return ProductPriceUpdate
-    else:
-        return ProductBase
-
-@app.get("/products", response_model=str)
-async def get_products(load_all: bool = False):
+@app.get("/products", response_model=List[PazaramaProductSchema])
+async def get_products(stock_code: Optional[str] = None):
     try:
-        await db_manager.init_db()
-        products = await trendyol_api.get_products(load_all)
-        db_products = []
-        for product in products:
-            db_product = await db_manager.create_product(product)
-            db_products.append(db_product)
-        return "Products loaded successfully"
+        db_products = await db_manager.get_product(stock_code)
+        return db_products
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.post("/update", response_model=ProductInDB)
+@app.post("/update", response_model=ResponseSchema)
 async def update_product_by_bulk(
-    update_type: UpdateType = Query(default=UpdateType.full),
-    product_update: Union[ProductStockUpdate, ProductPriceUpdate, ProductBase] = Body(...)):
+    product_update: List[PazaramaProductUpdateSchema] = Body(...)
+):
     try:
-        update_schema = get_update_schema(update_type)
-        if not isinstance(product_update, update_schema):
-            raise ValueError(f"Invalid update type. Expected {update_schema.__name__}, got {type(product_update).__name__}")
-        
-        result = await trendyol_api.update_product(product_update.model_dump(exclude_none=True, exclude_unset=True))
-        await db_manager.update_item(result["stockCode"], product_update)
-        return "Product with sku: " + result["stockCode"] + " has been updated successfully"
+        result = await pazarama_api.update_product(product_update.model_dump(exclude_none=True, exclude_unset=True))
+        await db_manager.update_product(product_update=product_update)
+        return "Products has been updated successfully " + str(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.post("/products/", response_model=ProductInDB)
-async def create_product(product: ProductSchema):
+@app.post("/products/", response_model=ResponseSchema)
+async def create_product(product: PazaramaProductBaseSchema):
     try:
-        await trendyol_api.create_product(product)
+        await pazarama_api.create_product(product)
         return await db_manager.create_product(product)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@app.get("/products/{stock_code}", response_model=ProductInDB)
+@app.get("/products/{stock_code}", response_model=ResponseSchema)
 async def read_product_by_stock_code(stock_code: str):
-    product = await db_manager.get_item(Product, stock_code)
+    product = await db_manager.get_item(PazaramaProduct, stock_code)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
 
 
-@app.put("/products/{stock_code}", response_model=Optional[ProductInDB])
+@app.put("/products/{code}", response_model=PazaramaProductResponseSchema)
 async def update_product_by_stock_code(
-    stock_code: str,
-    update_type: UpdateType = Query(default=UpdateType.full),
-    product_update: Union[ProductStockUpdate, ProductPriceUpdate, ProductBase] = Body(...)
+    code: str,
+    product_update: PazaramaProductUpdateSchema = Body(...)
 ):
     try:
-        update_schema = get_update_schema(update_type)
-        if not isinstance(product_update, update_schema):
-            raise ValueError(f"Invalid update type. Expected {update_schema.__name__}, got {type(product_update).__name__}")
+        # Update product on Pazarama API
+        api_result = pazarama_api.update_product(product_update.model_dump(exclude_none=True, exclude_unset=True))
+        
+        if not api_result:
+            raise HTTPException(status_code=400, detail="Failed to update product on Pazarama API")
 
-        updated_product = await db_manager.update_item(stock_code, product_update)
+        # Fetch the existing product from the database
+        existing_product = await db_manager.get_product(code)
+        if existing_product is None:
+            raise HTTPException(status_code=404, detail="Product not found in database")
 
-        if updated_product is None:
-            raise HTTPException(status_code=404, detail="Product not found")
+        # Update the existing product with new data
+        updated_product = await db_manager.update_product(code, product_update)
 
-        return ProductInDB.model_validate(updated_product)
+        if not updated_product.code or updated_product.stockCount is None:
+            raise ValueError("Both code and stockCount must be provided and valid")
+        
+        return PazaramaProductResponseSchema(
+            status_code=200,
+            message=f"Product with code {code} has been updated successfully",
+            data=PazaramaProductSchema.model_validate(updated_product).model_dump()
+        )
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve)) from ve
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}") from e
 
 
-@app.delete("/products/{stock_code}", response_model=ProductInDB)
-async def delete_product_by_stock_code(stock_code: str):
-    deleted_product = await db_manager.delete_product(Product, stock_code)
+@app.delete("/products/{code}", response_model=ResponseSchema)
+async def delete_product_by_stock_code(code: str):
+    deleted_product = await db_manager.delete_product(PazaramaProduct, code)
     if deleted_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     return deleted_product
+
+
+@app.post("/sync")
+async def sync_products(load_all: bool = False):
+    try:
+        # Fetch products from Pazarama API
+        pazarama_products = pazarama_api.get_products(load_all)
+        
+        # Sync products with local database
+        for product in pazarama_products:
+            existing_product = await db_manager.get_product(product["stockCode"])
+            if existing_product:
+                # Update existing product
+                await db_manager.update_product(product["stockCode"], PazaramaProductBaseSchema(**product))
+            else:
+                # Create new product
+                await db_manager.create_product(PazaramaProductCreateSchema(**product))
+        
+        return ResponseSchema(
+            status_code=200,
+            message=f"Successfully synced {len(pazarama_products)} products",
+            data={"synced_count": len(pazarama_products)}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred during sync: {str(e)}") from e

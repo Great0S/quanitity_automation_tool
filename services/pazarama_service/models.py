@@ -1,75 +1,72 @@
 from sqlalchemy import (
     Column,
-    ForeignKey,
     Integer,
     String,
     Float,
-    Boolean,
-    DateTime,
+    ForeignKey,
+    Enum,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
+
 Base = declarative_base()
 
 
-class Product(Base):
-    __tablename__ = "products"
+class PazaramaProduct(Base):
+    __tablename__ = 'pazarama_products'
 
-    id = Column(Integer, primary_key=True, index=True)
-    barcode = Column(String, unique=True, index=True)
-    title = Column(String)
-    productMainId = Column(String)
-    brandId = Column(Integer)
-    pimCategoryId = Column(Integer)
-    categoryName = Column(String)
-    quantity = Column(Integer)
-    stockCode = Column(String)
-    dimensionalWeight = Column(Float)
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255))
+    displayName = Column(String(255))
     description = Column(String)
-    brand = Column(String)
+    brandName = Column(String(100))
+    code = Column(String(100), unique=True, index=True)
+    groupCode = Column(String(100))
+    stockCount = Column(Integer)
+    stockCode = Column(String(100))
+    priorityRank = Column(Integer)
     listPrice = Column(Float)
     salePrice = Column(Float)
     vatRate = Column(Integer)
-    hasActiveCampaign = Column(Boolean, default=False)
-    hasHtmlContent = Column(Boolean, default=False)
-    createDateTime = Column(DateTime)
-    lastUpdateDate = Column(DateTime)
-    blacklisted = Column(Boolean, default=False)
+    categoryName = Column(String(100))
+    categoryId = Column(String(100))
+    state = Column(Integer)
+    status = Column(String(50))
+    waitingApproveExp = Column(String)
 
-    # Relationships
-    images = relationship("Image", back_populates="product", cascade="all, delete-orphan")
-    attributes = relationship("Attribute", back_populates="product", cascade="all, delete-orphan")
-
-
-    def __str__(self):
-        return (
-            f"Product: {self.title}\n"
-            f"Barcode: {self.barcode}\n"
-            f"Main ID: {self.productMainId}\n"
-            f"Price: {self.salePrice}\n"
-            f"Quantity: {self.quantity}\n"
-            f"Stock Code: {self.stockCode}\n"
-            f"Images: {len(self.images)}\n"
-            f"Attributes: {len(self.attributes)}"
-        )
+    attributes = relationship("PazaramaProductAttribute", back_populates="product", cascade="all, delete-orphan")
+    images = relationship("PazaramaProductImage", back_populates="product", cascade="all, delete-orphan")
+    delivery_types = relationship("PazaramaDeliveryType", back_populates="product", cascade="all, delete-orphan")
 
 
-class Image(Base):
-    __tablename__ = "images"
+class PazaramaProductAttribute(Base):
+    __tablename__ = 'pazarama_product_attributes'
 
-    id = Column(Integer, primary_key=True, index=True)
-    url = Column(String)
-    product_id = Column(Integer, ForeignKey("products.id"))
-    product = relationship("Product", back_populates="images")
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey('pazarama_products.id'))
+    name = Column(String(100))
+    value = Column(String)
+
+    product = relationship("PazaramaProduct", back_populates="attributes")
 
 
-class Attribute(Base):
-    __tablename__ = "attributes"
+class PazaramaProductImage(Base):
+    __tablename__ = 'pazarama_product_images'
 
-    id = Column(Integer, primary_key=True, index=True)
-    attributeId = Column(Integer)
-    attributeValue = Column(String)
-    attributeName = Column(String)
-    product_id = Column(Integer, ForeignKey("products.id"))
-    product = relationship("Product", back_populates="attributes")
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey('pazarama_products.id'))
+    url = Column(String(255))
+
+    product = relationship("PazaramaProduct", back_populates="images")
+
+
+class PazaramaDeliveryType(Base):
+    __tablename__ = 'pazarama_delivery_types'
+
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey('pazarama_products.id'))
+    type = Column(String(100))
+
+    product = relationship("PazaramaProduct", back_populates="delivery_types")
+
