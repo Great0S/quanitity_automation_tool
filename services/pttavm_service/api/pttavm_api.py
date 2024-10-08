@@ -6,8 +6,10 @@ import re
 import time
 import requests
 import xmltodict
-from app.config import logger
+# from app.config import logger
+import logging
 
+logger = logging.getLogger(__name__)
 
 username = os.environ.get('PTTAVMUSERNAME')
 password = os.environ.get('PTTAVMPASSWORD')
@@ -107,15 +109,16 @@ def getpttavm_procuctskdata(everyproduct: bool = False, local: bool = False):
 
             else:
 
-                products.append({'id': product['a:UrunKodu'],
-                                 'data': product})
+                products.append(product)
 
         logger.info(f"""PTTAVM fetched {len(products)} products""")
 
-        return products
+        return products[0]
 
-    return None
+    return []
 
+product = getpttavm_procuctskdata(everyproduct=True)
+print(product)
 
 def pttavm_updatedata(product_data: dict):
     """
