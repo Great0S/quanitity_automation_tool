@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 from contextlib import asynccontextmanager
@@ -13,7 +14,7 @@ from box import Box
 
 from services.pttavm_service.models import Base, PTTAVMProduct
 from services.pttavm_service.schemas import PTTAVMProductSchema, PTTAVMProductUpdateSchema
-
+from shared.logging import logger
 
 T = TypeVar('T', bound=BaseModel)
 
@@ -89,11 +90,18 @@ class DatabaseManager:
                 await session.rollback()
                 raise Exception(f"Error updating product: {str(e)}")
 
-    async def get_product(self, barkod: str) -> Optional[PTTAVMProduct]:
+    async def get_product(self, barkod: str) -> Optional[PTTAVMProductSchema]:
         async with self.get_db() as session:
-            stmt = select(PTTAVMProduct).where(PTTAVMProduct.barkod == barkod)
-            result = await session.execute(stmt)
-            return result.scalar_one_or_none()
+            try:
+                result = await session.execute(select(PTTAVMProduct).filter(PTTAVMProduct.barkod == barkod))
+                product = result.scalar_one_or_none()
+                if product:
+                    product = {column.name: getattr(product, column.name) for column in product.__table__.columns}
+                    return product
+                return None
+            except SQLAlchemyError as e:
+                logger.error(f"Error querying product: {str(e)}")
+                raise
 
     async def delete_product(self, barkod: str) -> bool:
         async with self.get_db() as session:

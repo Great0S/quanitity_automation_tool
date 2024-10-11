@@ -9,10 +9,8 @@ class PTTAVMProduct(Base):
 
     id = Column(Integer, primary_key=True)
     aciklama = Column(Text, nullable=True)
-    admin_code = Column(String, nullable=True)
     agirlik = Column(String)
     aktif = Column(Boolean, default=False)
-    alt_kategori_adi = Column(String, nullable=True)
     alt_kategori_id = Column(Integer, default=0)
     ana_kategori_id = Column(Integer, default=0)
     barkod = Column(String)
@@ -39,10 +37,6 @@ class PTTAVMProduct(Base):
     shop_id = Column(String)
     single_box = Column(Integer, default=0)
     tag = Column(Text)
-    tahmini_kargo_suresi = Column(String, nullable=True)
-    tedarikci_alt_kategori_adi = Column(String, nullable=True)
-    tedarikci_alt_kategori_id = Column(Integer, default=0)
-    tedarikci_sanal_kategori_id = Column(Integer, default=0)
     urun_adi = Column(String)
     urun_id = Column(String)
     urun_kodu = Column(String)
@@ -57,10 +51,8 @@ class PTTAVMProduct(Base):
     def from_dict(cls, data):
         return cls(
             aciklama=data.get('a:Aciklama'),
-            admin_code=data.get('a:AdminCode', {}).get('@i:nil'),
             agirlik=data.get('a:Agirlik', ''),
             aktif=data.get('a:Aktif', 'false').lower() == 'true',
-            alt_kategori_adi=data.get('a:AltKategoriAdi', {}).get('@i:nil'),
             alt_kategori_id=int(data.get('a:AltKategoriId', 0)),
             ana_kategori_id=int(data.get('a:AnaKategoriId', 0)),
             barkod=data.get('a:Barkod', ''),
@@ -87,10 +79,6 @@ class PTTAVMProduct(Base):
             shop_id=data.get('a:ShopId', ''),
             single_box=int(data.get('a:SingleBox', 0)),
             tag=data.get('a:Tag', ''),
-            tahmini_kargo_suresi=data.get('a:TahminiKargoSuresi', {}).get('@i:nil'),
-            tedarikci_alt_kategori_adi=data.get('a:TedarikciAltKategoriAdi', {}).get('@i:nil'),
-            tedarikci_alt_kategori_id=int(data.get('a:TedarikciAltKategoriId', 0)),
-            tedarikci_sanal_kategori_id=int(data.get('a:TedarikciSanalKategoriId', 0)),
             urun_adi=data.get('a:UrunAdi', ''),
             urun_id=data.get('a:UrunId', ''),
             urun_kodu=data.get('a:UrunKodu', ''),

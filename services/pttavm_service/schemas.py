@@ -3,10 +3,8 @@ from pydantic import BaseModel, Field
 
 class PTTAVMProductSchema(BaseModel):
     aciklama: Optional[str] = Field(None, alias='a:Aciklama')
-    admin_code: Optional[str] = Field(None, alias='a:AdminCode')
     agirlik: str = Field(None, alias='a:Agirlik')
     aktif: bool = Field(default=False, alias='a:Aktif')
-    alt_kategori_adi: Optional[str] = Field(None, alias='a:AltKategoriAdi')
     alt_kategori_id: int = Field(0, alias='a:AltKategoriId')
     ana_kategori_id: int = Field(0, alias='a:AnaKategoriId')
     barkod: str = Field(alias='a:Barkod')
@@ -33,10 +31,6 @@ class PTTAVMProductSchema(BaseModel):
     shop_id: str = Field(alias='a:ShopId')
     single_box: int = Field(1, alias='a:SingleBox')
     tag: str = Field(alias='a:Tag')
-    tahmini_kargo_suresi: Optional[str] = Field(None, alias='a:TahminiKargoSuresi')
-    tedarikci_alt_kategori_adi: Optional[str] = Field(None, alias='a:TedarikciAltKategoriAdi')
-    tedarikci_alt_kategori_id: int = Field(0, alias='a:TedarikciAltKategoriId')
-    tedarikci_sanal_kategori_id: int = Field(0, alias='a:TedarikciSanalKategoriId')
     urun_adi: str = Field(alias='a:UrunAdi')
     urun_id: str = Field(alias='a:UrunId')
     urun_kodu: str = Field(alias='a:UrunKodu')
