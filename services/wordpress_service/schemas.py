@@ -1,161 +1,67 @@
-# Product Models
-from datetime import datetime
-from typing import List, Optional, Union
-
-from pydantic import BaseModel, Field, HttpUrl
-
-
-class ImageSchema(BaseModel):
-    url: str
-
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate_to_json
-
-    @classmethod
-    def validate_to_json(cls, value):
-        if isinstance(value, str):
-            return cls(url=value)
-        return value
-
-
-class AttributeSchema(BaseModel):
-    attributeId: Optional[int] 
-    attributeValue: Optional[Union[int, str]] 
-    attributeName: Optional[str] 
-
-    class Config:
-        from_attributes = True
-
+# schemas/product.py
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
 
 class ProductBase(BaseModel):
-    barcode: Optional[str]
-    title: Optional[str]
-    productMainId: Optional[str]
-    brandId: Optional[int]
-    pimCategoryId: Optional[int]
-    categoryName: Optional[str]
-    quantity: Optional[int]
-    stockCode: Optional[str]
-    dimensionalWeight: Optional[float]
-    description: Optional[str]
-    brand: Optional[str]
-    listPrice: Optional[float]
-    salePrice: Optional[float]
-    vatRate: Optional[float]
+    name: str
+    slug: str
+    permalink: str
+    date_created: str  # Consider using datetime for actual date objects
+    date_modified: str
+    type: str
+    status: str
+    featured: bool
+    catalog_visibility: str
+    description: str
+    short_description: str
+    sku: str
+    price: float
+    regular_price: float
+    sale_price: Optional[float]
+    on_sale: bool
+    purchasable: bool
+    stock_quantity: int
+    manage_stock: bool
+    stock_status: str
+    categories: List[Dict[str, Any]]  # List of category dictionaries
+    images: List[Dict[str, Any]]  # List of image dictionaries
+    attributes: List[Dict[str, Any]]  # List of attribute dictionaries
 
+class ProductCreate(ProductBase):
+    pass  # You can add additional validation or fields if needed
 
-class ProductInDB(ProductBase):
-    id: int
-    createDateTime: Optional[datetime]
-    lastUpdateDate: Optional[datetime]
+class ProductUpdate(ProductBase):
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    permalink: Optional[str] = None
+    date_created: Optional[str] = None
+    date_modified: Optional[str] = None
+    type: Optional[str] = None
+    status: Optional[str] = None
+    featured: Optional[bool] = None
+    catalog_visibility: Optional[str] = None
+    description: Optional[str] = None
+    short_description: Optional[str] = None
+    sku: Optional[str] = None
+    price: Optional[float] = None
+    regular_price: Optional[float] = None
+    sale_price: Optional[float] = None
+    on_sale: Optional[bool] = None
+    purchasable: Optional[bool] = None
+    stock_quantity: Optional[int] = None
+    manage_stock: Optional[bool] = None
+    stock_status: Optional[str] = None
+    categories: Optional[List[Dict[str, Any]]] = None
+    images: Optional[List[Dict[str, Any]]] = None
+    attributes: Optional[List[Dict[str, Any]]] = None
+
+    
+class ProductResponse(ProductBase):
+    id: int  # Include the ID for the response schema
 
     class Config:
-        from_attributes = True
+        from_attributes = True  # Enable ORM mode to read data from SQLAlchemy models
 
-
-class ProductSchema(ProductBase):
-    hasActiveCampaign: Optional[bool] = False
-    hasHtmlContent: Optional[bool] = False
-    blacklisted: Optional[bool] = False
-    images: Optional[List[ImageSchema]]
-    attributes: Optional[List[AttributeSchema]]
-
-    class Config:
-        from_attributes = True
-
-
-class ProductStockUpdate(BaseModel):
-    barcode: Optional[str]
-    stockCode: Optional[str]
-    quantity: int
-
-
-class ProductPriceUpdate(BaseModel):
-    barcode: Optional[str]
-    stockCode: Optional[str]
-    salePrice: Optional[float]
-    listPrice: Optional[float]
-
-
-
-class ProductUpdateBatch(BaseModel):
-    ids: List[str]  # List of barcodes or productMainIds
-    data: Union[ProductPriceUpdate, ProductPriceUpdate, ProductBase]
-
-
-class ProductDeleteSchema:
-
-    def __init__(self, items):
-        self.items = items
-
-    def __str__(self):
-        return f"Products to delete: {len(self.items)}"
-
-    def add_item(self, barcode):
-        self.items.append({"barcode": barcode})
-
-    def to_dict(self):
-        return {"items": self.items}
-
-    @classmethod
-    def from_dict(cls, data):
-        return cls(data.get("items", []))
-
-
-class ProductGet:
-
-    def __init__(self, code: str):
-        self.code = code
-        self.approved: Optional[bool] = None
-        self.barcode: Optional[str] = None
-        self.start_date: Optional[int] = None
-        self.end_date: Optional[int] = None
-        self.page: Optional[int] = None
-        self.date_query_type: Optional[str] = None
-        self.size: Optional[int] = None
-        self.supplierId: Optional[int] = None
-        self.stockCode: Optional[str] = None
-        self.archived: Optional[bool] = None
-        self.productMainId: Optional[str] = None
-        self.onSale: Optional[bool] = None
-        self.rejected: Optional[bool] = None
-        self.blacklisted: Optional[bool] = None
-        self.brandIds: Optional[List[int]] = None
-
-    def __str__(self):
-        return f"Product Code: {self.code}"
-
-    def prepare_request_params(self) -> dict:
-        params = {}
-        if self.approved is not None:
-            params["approved"] = self.approved
-        if self.barcode:
-            params["barcode"] = self.barcode
-        if self.start_date:
-            params["startDate"] = self.start_date
-        if self.end_date:
-            params["endDate"] = self.end_date
-        if self.page is not None:
-            params["page"] = self.page
-        if self.date_query_type:
-            params["dateQueryType"] = self.date_query_type
-        if self.size is not None:
-            params["size"] = self.size
-        if self.supplierId is not None:
-            params["supplierId"] = self.supplierId
-        if self.stockCode:
-            params["stockCode"] = self.stockCode
-        if self.archived is not None:
-            params["archived"] = self.archived
-        if self.productMainId:
-            params["productMainId"] = self.productMainId
-        if self.onSale is not None:
-            params["onSale"] = self.onSale
-        if self.rejected is not None:
-            params["rejected"] = self.rejected
-        if self.blacklisted is not None:
-            params["blacklisted"] = self.blacklisted
-        if self.brandIds:
-            params["brandIds"] = self.brandIds
-        return params
+class UpdateStockSchema(BaseModel):
+    stock_quantity: Optional[int] = Field(None, description="The quantity of the product in stock.")
+    stock_status: Optional[str] = Field(None, description="The status of the stock (e.g., 'instock', 'outofstock').")

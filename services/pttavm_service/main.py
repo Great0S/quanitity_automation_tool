@@ -1,6 +1,4 @@
-from enum import Enum
-from typing import Optional, Union
-from fastapi import APIRouter, Body, FastAPI, HTTPException, Query
+from fastapi import APIRouter, Body, FastAPI, HTTPException
 
 from services.pttavm_service.api.pttavm_api import PTTAVMAPI
 from services.pttavm_service.schemas import PTTAVMProductSchema, PTTAVMProductUpdateSchema, PTTAVMProductResponseSchema
