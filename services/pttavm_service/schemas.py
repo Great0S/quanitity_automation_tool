@@ -1,161 +1,65 @@
-# Product Models
-from datetime import datetime
-from typing import List, Optional, Union
+from typing import Optional, List, Union
+from pydantic import BaseModel, Field
 
-from pydantic import BaseModel, Field, HttpUrl
+class PTTAVMProductSchema(BaseModel):
+    aciklama: Optional[str] = Field(None, alias='a:Aciklama')
+    agirlik: str = Field(None, alias='a:Agirlik')
+    aktif: bool = Field(default=False, alias='a:Aktif')
+    alt_kategori_id: int = Field(0, alias='a:AltKategoriId')
+    ana_kategori_id: int = Field(0, alias='a:AnaKategoriId')
+    barkod: str = Field(alias='a:Barkod')
+    boy_x: float = Field(0, alias='a:BoyX')
+    boy_y: float = Field(0, alias='a:BoyY')
+    boy_z: float = Field(0, alias='a:BoyZ')
+    desi: float = Field(0, alias='a:Desi')
+    durum: str = Field(alias='a:Durum')
+    garanti_suresi: int = Field(0, alias='a:GarantiSuresi')
+    garanti_veren_firma: Optional[str] = Field(None, alias='a:GarantiVerenFirma')
+    gtin: Optional[str] = Field(None, alias='a:Gtin')
+    iskonto: float = Field(0, alias='a:Iskonto')
+    kdv_oran: float = Field(0, alias='a:KDVOran')
+    kdvli: float = Field(0, alias='a:KDVli')
+    kdvsiz: float = Field(0, alias='a:KDVsiz')
+    kargo_profil_id: int = Field(0, alias='a:KargoProfilId')
+    kategori_bilgisi_guncelle: bool = Field(default=False, alias='a:KategoriBilgisiGuncelle')
+    mevcut: bool = Field(default=False, alias='a:Mevcut')
+    miktar: int = Field(0, alias='a:Miktar')
+    resim1_url: Optional[str] = Field(None, alias='a:Resim1Url')
+    resim2_url: Optional[str] = Field(None, alias='a:Resim2Url')
+    resim3_url: Optional[str] = Field(None, alias='a:Resim3Url')
+    row_count: int = Field(0, alias='a:RowCount')
+    shop_id: str = Field(alias='a:ShopId')
+    single_box: int = Field(1, alias='a:SingleBox')
+    tag: str = Field(alias='a:Tag')
+    urun_adi: str = Field(alias='a:UrunAdi')
+    urun_id: str = Field(alias='a:UrunId')
+    urun_kodu: str = Field(alias='a:UrunKodu')
+    urun_url: str = Field(alias='a:UrunUrl')
+    uzun_aciklama: str = Field(alias='a:UzunAciklama')
+    yeni_kategori_id: int = Field(1557, alias='a:YeniKategoriId')
+
+    class Config:
+        populate_by_name = True
 
 
-class ImageSchema(BaseModel):
-    url: str
+class PTTAVMProductUpdateSchema(BaseModel):
+    aktif: bool = Field(..., alias='a:Aktif')
+    barkod: str = Field(..., alias='a:Barkod')
+    kdv_oran: float = Field(..., alias='a:KDVOran')
+    kdvli: float = Field(..., alias='a:KDVli')
+    kdvsiz: float = Field(0, alias='a:KDVsiz')  # Assuming default value is 0
+    miktar: int = Field(..., alias='a:Miktar')
+    shop_id: str = Field(..., alias='a:ShopId')
 
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate_to_json
-
-    @classmethod
-    def validate_to_json(cls, value):
-        if isinstance(value, str):
-            return cls(url=value)
-        return value
+    class Config:
+        populate_by_name = True
 
 
-class AttributeSchema(BaseModel):
-    attributeId: Optional[int] 
-    attributeValue: Optional[Union[int, str]] 
-    attributeName: Optional[str] 
+class PTTAVMProductResponseSchema(BaseModel):
+    status_code: int
+    message: str
+    data: Optional[Union[dict, str]] = None
 
     class Config:
         from_attributes = True
 
-
-class ProductBase(BaseModel):
-    barcode: Optional[str]
-    title: Optional[str]
-    productMainId: Optional[str]
-    brandId: Optional[int]
-    pimCategoryId: Optional[int]
-    categoryName: Optional[str]
-    quantity: Optional[int]
-    stockCode: Optional[str]
-    dimensionalWeight: Optional[float]
-    description: Optional[str]
-    brand: Optional[str]
-    listPrice: Optional[float]
-    salePrice: Optional[float]
-    vatRate: Optional[float]
-
-
-class ProductInDB(ProductBase):
-    id: int
-    createDateTime: Optional[datetime]
-    lastUpdateDate: Optional[datetime]
-
-    class Config:
-        from_attributes = True
-
-
-class ProductSchema(ProductBase):
-    hasActiveCampaign: Optional[bool] = False
-    hasHtmlContent: Optional[bool] = False
-    blacklisted: Optional[bool] = False
-    images: Optional[List[ImageSchema]]
-    attributes: Optional[List[AttributeSchema]]
-
-    class Config:
-        from_attributes = True
-
-
-class ProductStockUpdate(BaseModel):
-    barcode: Optional[str]
-    stockCode: Optional[str]
-    quantity: int
-
-
-class ProductPriceUpdate(BaseModel):
-    barcode: Optional[str]
-    stockCode: Optional[str]
-    salePrice: Optional[float]
-    listPrice: Optional[float]
-
-
-
-class ProductUpdateBatch(BaseModel):
-    ids: List[str]  # List of barcodes or productMainIds
-    data: Union[ProductPriceUpdate, ProductPriceUpdate, ProductBase]
-
-
-class ProductDeleteSchema:
-
-    def __init__(self, items):
-        self.items = items
-
-    def __str__(self):
-        return f"Products to delete: {len(self.items)}"
-
-    def add_item(self, barcode):
-        self.items.append({"barcode": barcode})
-
-    def to_dict(self):
-        return {"items": self.items}
-
-    @classmethod
-    def from_dict(cls, data):
-        return cls(data.get("items", []))
-
-
-class ProductGet:
-
-    def __init__(self, code: str):
-        self.code = code
-        self.approved: Optional[bool] = None
-        self.barcode: Optional[str] = None
-        self.start_date: Optional[int] = None
-        self.end_date: Optional[int] = None
-        self.page: Optional[int] = None
-        self.date_query_type: Optional[str] = None
-        self.size: Optional[int] = None
-        self.supplierId: Optional[int] = None
-        self.stockCode: Optional[str] = None
-        self.archived: Optional[bool] = None
-        self.productMainId: Optional[str] = None
-        self.onSale: Optional[bool] = None
-        self.rejected: Optional[bool] = None
-        self.blacklisted: Optional[bool] = None
-        self.brandIds: Optional[List[int]] = None
-
-    def __str__(self):
-        return f"Product Code: {self.code}"
-
-    def prepare_request_params(self) -> dict:
-        params = {}
-        if self.approved is not None:
-            params["approved"] = self.approved
-        if self.barcode:
-            params["barcode"] = self.barcode
-        if self.start_date:
-            params["startDate"] = self.start_date
-        if self.end_date:
-            params["endDate"] = self.end_date
-        if self.page is not None:
-            params["page"] = self.page
-        if self.date_query_type:
-            params["dateQueryType"] = self.date_query_type
-        if self.size is not None:
-            params["size"] = self.size
-        if self.supplierId is not None:
-            params["supplierId"] = self.supplierId
-        if self.stockCode:
-            params["stockCode"] = self.stockCode
-        if self.archived is not None:
-            params["archived"] = self.archived
-        if self.productMainId:
-            params["productMainId"] = self.productMainId
-        if self.onSale is not None:
-            params["onSale"] = self.onSale
-        if self.rejected is not None:
-            params["rejected"] = self.rejected
-        if self.blacklisted is not None:
-            params["blacklisted"] = self.blacklisted
-        if self.brandIds:
-            params["brandIds"] = self.brandIds
-        return params

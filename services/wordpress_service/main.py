@@ -1,106 +1,97 @@
-from enum import Enum
-from typing import Optional, Union
-from fastapi import APIRouter, Body, FastAPI, HTTPException, Query
+from typing import List
+from fastapi import APIRouter, Body, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
-from services.trendyol_service.api.trendyol_api import TrendyolAPI
-from services.trendyol_service.models import Product
-from services.trendyol_service.database import DatabaseManager
-from .schemas import ProductInDB, ProductPriceUpdate, ProductSchema, ProductStockUpdate, ProductBase
+from services.wordpress_service.api.wordpress_api import WordPressAPI
+from services.wordpress_service.database import DatabaseManager
+from services.wordpress_service.schemas import ProductCreate, ProductUpdate, UpdateStockSchema, ProductResponse
 
-router = APIRouter()
-app = FastAPI()
 
-trendyol_api = TrendyolAPI()
+
+wordpress_api = WordPressAPI()
 db_manager = DatabaseManager()
 
+async def lifespan(app: FastAPI):
+    await db_manager.init_db()
+    yield
+
+router = APIRouter()
+app = FastAPI(lifespan=lifespan)    
 app.include_router(router)
 
-class UpdateType(str, Enum):
-    qty = "qty"
-    price = "price"
-    full = "full"
+# CORS middleware (optional, configure as needed)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Adjust this to your needs
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-def get_update_schema(update_type: UpdateType = Query(default=UpdateType.full)):
-    if update_type == UpdateType.qty:
-        return ProductStockUpdate
-    elif update_type == UpdateType.price:
-        return ProductPriceUpdate
-    else:
-        return ProductBase
 
-@app.get("/products", response_model=str)
-async def get_products(load_all: bool = False):
+@app.post("/products/", response_model=ProductResponse)
+async def create_product(product: ProductCreate):
     try:
-        await db_manager.init_db()
-        products = await trendyol_api.get_products(load_all)
-        db_products = []
-        for product in products:
-            db_product = await db_manager.create_product(product)
-            db_products.append(db_product)
-        return "Products loaded successfully"
+        new_product = await db_manager.create_product(product)
+        return new_product
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail=str(e))
 
-
-@app.post("/update", response_model=ProductInDB)
-async def update_product_by_bulk(
-    update_type: UpdateType = Query(default=UpdateType.full),
-    product_update: Union[ProductStockUpdate, ProductPriceUpdate, ProductBase] = Body(...)):
+@app.get("/products/{product_id}", response_model=ProductResponse)
+async def read_product(product_id: int):
     try:
-        update_schema = get_update_schema(update_type)
-        if not isinstance(product_update, update_schema):
-            raise ValueError(f"Invalid update type. Expected {update_schema.__name__}, got {type(product_update).__name__}")
+        product = await db_manager.get_product(product_id)
+        return product
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.put("/products/{product_id}/stock", response_model=ProductResponse)
+async def update_product_stock(product_id: int, stock_data: UpdateStockSchema):
+    try:
+        updated_product = await db_manager.update_product_stock(product_id, stock_data)
+        return updated_product
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.delete("/products/{product_id}", response_model=dict)
+async def delete_product(product_id: int):
+    try:
+        await db_manager.delete_product(product_id)
+        return {"message": f"Product with ID {product_id} deleted successfully."}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.get("/products/", response_model=List[ProductResponse])
+async def list_products():
+    try:
+        products = await db_manager.get_all_products()  # Assuming you have a method to get all products
+        return products
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/products/sync", response_model=dict)
+async def sync_products(load_all: bool = False):
+    try:
+        # Fetch products from WordPress API
+        wordpress_products = wordpress_api.get_wordpress_products(load_all)  # Assuming you have a method to get all products
         
-        result = await trendyol_api.update_product(product_update.model_dump(exclude_none=True, exclude_unset=True))
-        await db_manager.update_item(result["stockCode"], product_update)
-        return "Product with sku: " + result["stockCode"] + " has been updated successfully"
+        synced_count = 0
+        for item in wordpress_products:
+            existing_product = await db_manager.get_product(item['sku'])  # Assuming SKU is the unique identifier
+            
+            if existing_product:
+                # Update existing product
+                await db_manager.update_product(existing_product.id, ProductUpdate(**item))
+            else:
+                # Create new product
+                await db_manager.create_product(ProductCreate(**item))
+            
+            synced_count += 1
+        
+        return {
+            "status_code": 200,
+            "message": f"Successfully synced {synced_count} products",
+            "synced_count": synced_count
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@app.post("/products/", response_model=ProductInDB)
-async def create_product(product: ProductSchema):
-    try:
-        await trendyol_api.create_product(product)
-        return await db_manager.create_product(product)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-
-@app.get("/products/{stock_code}", response_model=ProductInDB)
-async def read_product_by_stock_code(stock_code: str):
-    product = await db_manager.get_item(Product, stock_code)
-    if product is None:
-        raise HTTPException(status_code=404, detail="Product not found")
-    return product
-
-
-@app.put("/products/{stock_code}", response_model=Optional[ProductInDB])
-async def update_product_by_stock_code(
-    stock_code: str,
-    update_type: UpdateType = Query(default=UpdateType.full),
-    product_update: Union[ProductStockUpdate, ProductPriceUpdate, ProductBase] = Body(...)
-):
-    try:
-        update_schema = get_update_schema(update_type)
-        if not isinstance(product_update, update_schema):
-            raise ValueError(f"Invalid update type. Expected {update_schema.__name__}, got {type(product_update).__name__}")
-
-        updated_product = await db_manager.update_item(stock_code, product_update)
-
-        if updated_product is None:
-            raise HTTPException(status_code=404, detail="Product not found")
-
-        return ProductInDB.model_validate(updated_product)
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve)) from ve
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}") from e
-
-
-@app.delete("/products/{stock_code}", response_model=ProductInDB)
-async def delete_product_by_stock_code(stock_code: str):
-    deleted_product = await db_manager.delete_product(Product, stock_code)
-    if deleted_product is None:
-        raise HTTPException(status_code=404, detail="Product not found")
-    return deleted_product
+        raise HTTPException(status_code=500, detail=f"An error occurred during sync: {str(e)}")

@@ -1,75 +1,36 @@
-from sqlalchemy import (
-    Column,
-    ForeignKey,
-    Integer,
-    String,
-    Float,
-    Boolean,
-    DateTime,
-)
-from sqlalchemy.orm import relationship
+# models/product.py
+from sqlalchemy import Column, Integer, String, Float, Boolean, Text, JSON
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
-
 class Product(Base):
-    __tablename__ = "products"
+    __tablename__ = 'products'
 
-    id = Column(Integer, primary_key=True, index=True)
-    barcode = Column(String, unique=True, index=True)
-    title = Column(String)
-    productMainId = Column(String)
-    brandId = Column(Integer)
-    pimCategoryId = Column(Integer)
-    categoryName = Column(String)
-    quantity = Column(Integer)
-    stockCode = Column(String)
-    dimensionalWeight = Column(Float)
-    description = Column(String)
-    brand = Column(String)
-    listPrice = Column(Float)
-    salePrice = Column(Float)
-    vatRate = Column(Integer)
-    hasActiveCampaign = Column(Boolean, default=False)
-    hasHtmlContent = Column(Boolean, default=False)
-    createDateTime = Column(DateTime)
-    lastUpdateDate = Column(DateTime)
-    blacklisted = Column(Boolean, default=False)
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    slug = Column(String, unique=True, nullable=False)
+    permalink = Column(String, nullable=False)
+    date_created = Column(String)  # Consider using DateTime for actual date objects
+    date_modified = Column(String)
+    type = Column(String)
+    status = Column(String)
+    featured = Column(Boolean)
+    catalog_visibility = Column(String)
+    description = Column(Text)
+    short_description = Column(Text)
+    sku = Column(String, unique=True, nullable=False)
+    price = Column(Float)
+    regular_price = Column(Float)
+    sale_price = Column(Float)
+    on_sale = Column(Boolean)
+    purchasable = Column(Boolean)
+    stock_quantity = Column(Integer)
+    manage_stock = Column(Boolean)
+    stock_status = Column(String)
+    categories = Column(JSON)  # Store categories as JSON
+    images = Column(JSON)  # Store images as JSON
+    attributes = Column(JSON)  # Store attributes as JSON
 
-    # Relationships
-    images = relationship("Image", back_populates="product", cascade="all, delete-orphan")
-    attributes = relationship("Attribute", back_populates="product", cascade="all, delete-orphan")
-
-
-    def __str__(self):
-        return (
-            f"Product: {self.title}\n"
-            f"Barcode: {self.barcode}\n"
-            f"Main ID: {self.productMainId}\n"
-            f"Price: {self.salePrice}\n"
-            f"Quantity: {self.quantity}\n"
-            f"Stock Code: {self.stockCode}\n"
-            f"Images: {len(self.images)}\n"
-            f"Attributes: {len(self.attributes)}"
-        )
-
-
-class Image(Base):
-    __tablename__ = "images"
-
-    id = Column(Integer, primary_key=True, index=True)
-    url = Column(String)
-    product_id = Column(Integer, ForeignKey("products.id"))
-    product = relationship("Product", back_populates="images")
-
-
-class Attribute(Base):
-    __tablename__ = "attributes"
-
-    id = Column(Integer, primary_key=True, index=True)
-    attributeId = Column(Integer)
-    attributeValue = Column(String)
-    attributeName = Column(String)
-    product_id = Column(Integer, ForeignKey("products.id"))
-    product = relationship("Product", back_populates="attributes")
+    def __repr__(self):
+        return f"<Product(name={self.name}, sku={self.sku}, price={self.price})>"
