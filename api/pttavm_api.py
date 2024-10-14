@@ -99,12 +99,12 @@ def getpttavm_procuctskdata(everyproduct: bool = False, local: bool = False):
         for product in products_list:
 
             if not everyproduct:
+                price = float(product['a:KDVsiz']) * (1 + int(product['a:KDVOran']) / 100)
 
                 products.append({'id': product['a:Barkod'],
                                  'sku': product['a:UrunKodu'],
                                  'qty': int(product['a:Miktar']),
-                                 'price': float(product['a:KDVli'])})
-
+                                 'price': price})
             else:
 
                 products.append({'id': product['a:UrunKodu'],

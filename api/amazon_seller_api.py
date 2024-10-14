@@ -4,6 +4,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from glob import glob
+import logging
 import textwrap
 from urllib import parse
 import json
@@ -466,18 +467,19 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
     report_items_document = io.StringIO(report_string)
     report_reader = csv.DictReader(report_items_document, delimiter="\t")
     report_items_data = list(report_reader)
-    products = {
-        i["seller-sku"]: {
-            "data": {
-                "id": i["product-id"],
-                "listing-id": i["listing-id"],
-                "quantity": i["quantity"],
-            }
-        }
-        for i in report_items_data
-        for k, v in i.items()
-        if k == "quantity" and not re.search(r"\_fba", i["seller-sku"])
+    products = [
+    {
+        "id": i["product-id"],
+        "sku": i["seller-sku"],
+        "listing-id": i["listing-id"],
+        "quantity": i["quantity"],
+        "price": i['price']
     }
+    for i in report_items_data
+    if "quantity" in i and not re.search(r"\_fba", i["seller-sku"])]
+
+    if not every_product:
+        return products
     items_skus = [
         item["seller-sku"]
         for item in report_items_data
@@ -543,6 +545,7 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
     logger.info(f"Amazon fetched {len(products)} products")
 
     return products
+
 
 
 def filter_order_data(orders_list, order, result, items):
@@ -1489,6 +1492,7 @@ class AmazonListingManager:
 
         sku = product_data["sku"]    
         qty = product_data["qty"]
+        price = product_data["price"]
         params = {"marketplaceIds": MarketPlaceID, "issueLocale": "en_US"}
 
         data_payload = json.dumps(
@@ -1507,7 +1511,22 @@ class AmazonListingManager:
                         ],
                     }
                 ],
-            }
+            },
+            {
+                    "op": 'replace',
+                    "path": '/attributes/purchasable_offer',
+                    "value": [{
+                        "purchasable_offer": [{
+                            "currency": "TRY",
+                            "our_price": [{
+                                "schedule": [{
+                                    "value_with_tax": price
+                                }]
+                            }],
+                            "marketplace_id": 'A33AVAJ2PDY3EV'
+                        }],
+                    }]
+                }
         )
 
         listing_update_request = request_data(

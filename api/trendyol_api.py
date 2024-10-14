@@ -140,7 +140,8 @@ def post_trendyol_data(product: dict):
             "items": [
                 {
                     "barcode": product['id'],
-                    "quantity": int(product['qty'])
+                    "quantity": int(product['qty']),
+                    "salePrice": float(product['price'])
                 }
             ]
         })

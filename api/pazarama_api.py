@@ -444,15 +444,21 @@ class PazaramaAPIClient:
         :param product: The `pazarama_updateRequest` function takes a `product` parameter, which is expected
         to be a dictionary containing the following keys:
         """
-
+        uri = ''
         product_id = product_data["id"]
         sku = product_data["sku"]
         qty = product_data["qty"]
+        price = product_data["price"]
 
-        update_payload = {"items": [{"code": product_id, "stockCount": int(qty)}]}
+        if price:
+            update_payload = {"items": [{"code": product_id, "listPrice": int(price) * 2, "salePrice": int(price)}]}
+            uri = "product/updatePrice-v2"
+        else:
+            update_payload = {"items": [{"code": product_id, "stockCount": int(qty)}]}
+            uri = "product/updateStock-v2"
 
         update_request, elapsed_time = self.request_processing(
-            uri="product/updateStock-v2", payload=update_payload, method="POST"
+            uri=uri, payload=update_payload, method="POST"
         )
 
         if update_request:

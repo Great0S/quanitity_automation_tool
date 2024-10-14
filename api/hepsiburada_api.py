@@ -557,12 +557,13 @@ class Hb_API:
                         "hepsiburadaSku": product_data["id"],
                         "merchantSku": product_data["sku"],
                         "availableStock": product_data["qty"],
+                        "price": product_data["price"]
                     }
                 ]
             )
             update_request_raw = self.request_data(
                 subdomain=self.listing_external_url,
-                url_addons=f"""/stock-uploads""",
+                url_addons=f"""/inventory-uploads""",
                 request_type="POST",
                 payload_content=update_payload,
             )
@@ -574,7 +575,7 @@ class Hb_API:
 
                     check_status_request = self.request_data(
                         subdomain=self.listing_external_url,
-                        url_addons=f"""/stock-uploads/id/{update_state_id}""",
+                        url_addons=f"""/inventory-uploads/id/{update_state_id}""",
                         request_type="GET",
                         payload_content=[],
                     )

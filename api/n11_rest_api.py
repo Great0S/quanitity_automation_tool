@@ -172,7 +172,7 @@ class N11RestAPI:
             "payload": {
                 "integrator": "QAT 1.0",
                 "skus": [
-                    {"stockCode": product["sku"], "quantity": int(product["qty"])}
+                    {"stockCode": product["sku"], "listPrice": int(product['price']) * 2, "salePrice": int(product['price']), "quantity": int(product["qty"]), "currencyType": "TL"}
                 ],
             }
         }

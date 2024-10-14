@@ -204,7 +204,7 @@ class App:
             "pazarama": lambda: pazaramaApi.get_products(load_all),
             "wordpress": lambda: get_wordpress_products(load_all),
             "pttavm": lambda: getpttavm_procuctskdata(load_all),
-            "amazon": lambda: spapi_getlistings(load_all),
+            "amazon": lambda: spapi_getlistings(every_product=load_all),
         }
 
         data = {}

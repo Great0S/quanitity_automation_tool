@@ -92,8 +92,10 @@ def update_wordpress_products(product_data: dict):
             stock_status = 'outofstock'
 
         update_request = wcapi.put(f"products/{product_data['id']}",
-                                   {'stock_quantity': product_data['qty'],
-                                    'stock_status': stock_status}).json()
+                                   {"regular_price": product_data['price'],
+                                    'stock_quantity': product_data['qty'],
+                                    'stock_status': stock_status,
+                                    "manage_stock": True}).json()
 
         if update_request['stock_quantity'] == int(product_data['qty']):
 
