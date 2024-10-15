@@ -109,7 +109,7 @@ def get_trendyol_stock_data(every_product: bool = False, local: bool = False, Fi
                 products.append({
                     "id": f"{item_id}",
                     "sku": f"{item}",
-                    "qty": quantity,
+                    "quantity": quantity,
                     "price": price
                 })
 
@@ -140,7 +140,7 @@ def post_trendyol_data(product: dict):
             "items": [
                 {
                     "barcode": product['id'],
-                    "quantity": int(product['qty']),
+                    "quantity": int(product['quantity']),
                     "salePrice": float(product['price'])
                 }
             ]
@@ -169,7 +169,7 @@ def post_trendyol_data(product: dict):
 
                     if request_status == 'SUCCESS':
 
-                        logger.info(f'Product with code: {product["sku"]}, New value: {product["qty"]}')
+                        logger.info(f'Product with code: {product["sku"]}, New value: {product["quantity"]}, New price: {product["price"]} updated successfully')
 
                         break
 

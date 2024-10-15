@@ -155,7 +155,7 @@ class N11RestAPI:
                 {
                     "id": product.get("n11ProductId"),
                     "sku": product.get("stockCode"),
-                    "qty": product.get("quantity"),
+                    "quantity": product.get("quantity"),
                     "price": product.get("salePrice"),
                 }
                 for product in products
@@ -172,7 +172,7 @@ class N11RestAPI:
             "payload": {
                 "integrator": "QAT 1.0",
                 "skus": [
-                    {"stockCode": product["sku"], "listPrice": int(product['price']) * 2, "salePrice": int(product['price']), "quantity": int(product["qty"]), "currencyType": "TL"}
+                    {"stockCode": product["sku"], "listPrice": int(product['price']) * 2, "salePrice": int(product['price']), "quantity": int(product["quantity"]), "currencyType": "TL"}
                 ],
             }
         }
@@ -200,9 +200,8 @@ class N11RestAPI:
 
                         task_response_json = task_response.json()
 
-                        logger.info(
-                            f"Request for product {product['sku']} is successful | Response: {task_response_json['skus']['content'][0]['status']} - {task_response_json['skus']['content'][0]['reasons']}"
-                        )
+                        logger.info(f"""Product with code: {
+                            product["sku"]}, New value: {product["quantity"]}, New price: {product["price"]} updated successfully""")
 
                         return
 

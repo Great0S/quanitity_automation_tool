@@ -418,7 +418,7 @@ class PazaramaAPIClient:
                             {
                                 "id": product.get("code"),
                                 "sku": product.get("stockCode"),
-                                "qty": product.get("stockCount"),
+                                "quantity": product.get("stockCount"),
                                 "price": product.get("salePrice"),
                             }
                         )
@@ -447,7 +447,7 @@ class PazaramaAPIClient:
         uri = ''
         product_id = product_data["id"]
         sku = product_data["sku"]
-        qty = product_data["qty"]
+        qty = product_data["quantity"]
         price = product_data["price"]
 
         if price:
@@ -466,7 +466,7 @@ class PazaramaAPIClient:
             if update_request["success"] == True:
 
                 logger.info(
-                    f"""Product with code: {product_data["sku"]}, New value: {product_data["qty"]}, Elapsed time: {elapsed_time:.2f} seconds."""
+                    f"""Product with code: {sku}, New value: {qty}, New price: {price} updated successfully || Elapsed time: {elapsed_time:.2f} seconds."""
                 )
 
             else:

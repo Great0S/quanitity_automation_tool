@@ -103,7 +103,7 @@ def getpttavm_procuctskdata(everyproduct: bool = False, local: bool = False):
 
                 products.append({'id': product['a:Barkod'],
                                  'sku': product['a:UrunKodu'],
-                                 'qty': int(product['a:Miktar']),
+                                 'quantity': int(product['a:Miktar']),
                                  'price': price})
             else:
 
@@ -126,7 +126,7 @@ def pttavm_updatedata(product_data: dict):
 
     sku = product_data['sku']
     item_id = product_data['id']
-    qty = product_data['qty']
+    qty = product_data['quantity']
     price = product_data['price']
     # price_kdvsiz = product['price'] - product['price'] * 0.1
 
@@ -151,7 +151,7 @@ def pttavm_updatedata(product_data: dict):
             'StokFiyatGuncelle3Response']['StokFiyatGuncelle3Result']
 
         logger.info(f"""Product success: {
-            responses_msg['a:Success']}, sku: {sku}, New stock: {qty}, New price: {price}""")
+            responses_msg['a:Success']}, sku: {sku}, New stock: {qty}, New price: {price} updated successfully""")
 
     else:
 

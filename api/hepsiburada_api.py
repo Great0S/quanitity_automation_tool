@@ -401,7 +401,7 @@ class Hb_API:
                                     {
                                         "id": data["hbSku"],
                                         "sku": data["merchantSku"],
-                                        "qty": listing.get('availableStock', 0),
+                                        "quantity": listing.get('availableStock', 0),
                                         "price": float(data["price"].replace(",", ".") if data["price"].isnumeric() else 0),
                                     }
                                 )
@@ -556,7 +556,7 @@ class Hb_API:
                     {
                         "hepsiburadaSku": product_data["id"],
                         "merchantSku": product_data["sku"],
-                        "availableStock": product_data["qty"],
+                        "availableStock": product_data["quantity"],
                         "price": product_data["price"]
                     }
                 ]
@@ -587,7 +587,7 @@ class Hb_API:
 
                             self.logger.info(
                                 f"""Product with code: {
-                                    product_data["sku"]}, New value: {product_data["qty"]}"""
+                                    product_data["sku"]}, New value: {product_data["quantity"]}, New price: {product_data["price"]} updated successfully"""
                             )
                             break
 

@@ -70,7 +70,7 @@ def get_wordpress_products(everyproduct: bool = False, local: bool = False):
             filtered_products.append({'id': item['id'],
                                       'sku': item['sku'],
                                       'price': float(item['price']),
-                                      'qty': qty})
+                                      'quantity': qty})
 
     logger.info(f"Wordpress fetched {len(filtered_products)} products")
 
@@ -83,7 +83,7 @@ def update_wordpress_products(product_data: dict):
 
     if isinstance(product_data, dict):
 
-        if int(product_data['qty']) > 0:
+        if int(product_data['quantity']) > 0:
 
             stock_status = 'instock'
 
@@ -92,22 +92,23 @@ def update_wordpress_products(product_data: dict):
             stock_status = 'outofstock'
 
         update_request = wcapi.put(f"products/{product_data['id']}",
-                                   {"regular_price": product_data['price'],
-                                    'stock_quantity': product_data['qty'],
+                                   {"regular_price": str(product_data['price']),
+                                    'stock_quantity': str(product_data['quantity']),
                                     'stock_status': stock_status,
                                     "manage_stock": True}).json()
 
-        if update_request['stock_quantity'] == int(product_data['qty']):
+        if update_request['stock_quantity'] == int(product_data['quantity']):
 
             logger.info(f"""Product success, sku: {
                 product_data['sku']}, New stock: {
-                product_data['qty']}""")
+                product_data['quantity']}, New price: {
+                product_data['price']} updated successfully""")
 
         else:
 
             logger.error(f"""Product update failed, sku: {
                 product_data['sku']}, New stock: {
-                    product_data['qty']}""")
+                    product_data['quantity']}""")
 
 
 def create_wordpress_products(product_data):

@@ -76,28 +76,32 @@ def generate_changed_items(matching_items: Dict[str, List[Dict[str, Any]]], use_
     """Generates a list of items with quantity changes or includes all items if specified."""
     changed_items = []
 
-    for sku, items in matching_items.items():
-        if len(items) > 1:
-            reference_item = items[0] if use_source else min(items, key=lambda x: x["qty"])
-            for item in items:
-                if reference_item["qty"] != item["qty"]:
-                    changed_items.append({
-                        "id": item.get("id"),
-                        "sku": sku,
-                        "price": reference_item.get("price", 0),
-                        "qty": str(reference_item["qty"]),
-                        "platform": item["platform"]
-                    })
+    try:
+        for sku, items in matching_items.items():
+            if len(items) > 1:
+                reference_item = items[0] if use_source else min(items, key=lambda x: x["quantity"])
+                for item in items:
+                    if reference_item["quantity"] != item["quantity"]:
+                        changed_items.append({
+                            "id": item.get("id"),
+                            "sku": sku,
+                            "price": reference_item.get("price", 0),
+                            "quantity": str(reference_item["quantity"]),
+                            "platform": item["platform"]
+                        })
 
-    return changed_items
+        return changed_items
+    
+    except Exception as e:
+        logger.error(f"Error generating changed items: {e}")
 
 def add_items_without_source(include_all: bool, matching_items: Dict[str, List[Dict[str, Any]]], platform: str, target_item):
     """Helper function to add items without considering the source."""
 
-    qty = (
+    quantity = (
         int(target_item.get("data", {}).get("quantity", 0))
         if "data" in target_item
-        else target_item.get("qty", 0)
+        else target_item.get("quantity", 0)
     )
     item_id = target_item.get("data", {}).get("id", target_item.get("id"))
     price = target_item.get("price", 0)
@@ -109,7 +113,7 @@ def add_items_without_source(include_all: bool, matching_items: Dict[str, List[D
             )
         else:
             matching_items[target_item["sku"]].append(
-                {"platform": platform, "id": item_id, "price": price, "qty": qty}
+                {"platform": platform, "id": item_id, "price": price, "quantity": quantity}
             )
     else:
         if include_all:
@@ -118,7 +122,7 @@ def add_items_without_source(include_all: bool, matching_items: Dict[str, List[D
             ]
         else:
             matching_items[target_item["sku"]] = [
-                {"platform": platform, "id": item_id, "price": price, "qty": qty}
+                {"platform": platform, "id": item_id, "price": price, "quantity": quantity}
             ]
 
 def compare_with_source(source_data: List[Dict[str, Any]], platform_data: List[Dict[str, Any]], 
@@ -147,7 +151,7 @@ def add_matching_item(matching_items: Dict[str, List[Dict[str, Any]]], source_it
                 "platform": platform,
                 "id": target_item.get("id", None),
                 "price": target_item.get("price", 0),
-                "qty": target_item.get("qty", 0),
+                "quantity": target_item.get("quantity", 0),
             }
         ]
     
@@ -450,8 +454,8 @@ class App:
                     for sku, new_value in sku_update.items():
                         if product_sku == sku:
 
-                            if update_type == 'qty':
-                                product["qty"] = int(new_value)
+                            if update_type == 'quantity':
+                                product["quantity"] = int(new_value)
                                 product["platform"] = platform
                                 product_data.append(product)
                             elif update_type == 'price':
@@ -576,7 +580,7 @@ class App:
             for count, update in enumerate(post_data, start=1):
                 logger.info(
                     f"{count}. Product with SKU {update['sku']} from {update['platform']} has a new stock! "
-                    f"New stock: {update['qty']}"
+                    f"New stock: {update['quantity']}"
                 )
 
         while True:

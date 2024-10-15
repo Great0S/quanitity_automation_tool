@@ -472,8 +472,8 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
         "id": i["product-id"],
         "sku": i["seller-sku"],
         "listing-id": i["listing-id"],
-        "quantity": i["quantity"],
-        "price": i['price']
+        "quantity": int(i["quantity"]),
+        "price": float(i['price']) if i['price'] else 0
     }
     for i in report_items_data
     if "quantity" in i and not re.search(r"\_fba", i["seller-sku"])]
@@ -1491,7 +1491,7 @@ class AmazonListingManager:
         """
 
         sku = product_data["sku"]    
-        qty = product_data["qty"]
+        qty = product_data["quantity"]
         price = product_data["price"]
         params = {"marketplaceIds": MarketPlaceID, "issueLocale": "en_US"}
 
@@ -1540,7 +1540,7 @@ class AmazonListingManager:
 
             logger.info(
                 f"""Product with code: {
-                product_data["sku"]}, New value: {product_data["qty"]}"""
+                product_data["sku"]}, New value: {product_data["quantity"]}, New price: {product_data["price"]} updated successfully"""
             )
 
         else:
