@@ -1509,10 +1509,8 @@ class AmazonListingManager:
                                 "marketplace_id": "A33AVAJ2PDY3EV",
                             }
                         ],
-                    }
-                ],
-            },
-            {
+                    },
+                    {
                     "op": 'replace',
                     "path": '/attributes/purchasable_offer',
                     "value": [{
@@ -1527,6 +1525,8 @@ class AmazonListingManager:
                         }],
                     }]
                 }
+                ]
+            }
         )
 
         listing_update_request = request_data(

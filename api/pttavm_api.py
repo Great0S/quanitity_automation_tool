@@ -91,7 +91,7 @@ def getpttavm_procuctskdata(everyproduct: bool = False, local: bool = False):
     api_call = requestdata(uri='StokKontrolListesi')
     products = []
 
-    if api_call.status_code == 200:
+    if isinstance(api_call, requests.Response) and api_call.status_code == 200:
 
         products_list = formatdata(api_call)[
             'StokKontrolListesiResponse']['StokKontrolListesiResult']['a:StokKontrolDetay']
@@ -113,8 +113,11 @@ def getpttavm_procuctskdata(everyproduct: bool = False, local: bool = False):
         logger.info(f"""PTTAVM fetched {len(products)} products""")
 
         return products
+    
+    else:
+        logger.error(f"""Request failure for PTTAVM | Response: {api_call}""")
 
-    return None
+        return None
 
 
 def pttavm_updatedata(product_data: dict):
