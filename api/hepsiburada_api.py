@@ -402,12 +402,13 @@ class Hb_API:
                                         "id": data["hbSku"],
                                         "sku": data["merchantSku"],
                                         "quantity": listing.get('availableStock', 0),
-                                        "price": float(data["price"].replace(",", ".") if data["price"].isnumeric() else 0),
+                                        "price": float(listing["price"]),
                                     }
                                 )
                             else:
 
                                 data['stock'] = listing.get('availableStock', 0)
+                                data['price'] = listing.get('price', 0)
                                 listings_list.append({"sku": data["merchantSku"], "data": data})                    
 
                 page += 1         

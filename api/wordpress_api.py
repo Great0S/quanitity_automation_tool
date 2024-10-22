@@ -92,7 +92,7 @@ def update_wordpress_products(product_data: dict):
             stock_status = 'outofstock'
 
         update_request = wcapi.put(f"products/{product_data['id']}",
-                                   {"regular_price": str(product_data['price']),
+                                   {"price": str(product_data['price']),
                                     'stock_quantity': str(product_data['quantity']),
                                     'stock_status': stock_status,
                                     "manage_stock": True}).json()

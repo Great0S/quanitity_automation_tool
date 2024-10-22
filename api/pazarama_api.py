@@ -436,7 +436,7 @@ class PazaramaAPIClient:
 
         return products_items
 
-    def update_product(self, product_data: dict):
+    def update_product(self, product_data: dict, price_match: bool = False):
         """
         The function `pazarama_updateRequest` updates the stock count of a product on Pazarama platform
         based on the provided product information.
@@ -450,7 +450,7 @@ class PazaramaAPIClient:
         qty = product_data["quantity"]
         price = product_data["price"]
 
-        if price:
+        if price_match:
             update_payload = {"items": [{"code": product_id, "listPrice": int(price) * 2, "salePrice": int(price)}]}
             uri = "product/updatePrice-v2"
         else:
@@ -472,5 +472,5 @@ class PazaramaAPIClient:
             else:
 
                 logger.error(
-                    f'Product with code: {sku} failed to update || Reason: {update_request["data"][0]["error"]} || Elapsed time: {elapsed_time:.2f} seconds.'
+                    f'Product with code: {sku} failed to update || Reason: {update_request['message']} || Elapsed time: {elapsed_time:.2f} seconds.'
                 )

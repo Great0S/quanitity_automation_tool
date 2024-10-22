@@ -80,6 +80,7 @@ def generate_changed_items(matching_items: Dict[str, List[Dict[str, Any]]], use_
         for sku, items in matching_items.items():
             if len(items) > 1:
                 reference_item = items[0] if use_source else min(items, key=lambda x: x["quantity"])
+             
                 for item in items:
                     if reference_item["quantity"] != item["quantity"]:
                         changed_items.append({
