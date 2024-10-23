@@ -141,20 +141,23 @@ class Hb_API:
         ready_data = []
 
         categories = get_categories(self)
-        sorted_items = sorted(items.items())
+        # sorted_items = sorted(items.items())
 
-        for item_data_list in sorted_items:
+        for item_data_list in items:
 
-            if len(item_data_list[1]) >= 2:
-                for i in range(len(item_data_list[1])):
-                    if item_data_list[1][i]["platform"] == source:
+            if isinstance(item_data_list, list):            
+                if len(item_data_list[1]) >= 2:
+                    for i in range(len(item_data_list[1])):
+                        if item_data_list[1][i]["platform"] == source:
 
-                        self.data = item_data_list[1][i]["data"]
-                        break
+                            self.data = item_data_list[1][i]["data"]
+                            break
 
+                else:
+
+                    self.data = item_data_list[1][0]["data"]
             else:
-
-                self.data = item_data_list[1][0]["data"]
+                self.data = item_data_list['data']
 
             images = [item['url'] for item in self.data["images"]]
             
@@ -656,7 +659,7 @@ class Hb_API:
 
                         if status_check['success'] == True:
 
-                            self.logger.info("Listings created successfully")
+                            self.logger.info(f"{len(ready_data)} Listings created successfully")
 
                         else:
 

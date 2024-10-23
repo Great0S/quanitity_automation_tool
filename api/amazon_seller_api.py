@@ -480,6 +480,7 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
 
     if not every_product:
         return products
+    
     items_skus = [
         item["seller-sku"]
         for item in report_items_data
@@ -510,38 +511,37 @@ def spapi_getlistings(every_product: bool = False, local: bool = False):
             if catalog_items_request:
                 for item in catalog_items_request.payload["items"]:
 
-                    sku = [
-                        i["identifier"]
-                        for i in item["identifiers"][0]["identifiers"]
-                        if i["identifierType"] == "SKU"
-                    ]
-
                     summaries = item["summaries"][0]
 
                     identifiers = {
-                        f"""{k}{item['identifiers'][0]['identifiers'].index(i)}""": v
+                        f"""{k}_{i['identifierType']}""": v
                         for i in item["identifiers"][0]["identifiers"]
                         for k, v in i.items()
                     }
 
+                    sku = identifiers['identifier_SKU']
                     attributes = item["attributes"]
 
                     images = {
                         f"""link{item['images'][0]['images'].index(i)}""": i["link"]
                         for i in item["images"][0]["images"]
                         for k, v in i.items()
-                        if v == "MAIN"
+                        if v == 1000
                     }
 
                     combined_dict = {**identifiers, **summaries, **attributes, **images}
 
-                    products[sku[0]]["data"].update(combined_dict)
+                    for pd in products:
+
+                        if pd["sku"] == sku:
+
+                            pd["data"] = combined_dict
 
             time.sleep(1)
 
-    products = [
-        {"sku": k, "data": f} for k, v in products.items() for c, f in v.items()
-    ]
+    # products = [
+    #     {"sku": kd['sku'], "data": f} for kd in products for k, v in kd.items() for c, f in v.items()
+    # ]
     logger.info(f"Amazon fetched {len(products)} products")
 
     return products
@@ -1450,7 +1450,7 @@ class AmazonListingManager:
             None
         """
         listing_add_request = self.retry_with_backoff(
-            ListingsItems().put_listings_item,
+            func=ListingsItems().put_listings_item,
             sellerId=self.seller_id,
             sku=product_sku,
             marketplaceIds=self.marketplace_id,
@@ -1471,12 +1471,11 @@ class AmazonListingManager:
         Returns:
             None
         """
-        for _, data_items in product_data.items():
-            for product in data_items:
-                product_data = product["data"]
-                product_sku = product_data['stockCode']
+        for product in product_data:
+                pd_data = product["data"]
+                product_sku = pd_data['stockCode']
                 try:
-                    payload = self.build_payload(product_data)
+                    payload = self.build_payload(pd_data)
                     self.submit_listing(product_sku, payload)
                 except Exception as e:
                     logger.error(f"Failed to process product {product_sku}: {e}", exc_info=True)
