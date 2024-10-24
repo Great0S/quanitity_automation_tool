@@ -1100,7 +1100,20 @@ class AmazonListingManager:
             )
             if len(product_definitions.payload['productTypes']) > 0:
                 break
-            time.sleep(3)
+
+            user_action = input(f"The product type {category_name} was not found. Do you want to retry or use the default type? (y/n)")
+
+            if user_action.lower() == 'y':
+                time.sleep(3)
+                continue                
+            else:
+                product_definitions = self.retry_with_backoff(
+                    ProductTypeDefinitions().search_definitions_product_types,
+                    itemName='Halı',
+                    marketplaceIds=self.marketplace_id,
+                    searchLocale="tr_TR",
+                    locale="tr_TR",
+                    )
 
         product_type = product_definitions.payload["productTypes"][0]["name"]
 

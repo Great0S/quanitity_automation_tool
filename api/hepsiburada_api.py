@@ -171,40 +171,40 @@ class Hb_API:
             source_category = self.data["categoryName"]
             product = self.data["title"]
 
-            for cat_data in categories:
+            if source_category in categories:
 
-                item_data = categories[cat_data]
-                category = re.sub(r"(\bPaspas\b|\bPaspaslar\b)", "", cat_data, re.IGNORECASE).strip()
+                self.category_target = categories[source_category]["categoryId"]
+                attrs = (
+                    categories[source_category]["baseAttributes"]
+                    + categories[source_category]["attributes"]
+                    + categories[source_category]["variantAttributes"]
+                )
+                category_attrs_list = [{x["id"]: x["name"]} for x in attrs]
+                self.category_attrs = {
+                    a: b for d in category_attrs_list for a, b in d.items()
+                }
+            
+            else:
 
-                if re.search(category, product):
+                for cat_data in categories:
 
-                    self.category_target = item_data["categoryId"]
-                    attrs = (
-                        item_data["baseAttributes"]
-                        + item_data["attributes"]
-                        + item_data["variantAttributes"]
-                    )
-                    category_attrs_list = [{x["id"]: x["name"]} for x in attrs]
-                    self.category_attrs = {
-                        a: b for d in category_attrs_list for a, b in d.items()
-                    }
+                    item_data = categories[cat_data]
+                    category = re.sub(r"(\bPaspas\b|\bPaspaslar\b)", "", cat_data, re.IGNORECASE).strip()
 
-                    break
+                    if re.search(category, product):
 
-                elif source_category == cat_data:
+                        self.category_target = item_data["categoryId"]
+                        attrs = (
+                            item_data["baseAttributes"]
+                            + item_data["attributes"]
+                            + item_data["variantAttributes"]
+                        )
+                        category_attrs_list = [{x["id"]: x["name"]} for x in attrs]
+                        self.category_attrs = {
+                            a: b for d in category_attrs_list for a, b in d.items()
+                        }
 
-                    self.category_target = item_data["categoryId"]
-                    attrs = (
-                        item_data["baseAttributes"]
-                        + item_data["attributes"]
-                        + item_data["variantAttributes"]
-                    )
-                    category_attrs_list = [{x["id"]: x["name"]} for x in attrs]
-                    self.category_attrs = {
-                        a: b for d in category_attrs_list for a, b in d.items()
-                    }
-
-                    break
+                        break
 
             for i in enumerate(images):
 
@@ -659,7 +659,23 @@ class Hb_API:
 
                         if status_check['success'] == True:
 
-                            self.logger.info(f"{len(ready_data)} Listings created successfully")
+                            for status in status_check['data']:
+
+                                if status['importStatus'] == 'Done':
+
+                                    self.logger.info(
+                                        f"""{len(ready_data)} Listings created successfully""")
+                                    break
+
+                                elif status['importStatus'] == 'Processing':
+                                    self.logger.info(
+                                        f"""Listing {status['merchantSku']} creation is in progress""")
+                                    continue
+
+                                elif status['importStatus'] == 'Failed':
+                                    self.logger.error(
+                                    f"""Listing {status['merchantSku']} creation failed || Reason: {
+                                        status['importMessages'][0]['message']}""")
 
                         else:
 
