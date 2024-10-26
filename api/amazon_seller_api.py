@@ -1101,19 +1101,16 @@ class AmazonListingManager:
             if len(product_definitions.payload['productTypes']) > 0:
                 break
 
-            user_action = input(f"The product type {category_name} was not found. Do you want to retry or use the default type? (y/n)")
+            logger.warning(f"The product type {category_name} was not found. using the default type!")
 
-            if user_action.lower() == 'y':
-                time.sleep(3)
-                continue                
-            else:
-                product_definitions = self.retry_with_backoff(
+            product_definitions = self.retry_with_backoff(
                     ProductTypeDefinitions().search_definitions_product_types,
                     itemName='Halı',
                     marketplaceIds=self.marketplace_id,
                     searchLocale="tr_TR",
                     locale="tr_TR",
                     )
+            break
 
         product_type = product_definitions.payload["productTypes"][0]["name"]
 
@@ -1236,7 +1233,17 @@ class AmazonListingManager:
                         ],
                     },
                     "UTILITY_KNIFE": {
-                        "supplier_declared_dg_hz_regulation": "not_applicable",
+                        "unit_count": [{
+                            "type": {
+                                "language_tag": "tr_TR",
+                                "value": "Adet"
+                            },
+                            "value": 1
+                        }],
+                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
+                        "model_name": [{"value": product_data["productMainId"]}],
+                        "included_components": [{"value": f"Tek adet {product_data['title']}"}],
+                        "power_source_type": [{"value": ""}],
                     },
                 }
         return category_attrs_list[product_type]
@@ -1396,8 +1403,10 @@ class AmazonListingManager:
             dict: The payload required for the SP-API request.
         """
         # Prepare bullet points
-        bullet_points_list = textwrap.wrap(product_data["description"], width=len(product_data["description"]) // 5)
-        bullet_points = [{"value": bullet_point} for bullet_point in bullet_points_list]
+        bullet_points = [{'value': ''}]
+        if product_data["description"]:
+            bullet_points_list = textwrap.wrap(product_data["description"], width=len(product_data["description"]) // 5)
+            bullet_points = [{"value": bullet_point} for bullet_point in bullet_points_list]
 
         # Prepare product images
         product_images = self.build_image_payload(product_data["images"])
@@ -1472,7 +1481,7 @@ class AmazonListingManager:
         if listing_add_request and listing_add_request.payload["status"] == "ACCEPTED":
             logger.info(f"New product added with code: {product_sku}, qty: {payload['attributes']['fulfillment_availability'][0]['quantity']}")
         else:
-            logger.error(f"New product with code: {product_sku} creation has failed || Reason: {listing_add_request}")
+            logger.error(f"New product with code: {product_sku} creation has failed || Reason: {listing_add_request.payload['issues']}")
 
     def add_listings(self, product_data):
         """
@@ -1487,11 +1496,17 @@ class AmazonListingManager:
         for product in product_data:
                 pd_data = product["data"]
                 product_sku = pd_data['stockCode']
-                try:
-                    payload = self.build_payload(pd_data)
-                    self.submit_listing(product_sku, payload)
-                except Exception as e:
-                    logger.error(f"Failed to process product {product_sku}: {e}", exc_info=True)
+
+                if product['data']['quantity'] > 0:
+
+                    if pd_data['stockCode'] == 'EVA26GRI':
+                        pass
+
+                    try:
+                        payload = self.build_payload(pd_data)
+                        self.submit_listing(product_sku, payload)
+                    except Exception as e:
+                        logger.error(f"Failed to process product {product_sku}: {e}", exc_info=True)
 
     def update_listing(self, product_data: dict):
         """

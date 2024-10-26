@@ -145,6 +145,9 @@ class Hb_API:
 
         for item_data_list in items:
 
+            if item_data_list['data']['stockCode'] == 'KAREMDHOVKRMBYZ':
+                pass
+
             if isinstance(item_data_list, list):            
                 if len(item_data_list[1]) >= 2:
                     for i in range(len(item_data_list[1])):
@@ -616,6 +619,20 @@ class Hb_API:
             ready_data (list): A list of dictionaries containing product data.
         """
 
+        def get_product_status(response_json, page: int = 0) -> dict:
+
+            status_check_response = self.request_data(
+                        subdomain=self.mpop_url,
+                        url_addons=f"""/product/api/products/status/{
+                            response_json['data']['trackingId']}?page={page}""",
+                        request_type="GET",
+                        payload_content=[],
+                    )
+
+            status_check = json.loads(status_check_response.text)
+
+            return status_check
+
         if product_data:
 
             ready_data = self.prepare_product_data(items=product_data, op='create')
@@ -645,39 +662,37 @@ class Hb_API:
 
                 if response_json['success'] == True:
 
-                    status_check_response = self.request_data(
-                        subdomain=self.mpop_url,
-                        url_addons=f"""/product/api/products/status/{
-                            response_json['data']['trackingId']}""",
-                        request_type="GET",
-                        payload_content=[],
-                    )
+                    status_check = get_product_status(response_json)
+                    count = 0
 
-                    if status_check_response:
+                    if status_check['success'] == True:
+                            
+                        while count != status_check['totalPages']:
 
-                        status_check = json.loads(status_check_response.text)
-
-                        if status_check['success'] == True:
+                            count += 1
 
                             for status in status_check['data']:
 
-                                if status['importStatus'] == 'Done':
+                                if status['importStatus'] == 'DONE':
 
                                     self.logger.info(
                                         f"""{len(ready_data)} Listings created successfully""")
                                     break
 
-                                elif status['importStatus'] == 'Processing':
+                                elif status['importStatus'] == 'PROCESSING':
                                     self.logger.info(
                                         f"""Listing {status['merchantSku']} creation is in progress""")
                                     continue
 
-                                elif status['importStatus'] == 'Failed':
+                                elif status['importStatus'] == 'FAILED':
                                     self.logger.error(
                                     f"""Listing {status['merchantSku']} creation failed || Reason: {
                                         status['importMessages'][0]['message']}""")
+                            
+                            
+                            status_check = get_product_status(response_json, count)         
 
-                        else:
+                    else:
 
                             pass
 

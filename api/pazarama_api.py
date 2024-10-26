@@ -213,7 +213,10 @@ class PazaramaAPIClient:
                     method, url, headers=headers, params=params, data=payload_dump
                 )
                 response_data = response.json()
-                response.raise_for_status()
+                if response_data['success'] == False:
+                    logger.error(f"Request failed || Reason: {response_data['message']}")
+                    return None
+
 
                 if response.status_code == 200:
                     return response_data
@@ -329,60 +332,63 @@ class PazaramaAPIClient:
             },
         }
 
-        for _, data_items in product_data.items():
-            for product in data_items:
-                product_data = product["data"]
-                product_sku = product_data["stockCode"]
-                product_category = product_data["categoryName"]
-                category_id = categories[product_category]["id"]
-                brands = {
-                    "Stepmat": "20fd0ae7-cf18-4bba-90f6-61ea5856045d",
-                    "Myfloor": "825300a0-71a1-4e56-bab9-08dacc7459ff",
-                }
-                images = [{"imageurl": image["url"]}for image in product_data["images"]]
+        try:
+            for data_items in product_data:
+                    product_data = data_items['data']
+                    product_sku = product_data["stockCode"]
+                    product_category = product_data["categoryName"]
+                    category_id = categories[product_category]["id"]
+                    brands = {
+                        "Stepmat": "20fd0ae7-cf18-4bba-90f6-61ea5856045d",
+                        "Myfloor": "825300a0-71a1-4e56-bab9-08dacc7459ff",
+                    }
+                    images = [{"imageurl": image["url"]}for image in product_data["images"]]
 
-                request_payload = {
-                    "products": [
-                        {
-                            "name": product_data["title"],
-                            "displayName": product_data["title"],
-                            "description": product_data["description"],
-                            "brandId": brands[product_data["brand"]],
-                            "desi": 1,
-                            "code": product_data["barcode"],
-                            "groupCode": product_data["productMainId"],
-                            "stockCode": product_data["stockCode"],
-                            "stockCount": product_data["quantity"],
-                            "listPrice": product_data["listPrice"],
-                            "salePrice": product_data["salePrice"],
-                            "productSaleLimitQuantity": 1000,
-                            "currencyType": "TRY",
-                            "vatRate": 10,
-                            "images": images,
-                            "categoryId": category_id,
-                            "attributes": [],
-                            "deliveries": [ { "deliveryId": "", "cityList": [] } ],
-                        }
-                    ]
-                }
+                    request_payload = {
+                        "products": [
+                            {
+                                "name": product_data["title"],
+                                "displayName": product_data["title"],
+                                "description": product_data["description"],
+                                "brandId": brands[product_data["brand"]],
+                                "desi": 1,
+                                "code": product_data["barcode"],
+                                "groupCode": product_data["productMainId"],
+                                "stockCode": product_data["stockCode"],
+                                "stockCount": product_data["quantity"],
+                                "listPrice": product_data["listPrice"],
+                                "salePrice": product_data["salePrice"],
+                                "productSaleLimitQuantity": 1000,
+                                "currencyType": "TRY",
+                                "vatRate": 10,
+                                "images": images,
+                                "categoryId": category_id,
+                                "attributes": [],
+                                "deliveries": [],
+                            }
+                        ]
+                    }
 
-                update_request, elapsed_time = self.request_processing(
-                    uri="product/create", payload=request_payload, method="POST"
-                )
+                    update_request, elapsed_time = self.request_processing(
+                        uri="product/create", payload=request_payload, method="POST"
+                    )
 
-                if update_request:
+                    if update_request:
 
-                    if update_request["success"] == True:
+                        if update_request["success"] == True:
 
-                        logger.info(
-                            f"""Product with code: {product["sku"]}, New value: {product["qty"]}, Elapsed time: {elapsed_time:.2f} seconds."""
-                        )
+                            logger.info(
+                                f"""Product with code: {product_data['stockCode']} has been created, Elapsed time: {elapsed_time:.2f} seconds."""
+                            )
 
-                    else:
+                        else:
 
-                        logger.error(
-                            f'Product with code: {product_sku} failed to update || Reason: {update_request["data"][0]["error"]} || Elapsed time: {elapsed_time:.2f} seconds.'
-                        )
+                            logger.error(
+                                f'Product with code: {product_data['stockCode']} failed to create || Reason: {update_request['message']} || Elapsed time: {elapsed_time:.2f} seconds.'
+                            )
+        except KeyError:
+            logger.error(f"Error: {KeyError}")
+        
 
     def get_products(self, everyProduct: bool = False, local: bool = False):
         """
