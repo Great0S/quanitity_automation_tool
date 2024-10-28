@@ -93,30 +93,35 @@ class PazaramaAPIClient:
         if not self.access_token or time.time() >= self.token_expiry:
             self.get_access_token()
 
-    def process_target_attributes(self, data):
+    def process_target_attributes(self, source_data, target_data):
         """
         Extracts 'id', 'name', and 'values' from a list of attributes.
 
         :param data: List of dictionaries containing attribute details
         :return: List of dictionaries containing 'id', 'name', and 'values'
         """
-        extracted_data = []
+        
+        attr_values = None
+        
+        for source_attr in source_data.keys():
+            
+            if re.search(target_data['name'], str(source_attr)):
+                
+                for value in target_data.get("attributeValues", []):
+                    if source_data[source_attr] == value.get("value"):
+                        attr_values = value.get("id")
+                        break
 
-        for attribute in data["attributes"]:
-            # Extracting 'id', 'name', and 'values'
-            attr_id = attribute.get("id")
-            attr_name = attribute.get("name")
-            attr_values = [
-                {"id": value.get("id"), "value": value.get("value")}
-                for value in attribute.get("attributeValues", [])
-            ]
+                if not attr_values:                    
+                    for value in target_data.get("attributeValues", []):
 
-            # Append the extracted data to the result list
-            extracted_data.append(
-                {"id": attr_id, "name": attr_name, "values": attr_values}
-            )
-
-        return extracted_data
+                        if re.search(str(source_data[source_attr]), str(value.get("value"))):
+                            attr_values = value.get("id")
+                            break
+                        else:
+                            attr_values = None
+                    
+        return attr_values
 
     def process_source_attributes(self, attributes):
         """
@@ -131,12 +136,12 @@ class PazaramaAPIClient:
         size_match = [1, 1]
         size, color, feature, materyal, style, tip, thickness, shape = (
             1,
-            None,
-            None,
-            None,
-            None,
-            None,
-            1,
+            "Renkli",
+            "",
+            "",
+            "",
+            "",
+            5,
             "Dikdörtgen",
         )
 
@@ -147,9 +152,18 @@ class PazaramaAPIClient:
             attr_values = attr["attributeValue"]
 
             if re.search(r"Boyut/Ebat|Beden", attr_name):
-                if isinstance(attr_name, (int, float)):
+                if isinstance(attr_values, (int, float)):
+                    # Directly assign if it's a number
                     size = attr_values
-                    size_match = str(attr_values).split("x")
+                elif isinstance(attr_values, str):
+                    # Check if it has a dimension format "number x number"
+                    if "x" in attr_values:
+                        size = attr_values
+                        # Strip any extra whitespace around each dimension
+                        size_match = [s.strip() for s in attr_values.split("x")]
+                    else:
+                        # Handle cases like "Tek Ebat" or any single size description
+                        size = attr_values.strip()
             elif re.search(r"Renk|Color", attr_name):
                 color = attr_values
             elif re.search(r"Özellik", attr_name):
@@ -168,15 +182,15 @@ class PazaramaAPIClient:
                 shape = attr_values
 
         return {
-            "size": size,
+            "Boyut/Ebat": size,
             "size_match": size_match,
-            "color": color,
-            "feature": feature,
-            "style": style,
-            "material": materyal,
-            "thickness": thickness,
-            "shape": shape,
-            "tip": tip,
+            "Renk": color,
+            "Özellik": feature,
+            "Tema": style,
+            "Materyal": materyal,
+            "Hav Yüksekliği": thickness,
+            "Şekil": shape,
+            "Tip": tip,
         }
 
     def request_data(self, method="GET", uri="", params=None, payload=None):
@@ -272,6 +286,23 @@ class PazaramaAPIClient:
 
         return response, elapsed_time
 
+    def get_attrs(self, category_id, source_data=None):
+
+        source_attrs = self.process_source_attributes(source_data)
+        attr_request, _ = self.request_processing(
+                uri="category/getCategoryWithAttributes", params={"id": category_id}, method="GET"
+            )
+        
+        attrs_list = []
+
+        for item in attr_request['data']['attributes']:
+            attrs = self.process_target_attributes(target_data=item, source_data=source_attrs)
+            if attrs:
+                attrs_list.append({"attributeId": item['id'], "attributeValueId": attrs})
+        
+        return attrs_list
+
+
     def create_products(self, product_data):
         """
         The function `pazarama_updateRequest` updates the stock count of a product on Pazarama platform
@@ -290,7 +321,7 @@ class PazaramaAPIClient:
                 "id": "50af37b5-4de3-4f86-bc8e-065f78d9fdb8",
                 "target_name": "Halı",
             },
-            "Pilates Minder ve Mat": {
+            "Pilates Minder & Mat": {
                 "id": "026d861d-174b-423d-b0fc-ea8399519e22",
                 "target_name": "Pilates, Yoga Matı, Minderi",
             },
@@ -298,19 +329,19 @@ class PazaramaAPIClient:
                 "id": "bebee8ab-639a-465a-b4f8-2d5105918fa2",
                 "target_name": "Kedi Tuvaleti, Aksesuarları",
             },
-            "Merdiven Aparatları": {
+            "Merdiven Aparatı": {
                 "id": "b3d1b879-1b82-4a6a-a254-cfb910e0f70c",
                 "target_name": "Merdivenler",
             },
-            "Yapıştırıcı&Bantlar": {
+            "Yapıştırıcı ve Bant": {
                 "id": "06f358f2-6e2a-4c90-a042-23a18d9be7c5",
                 "target_name": "Yapıştırıcı Bantlar",
             },
-            "Maket Bıçağı": {
+            "Maket Bıçak": {
                 "id": "c45b36f1-119b-424b-be4d-8c75a87fa733",
                 "target_name": "Makas, Maket Bıçağı",
             },
-            "Oto Paspasları": {
+            "Oto Paspas": {
                 "id": "df40da26-ff65-4861-9c59-65757fda6b85",
                 "target_name": "Oto Paspası",
             },
@@ -318,7 +349,7 @@ class PazaramaAPIClient:
                 "id": "81a97ee5-3950-45d9-b37e-b51e1a74aa39",
                 "target_name": "Dekoratif Yastık, Kırlent, Kılıf",
             },
-            "Bahçe Yer Döşemeleri": {
+            "Bahçe Yer Döşemesi": {
                 "id": "f5dc89bb-88e4-4bd3-8bef-943bd47def7b",
                 "target_name": "Bahçe Yer Döşemesi",
             },
@@ -326,70 +357,77 @@ class PazaramaAPIClient:
                 "id": "50af37b5-4de3-4f86-bc8e-065f78d9fdb8",
                 "target_name": "Halı",
             },
-            "Dikiş Makinesi Aksesuarları": {
+            "Dikiş Makinesi Aksesuarı": {
                 "id": "e63975fc-a24a-4b7d-b5a2-c3281e05b774",
                 "target_name": "Dikiş Makinesi Aksesuarları",
             },
         }
 
+        products = []
+        product_data_list = product_data
+
         try:
-            for data_items in product_data:
-                    product_data = data_items['data']
-                    product_sku = product_data["stockCode"]
-                    product_category = product_data["categoryName"]
-                    category_id = categories[product_category]["id"]
-                    brands = {
-                        "Stepmat": "20fd0ae7-cf18-4bba-90f6-61ea5856045d",
-                        "Myfloor": "825300a0-71a1-4e56-bab9-08dacc7459ff",
-                    }
-                    images = [{"imageurl": image["url"]}for image in product_data["images"]]
+            for data_items in product_data_list:
+                product_data = data_items['data']
+                product_sku = product_data["stockCode"]
+                product_category = product_data["categoryName"]
+                category_id = categories[product_category]["id"]
+                category_attrs = self.get_attrs(category_id, product_data['attributes'])
+                brands = {
+                    "Stepmat": "20fd0ae7-cf18-4bba-90f6-61ea5856045d",
+                    "Myfloor": "825300a0-71a1-4e56-bab9-08dacc7459ff",
+                }
 
-                    request_payload = {
-                        "products": [
-                            {
-                                "name": product_data["title"],
-                                "displayName": product_data["title"],
-                                "description": product_data["description"],
-                                "brandId": brands[product_data["brand"]],
-                                "desi": 1,
-                                "code": product_data["barcode"],
-                                "groupCode": product_data["productMainId"],
-                                "stockCode": product_data["stockCode"],
-                                "stockCount": product_data["quantity"],
-                                "listPrice": product_data["listPrice"],
-                                "salePrice": product_data["salePrice"],
-                                "productSaleLimitQuantity": 1000,
-                                "currencyType": "TRY",
-                                "vatRate": 10,
-                                "images": images,
-                                "categoryId": category_id,
-                                "attributes": [],
-                                "deliveries": [],
-                            }
-                        ]
-                    }
+                if data_items['data']['quantity'] == 0:
+                    continue
 
-                    update_request, elapsed_time = self.request_processing(
-                        uri="product/create", payload=request_payload, method="POST"
+                images = [{"imageurl": image["url"]}for image in product_data["images"]]
+                products.append({
+                            "name": product_data["title"],
+                            "displayName": product_data["title"],
+                            "description": product_data["description"],
+                            "brandId": brands.get(product_data["brand"], brands['Myfloor']),
+                            "desi": 1,
+                            "code": product_data["barcode"],
+                            "groupCode": product_data["productMainId"],
+                            "stockCode": product_data["stockCode"],
+                            "stockCount": product_data["quantity"],
+                            "listPrice": product_data["listPrice"],
+                            "salePrice": product_data["salePrice"],
+                            "productSaleLimitQuantity": 1000,
+                            "currencyType": "TRY",
+                            "vatRate": 10,
+                            "images": images,
+                            "categoryId": category_id,
+                            "attributes": category_attrs,
+                            "deliveries": [],
+                        })
+                
+            request_payload = {
+                    "products": products
+                    }
+            create_request, elapsed_time = self.request_processing(
+                uri="product/create", payload=request_payload, method="POST"
+            )
+            if create_request:
+                if create_request["success"] == True:
+                    if create_request['data']['error']['errors'] != []:
+                    # batch_id = create_request["data"]['batchRequestId']
+                    # product_status_check, _ = self.request_processing(
+                    #     uri=f"product/getProductBatchResult",
+                    #     method="GET",
+                    #     params={"BatchRequestId": batch_id}
+                    # )
+                    # if product_status_check['success'] == True:
+                        for product_sk in create_request['data']['error']['errors']:
+                            logger.error(f"Product with code: {product_sku} failed to create. || Reason: {product_sk}")
+                else:
+                    logger.error(
+                        f'Product with code: {product_sku} failed to create || Reason: {create_request['message']} || Elapsed time: {elapsed_time:.2f} seconds.'
                     )
-
-                    if update_request:
-
-                        if update_request["success"] == True:
-
-                            logger.info(
-                                f"""Product with code: {product_data['stockCode']} has been created, Elapsed time: {elapsed_time:.2f} seconds."""
-                            )
-
-                        else:
-
-                            logger.error(
-                                f'Product with code: {product_data['stockCode']} failed to create || Reason: {update_request['message']} || Elapsed time: {elapsed_time:.2f} seconds.'
-                            )
         except KeyError:
             logger.error(f"Error: {KeyError}")
         
-
     def get_products(self, everyProduct: bool = False, local: bool = False):
         """
         Retrieves a list of products from the Pazarama API and returns a subset of product data

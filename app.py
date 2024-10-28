@@ -65,10 +65,14 @@ def find_non_matching_items(data: Dict[str, Any], source: str, target: str) -> L
     """Finds items that don't match between source and target platforms."""
     non_matching_items = []
     target_data = {item["sku"]: item for item in data.get(target, [])}
+    exists = []
+    non_found = []
 
     for source_item in data.get(source):
-        if source_item["sku"] not in target_data:
+        if source_item["sku"] not in target_data and source_item['data']['quantity'] > 0:
+            # non_found.append(source_item["sku"])
             non_matching_items.append({"platform": target, "data": source_item["data"]})
+
 
     return non_matching_items
 

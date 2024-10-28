@@ -4,6 +4,9 @@ import os
 import re
 import requests
 from app.config import logger
+import time
+import time
+import time
 
 
 class N11RestAPI:
@@ -30,7 +33,7 @@ class N11RestAPI:
             'Pilates Minder & Mat': 1003252,
             'Maket Bıçak': 1001621,
             "Merdiven Aparatı": 1120112,
-            'Kapı Önü Paspası' : 1002928
+            'Kapı Önü Paspası': 1000722
         }
 
         if category_name:
@@ -62,7 +65,9 @@ class N11RestAPI:
             "Boyut/Ebat": "Ölçüler",
             "Taban": "Taban Özelliği",
             "Hav Yüksekliği": "Hav Yüksekliği",
-            "Marka": "Marka"
+            "Marka": "Marka",
+            "Materyal": "Materyal",
+            "Basamak Sayısı": "Basamak Sayısı"
         }
 
         # First pass: collect all attributes from attrs_data
@@ -71,12 +76,14 @@ class N11RestAPI:
             # Check if the attribute name matches any key in n11_attrs_names
             for original_name, n11_name in n11_attrs_names.items():
                 if re.search(attr_name, original_name):
-                    attrs[n11_name] = attr["attributeValue"].replace(" Taban", "")
+                    attrs[n11_name] = attr["attributeValue"].replace(
+                        " Taban", "")
                     break
-                
+
         # Special handling for Hav Yüksekliği - extract only digits
         if 'Hav Yüksekliği' in attrs:
-            attrs['Hav Yüksekliği'] = re.sub(r'\D', '', attrs['Hav Yüksekliği'])
+            attrs['Hav Yüksekliği'] = re.sub(
+                r'\D', '', attrs['Hav Yüksekliği'])
 
         # Get category attributes from n11 API
         n11_category_attrs_response = requests.get(
@@ -99,20 +106,18 @@ class N11RestAPI:
                     else:
                         value_id = 'null'
                         custom_value = attrs_data['data']['brand']
-                    
-                
-                n11_attrs[current_attr_name] = {
-                "id": n11_attr['attributeId'],
-                "valueId": value_id,
-                "customValue": custom_value
-            }
-                continue
 
+                n11_attrs[current_attr_name] = {
+                    "id": n11_attr['attributeId'],
+                    "valueId": value_id,
+                    "customValue": custom_value
+                }
+                continue
 
             # Skip if attribute is not in our mapping
             if current_attr_name not in n11_attrs_names.values():
                 continue
-            
+
             # Find the corresponding attribute value
             value_id = 'null'
             custom_value = 'null'
@@ -126,7 +131,7 @@ class N11RestAPI:
                     if attr_val['value'] == attr_value:
                         value_id = attr_val['id']
                         break
-                    
+
                 # If no matching ID found, use as custom value
                 if value_id == 'null':
                     custom_value = attr_value
@@ -138,6 +143,25 @@ class N11RestAPI:
                 "customValue": custom_value
             }
 
+        if attrs_data['data']['categoryName'] == 'Kedi Tuvaleti Paspası':
+
+            n11_attrs['Materyal'] = {
+                "id": 223,
+                "valueId": 11034090
+            }
+
+        if attrs_data['data']['categoryName'] == 'Merdiven Aparatı':
+            n11_attrs['Basamak Sayısı'] = {
+                "id": 1392,
+                "valueId": 9005305,
+                "customValue": 'null'
+            }
+            n11_attrs['Malzeme'] = {
+                "id": 1505,
+                "valueId": 10936474,
+                "customValue": 'null'
+            }
+
         return n11_attrs
 
     def create_product(self, product_data):
@@ -146,8 +170,9 @@ class N11RestAPI:
 
         # Prepare the SKU data from the provided product data
         for product in product_data:
-            category_id = self.find_category_id(product["data"]["categoryName"])
-            if not category_id:
+            category_id = self.find_category_id(
+                product["data"]["categoryName"])
+            if not category_id or product["data"]["quantity"] == 0:
                 continue
             attrs = self.get_attrs(product, category_id)
             images = product["data"].get("images", [])
@@ -161,7 +186,7 @@ class N11RestAPI:
                 "title": product["data"]["title"],
                 "description": product["data"]["description"],
                 "categoryId": category_id,
-                "currencyType": 1,
+                "currencyType": "TL",
                 "productMainId": product["data"].get("productMainId", 'null'),
                 "preparingDay": 3,
                 "shipmentTemplate": "Kargo",
@@ -198,23 +223,31 @@ class N11RestAPI:
                 data=json.dumps(payload),
             )
 
-            response.raise_for_status() 
+            response.raise_for_status()
             response_data = response.json()
 
             if response.status_code == 200:
-                task_detail = requests.post(
-                    self.base_url + "ms/product/tasks/task-detail",
-                    headers=self.headers,
-                    data=json.dumps({"taskId": response_data["id"],"pageable": {
-        "page": 0,
-        "size": 1000
-    }}),)
-                task_response = task_detail.json()
-                for item in task_response['content']:
+                while True:
+                    # Fetch task details
+                    task_detail = requests.post(
+                        self.base_url + "ms/product/task-details/page-query",
+                        headers=self.headers,
+                        data=json.dumps({"taskId": response_data["id"], "pageable": {
+                            "page": 0,
+                                                                        "size": 1000
+                        }}),)
+                    task_response = task_detail.json()
+                    if task_response['status'] in ['PROCESSED', 'REJECT']:
+                        break
+
+                    time.sleep(5)
+
+                for item in task_response['skus']['content']:
                     if item['status'] == 'SUCCESS':
-                        print(f"{item['itemCode']} is successfully created")
+                        logger.info(
+                            f"{item['itemCode']} is successfully created")
                     else:
-                        print(f"{item['itemCode']} is not created || Reason: {item['reasons']}")
+                        logger.error(f"Not created || Reason: {item['reasons']}")
         except requests.exceptions.RequestException as e:
             logger.error(f"An error occurred: {e}")
             return 'null'
@@ -262,7 +295,8 @@ class N11RestAPI:
             ]
         else:
             # Return full product data
-            products = [{'sku': item['stockCode'], 'data': item} for item in products]
+            products = [{'sku': item['stockCode'], 'data': item}
+                        for item in products]
             return products
 
     def update_product(self, product: dict):
@@ -273,7 +307,8 @@ class N11RestAPI:
             "payload": {
                 "integrator": "QAT 1.0",
                 "skus": [
-                    {"stockCode": product["sku"], "listPrice": int(product['price']) * 2, "salePrice": int(product['price']), "quantity": int(product["quantity"]), "currencyType": "TL"}
+                    {"stockCode": product["sku"], "listPrice": int(product['price']) * 2, "salePrice": int(
+                        product['price']), "quantity": int(product["quantity"]), "currencyType": "TL"}
                 ],
             }
         }
@@ -317,6 +352,6 @@ class N11RestAPI:
 
             logger.error(
                 f"""Request for product {
-                   product['sku']} is unsuccessful | Response: {
-                       post_response.text}"""
+                    product['sku']} is unsuccessful | Response: {
+                    post_response.text}"""
             )
