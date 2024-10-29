@@ -457,19 +457,14 @@ class PazaramaAPIClient:
                 
                 if create_request:
                     if create_request["success"] == True:
-                        # if create_request['userMessage'] == 'Ürününüz onaya gönderildi.':
-                        #     logger.info(f"{end_idx - start_idx} Products successfully created.")
+                        
                         if create_request['data']['error']['errors'] != []:
-                        # batch_id = create_request["data"]['batchRequestId']
-                        # product_status_check, _ = self.request_processing(
-                        #     uri=f"product/getProductBatchResult",
-                        #     method="GET",
-                        #     params={"BatchRequestId": batch_id}
-                        # )
-                        # if product_status_check['success'] == True:
+                            
                             for product_sk in create_request['data']['error']['errors']:
                                 logger.error(f"Product with code: {product_sku} failed to create. || Reason: {product_sk}")
+
                         else:
+
                             while True:
                                 batch_id = create_request["data"]['batchRequestId']
                                 product_status_check, _ = self.request_processing(
