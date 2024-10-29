@@ -1,4 +1,5 @@
 import base64
+import math
 import os
 import re
 import requests
@@ -120,6 +121,35 @@ class PazaramaAPIClient:
                             break
                         else:
                             attr_values = None
+
+        if not attr_values and target_data['isRequired'] == True:
+            if target_data['name'] == 'Renk':
+                attr_values = 'ab973803-c1e4-4668-b2c4-54ca25db3fcb'
+
+            if target_data['name'] == 'Ebat':
+                attr_values = '14c90518-13a8-4c9f-8ef2-9160acf5dda6'
+            
+            if target_data['name'] == 'Ürün Tipi':
+                attr_values = '10735df0-060d-41ca-8d31-4aaa69194495'
+
+            if target_data['name'] == 'Ürün Türü' and target_data['attributeValues'][0]['value'] == 'Maket Bıçağı':
+                attr_values = 'ea64fee0-242d-4999-817c-19a1aa8293b1'
+
+            if target_data['name'] == 'Kesim Şekli':
+                attr_values = '5f0a6271-bd4f-4a5c-a9d7-b3870f518eb8'
+
+            if target_data['name'] == 'Ürün Adedi':
+                attr_values = '6506114f-78e5-492b-8ec8-54e5982e01f1'
+
+            if target_data['name'] == 'Paspas Tipi':
+                attr_values = 'bd58ed1a-d551-4950-a4f2-4c2811d4975a'
+            
+            if target_data['name'] == 'Ürün Şekli':
+                attr_values = '12a1a7dc-09b0-4dac-8065-6bf2ae786922'
+
+            if not attr_values:
+                attr_values = None
+            
                     
         return attr_values
 
@@ -302,7 +332,6 @@ class PazaramaAPIClient:
         
         return attrs_list
 
-
     def create_products(self, product_data):
         """
         The function `pazarama_updateRequest` updates the stock count of a product on Pazarama platform
@@ -318,7 +347,7 @@ class PazaramaAPIClient:
                 "target_name": "Dış Mekan Paspası",
             },
             "Halı": {
-                "id": "50af37b5-4de3-4f86-bc8e-065f78d9fdb8",
+                "id": "483b2653-55bd-45d7-a662-23a16899b315",
                 "target_name": "Halı",
             },
             "Pilates Minder & Mat": {
@@ -330,7 +359,7 @@ class PazaramaAPIClient:
                 "target_name": "Kedi Tuvaleti, Aksesuarları",
             },
             "Merdiven Aparatı": {
-                "id": "b3d1b879-1b82-4a6a-a254-cfb910e0f70c",
+                "id": "785b42ba-f9fd-4aad-84d3-d5099b605137",
                 "target_name": "Merdivenler",
             },
             "Yapıştırıcı ve Bant": {
@@ -381,6 +410,10 @@ class PazaramaAPIClient:
                 if data_items['data']['quantity'] == 0:
                     continue
 
+                if product_data["description"] == "":
+                    product_data["description"] = product_data["title"]
+
+
                 images = [{"imageurl": image["url"]}for image in product_data["images"]]
                 products.append({
                             "name": product_data["title"],
@@ -402,29 +435,63 @@ class PazaramaAPIClient:
                             "attributes": category_attrs,
                             "deliveries": [],
                         })
+             
+            batch_size = 50
+            num_batches = math.ceil(len(products) / batch_size)
+            
+            for i in range(num_batches):
+                # Get the current batch of products
+                start_idx = i * batch_size
+                end_idx = min((i + 1) * batch_size, len(products))
+                current_batch = products[start_idx:end_idx]
+            
+                # Prepare the request payload for the current batch
+                request_payload = {
+                    "products": current_batch
+                }
+            
+                # Process the current batch
+                create_request, elapsed_time = self.request_processing(
+                    uri="product/create", payload=request_payload, method="POST"
+                )
                 
-            request_payload = {
-                    "products": products
-                    }
-            create_request, elapsed_time = self.request_processing(
-                uri="product/create", payload=request_payload, method="POST"
-            )
-            if create_request:
-                if create_request["success"] == True:
-                    if create_request['data']['error']['errors'] != []:
-                    # batch_id = create_request["data"]['batchRequestId']
-                    # product_status_check, _ = self.request_processing(
-                    #     uri=f"product/getProductBatchResult",
-                    #     method="GET",
-                    #     params={"BatchRequestId": batch_id}
-                    # )
-                    # if product_status_check['success'] == True:
-                        for product_sk in create_request['data']['error']['errors']:
-                            logger.error(f"Product with code: {product_sku} failed to create. || Reason: {product_sk}")
-                else:
-                    logger.error(
-                        f'Product with code: {product_sku} failed to create || Reason: {create_request['message']} || Elapsed time: {elapsed_time:.2f} seconds.'
-                    )
+                if create_request:
+                    if create_request["success"] == True:
+                        # if create_request['userMessage'] == 'Ürününüz onaya gönderildi.':
+                        #     logger.info(f"{end_idx - start_idx} Products successfully created.")
+                        if create_request['data']['error']['errors'] != []:
+                        # batch_id = create_request["data"]['batchRequestId']
+                        # product_status_check, _ = self.request_processing(
+                        #     uri=f"product/getProductBatchResult",
+                        #     method="GET",
+                        #     params={"BatchRequestId": batch_id}
+                        # )
+                        # if product_status_check['success'] == True:
+                            for product_sk in create_request['data']['error']['errors']:
+                                logger.error(f"Product with code: {product_sku} failed to create. || Reason: {product_sk}")
+                        else:
+                            while True:
+                                batch_id = create_request["data"]['batchRequestId']
+                                product_status_check, _ = self.request_processing(
+                                    uri=f"product/getProductBatchResult",
+                                    method="GET",
+                                    params={"BatchRequestId": batch_id}
+                                )
+                                if product_status_check['data']['status'] == 2:
+                                    for result in product_status_check['data']['batchResult']:
+                                        if result['failureReasons'] != []:
+                                            logger.error(f"Product with code: {result['createProduct']['stockCode']} failed to create. || Reason: {result['failureReasons']}")
+                                        else:
+                                            logger.info(f"Product with code: {result['createProduct']['stockCode']} successfully created.")
+                                    break
+                                elif product_status_check['data']['status'] == 3:
+                                    logger.error(f"Product with code: {product_sku} failed to create.")
+                                    break
+                                time.sleep(2)
+                    else:
+                        logger.error(
+                            f'Product with code: {product_sku} failed to create || Reason: {create_request['message']} || Elapsed time: {elapsed_time:.2f} seconds.'
+                        )
         except KeyError:
             logger.error(f"Error: {KeyError}")
         
@@ -443,33 +510,41 @@ class PazaramaAPIClient:
         """
         products_items = []
 
-        params = {"Approved": "true", "Size": 250}
+        params = {"Approved": "true", "Size": 250, "Page": 1}
 
         try:
-            products_list, elapsed_time = self.request_processing(
-                uri="product/products", params=params
-            )
-            if not products_list or "data" not in products_list:
-                logger.error("Failed to retrieve product data or data is missing.")
-                return products_items
+            while True:
+                # Process the request to retrieve product data
+                products_list, elapsed_time = self.request_processing(
+                    uri="product/products", params=params
+                )
+                if not products_list or "data" not in products_list:
+                    logger.error("Failed to retrieve product data or data is missing.")
+                    return products_items
 
-            products = products_list["data"]
+                products = products_list["data"]
 
-            if products:
-                for product in products:
-                    if not everyProduct:
-                        products_items.append(
-                            {
-                                "id": product.get("code"),
-                                "sku": product.get("stockCode"),
-                                "quantity": product.get("stockCount"),
-                                "price": product.get("salePrice"),
-                            }
-                        )
-                    else:
-                        products_items.append(
-                            {"sku": product.get("stockCode"), "data": product}
-                        )
+                if products:
+                    for product in products:
+                        if not everyProduct:
+                            products_items.append(
+                                {
+                                    "id": product.get("code"),
+                                    "sku": product.get("stockCode"),
+                                    "quantity": product.get("stockCount"),
+                                    "price": product.get("salePrice"),
+                                }
+                            )
+                        else:
+                            products_items.append(
+                                {"sku": product.get("stockCode"), "data": product}
+                            )
+
+                # Check if there are more pages of products to retrieve
+                if len(products_list['data']) < 250:
+                    break
+
+                params["Page"] += 1
 
             logger.info(
                 f"Pazarama fetched {len(products_items)} products in {elapsed_time:.2f} seconds."

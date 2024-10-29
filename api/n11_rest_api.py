@@ -1,4 +1,5 @@
 import base64
+import csv
 import json
 import os
 import re
@@ -84,6 +85,8 @@ class N11RestAPI:
         if 'Hav Yüksekliği' in attrs:
             attrs['Hav Yüksekliği'] = re.sub(
                 r'\D', '', attrs['Hav Yüksekliği'])
+        else:
+            attrs['Hav Yüksekliği'] = '5'
 
         # Get category attributes from n11 API
         n11_category_attrs_response = requests.get(
@@ -96,6 +99,57 @@ class N11RestAPI:
         for n11_attr in n11_category_attrs['categoryAttributes']:
 
             current_attr_name = n11_attr['attributeName']
+
+            if current_attr_name == 'Taban Özelliği':
+
+                value_id = 5190307
+                custom_value = 'null'
+
+                if current_attr_name in attrs.keys():
+                    for mk in n11_attr['attributeValues']:
+                        if mk['value'] == attrs[current_attr_name]:
+                            value_id = mk['id']
+                            custom_value = 'null'
+                            break  
+
+                n11_attrs[current_attr_name] = {
+                    "id": n11_attr['attributeId'],
+                    "valueId": value_id,
+                    "customValue": custom_value
+                }
+                continue
+
+            if current_attr_name == 'Ölçüler':
+                value_id = 4656832
+                custom_value = 'null'
+                if current_attr_name in attrs.keys():
+                    for mk in n11_attr['attributeValues']:
+                        if mk['value'] == attrs[current_attr_name]:
+                            value_id = mk['id']
+                            custom_value = 'null'
+                            break
+                
+                n11_attrs[current_attr_name] = {
+                    "id": n11_attr['attributeId'],
+                    "valueId": value_id,
+                    "customValue": custom_value
+                }
+            
+            if current_attr_name == 'Şekil':
+                value_id = 3137563
+                custom_value = 'null'
+                if current_attr_name in attrs.keys():
+                    for mk in n11_attr['attributeValues']:
+                        if mk['value'] == attrs[current_attr_name]:
+                            value_id = mk['id']
+                            custom_value = 'null'
+                            break
+                
+                n11_attrs[current_attr_name] = {
+                    "id": n11_attr['attributeId'],
+                    "valueId": value_id,
+                    "customValue": custom_value
+                }
 
             if current_attr_name == 'Marka':
                 for mk in n11_attr['attributeValues']:
@@ -113,7 +167,7 @@ class N11RestAPI:
                     "customValue": custom_value
                 }
                 continue
-
+            
             # Skip if attribute is not in our mapping
             if current_attr_name not in n11_attrs_names.values():
                 continue
@@ -137,18 +191,28 @@ class N11RestAPI:
                     custom_value = attr_value
 
             # Store the processed attribute
-            n11_attrs[current_attr_name] = {
-                "id": n11_attr['attributeId'],
-                "valueId": value_id,
-                "customValue": custom_value
-            }
+            if value_id != 'null' or custom_value != 'null':
+                n11_attrs[current_attr_name] = {
+                    "id": n11_attr['attributeId'],
+                    "valueId": value_id,
+                    "customValue": custom_value
+                }
 
-        if attrs_data['data']['categoryName'] == 'Kedi Tuvaleti Paspası':
+        if attrs_data['data']['categoryName'] == 'Kedi Tuvaleti':
 
             n11_attrs['Materyal'] = {
                 "id": 223,
                 "valueId": 11034090
             }
+            n11_attrs['Ölçüler'] = {
+                "id": 845,
+                "valueId": 1022916
+            }
+            n11_attrs['Ürün Tipi'] = {
+                "id": 624,
+                "valueId": 6376150
+            }
+            n11_attrs['Renk']['valueId'] = 662004
 
         if attrs_data['data']['categoryName'] == 'Merdiven Aparatı':
             n11_attrs['Basamak Sayısı'] = {
@@ -164,6 +228,47 @@ class N11RestAPI:
 
         return n11_attrs
 
+    def json_to_csv(self, data, csv_file_path):
+
+        # Extract the skus list from the payload
+        skus = data.get('payload', {}).get('skus', [])
+
+        if not skus:
+            print("No SKUs found in the JSON file.")
+            return
+
+        # Determine all possible fields across all SKUs, excluding 'images'
+        all_fields = set()
+        for sku in skus:
+            all_fields.update(key for key in sku.keys() if key != 'images')
+            # Handle nested 'attributes' structure
+            if 'attributes' in sku:
+                all_fields.update(f"attribute_{attr['id']}" for attr in sku['attributes'])
+
+        # Convert set to sorted list for consistent column order
+        fields = sorted(all_fields)
+
+        # Write to CSV file
+        with open(csv_file_path, 'w', newline='', encoding='utf-8') as csv_file:
+            writer = csv.DictWriter(csv_file, fieldnames=fields)
+
+            # Write the header
+            writer.writeheader()
+
+            # Write the data
+            for sku in skus:
+                row = {}
+                for field in fields:
+                    if field.startswith('attribute_'):
+                        attr_id = int(field.split('_')[1])
+                        attr = next((a for a in sku.get('attributes', []) if a['id'] == attr_id), None)
+                        row[field] = f"{attr['valueId']}:{attr['customValue']}" if attr else ''
+                    else:
+                        row[field] = sku.get(field, '')
+                writer.writerow(row)
+
+        print(f"CSV file with all SKU fields (except images) has been created at: {csv_file_path}")
+
     def create_product(self, product_data):
         """Create products using the N11 API."""
         payload = {"payload": {"integrator": "QAT 1.0", "skus": []}}
@@ -178,13 +283,20 @@ class N11RestAPI:
             images = product["data"].get("images", [])
             image_list = []
 
+            if 'KPKHC' in product["data"]["stockCode"]:
+                product['data']['title'] = product['data']['title'].replace('Koko Paspas - ', '')
+
+            if product["data"]['description'] == '':
+                product["data"]['description'] = 'Türkiyede Üretimi'
+
+
             for index, img in enumerate(images, start=1):
                 image_list.append({"url": img["url"], "order": index})
 
             # Create a dictionary representing the SKU data
             sku_data = {
                 "title": product["data"]["title"],
-                "description": product["data"]["description"],
+                "description": product["data"]['description'],
                 "categoryId": category_id,
                 "currencyType": "TL",
                 "productMainId": product["data"].get("productMainId", 'null'),
@@ -212,6 +324,7 @@ class N11RestAPI:
 
         # Send POST request to create products
         try:
+            self.json_to_csv(payload, 'test.csv')
             response = requests.post(
                 self.base_url + "ms/product/tasks/product-create",
                 headers={
@@ -247,7 +360,7 @@ class N11RestAPI:
                         logger.info(
                             f"{item['itemCode']} is successfully created")
                     else:
-                        logger.error(f"Not created || Reason: {item['reasons']}")
+                        logger.error(f"{item['itemCode']} Not created || Reason: {item['reasons']}")
         except requests.exceptions.RequestException as e:
             logger.error(f"An error occurred: {e}")
             return 'null'
@@ -355,3 +468,4 @@ class N11RestAPI:
                     product['sku']} is unsuccessful | Response: {
                     post_response.text}"""
             )
+
