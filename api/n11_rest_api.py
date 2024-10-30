@@ -33,7 +33,7 @@ class N11RestAPI:
             "Halı": 1000722,
             'Pilates Minder & Mat': 1003252,
             'Maket Bıçak': 1001621,
-            "Merdiven Aparatı": 1120112,
+            "Merdiven Aparatı": 1238202,
             'Kapı Önü Paspası': 1000722
         }
 
@@ -215,15 +215,32 @@ class N11RestAPI:
             n11_attrs['Renk']['valueId'] = 662004
 
         if attrs_data['data']['categoryName'] == 'Merdiven Aparatı':
-            n11_attrs['Basamak Sayısı'] = {
-                "id": 1392,
-                "valueId": 9005305,
-                "customValue": 'null'
-            }
-            n11_attrs['Malzeme'] = {
-                "id": 1505,
-                "valueId": 10936474,
-                "customValue": 'null'
+            
+            thickness = 'null'
+            length = 'null'
+            value_id = 'null'
+
+            pattern = r"(\w+)\s*/\s*(\d+)"
+            matches = re.search(pattern, attrs_data['data']['title'])
+            thickness = matches.group(1)
+            if thickness == 'Ince':
+                thickness = 'İnce'
+            length = matches.group(2)   
+            size_value = f"{thickness} - {length} CM"
+
+            for mk in n11_attr['attributeValues']:
+                if mk['value'] == size_value:
+                    value_id = mk['id']
+                    custom_value = 'null'
+                    break 
+
+            if value_id == 'null':
+                pass        
+
+            n11_attrs['Seçenekler'] = {
+                "id": 6369,
+                "valueId": value_id,
+                "customValue": custom_value
             }
 
         return n11_attrs
@@ -288,6 +305,9 @@ class N11RestAPI:
 
             if product["data"]['description'] == '':
                 product["data"]['description'] = 'Türkiyede Üretimi'
+
+            if any(char.isalpha() for char in product['data']['barcode']):
+                product['data']['barcode'] = ''
 
 
             for index, img in enumerate(images, start=1):
