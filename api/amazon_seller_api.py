@@ -1498,10 +1498,6 @@ class AmazonListingManager:
                 product_sku = pd_data['stockCode']
 
                 if product['data']['quantity'] > 0:
-
-                    if pd_data['stockCode'] == 'EVA26GRI':
-                        pass
-
                     try:
                         payload = self.build_payload(pd_data)
                         self.submit_listing(product_sku, payload)

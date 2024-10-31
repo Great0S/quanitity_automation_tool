@@ -25,6 +25,15 @@ class N11RestAPI:
             "Content-Type": "application/json",
         }
 
+    def _create_basic_auth(self, username, password):
+        """Create basic authentication header."""
+
+        auth_string = f"{username}:{password}"
+        auth_bytes = auth_string.encode("ascii")
+        base64_bytes = base64.b64encode(auth_bytes)
+        base64_string = base64_bytes.decode("ascii")
+        return f"Basic {base64_string}"
+
     def find_category_id(self, category_name):
         """Find category ID by matching category name."""
 
@@ -44,15 +53,6 @@ class N11RestAPI:
         logger.warning(f"Category '{category_name}' not found.")
 
         return 'null'  # Return 'null' if no match is found
-
-    def _create_basic_auth(self, username, password):
-        """Create basic authentication header."""
-
-        auth_string = f"{username}:{password}"
-        auth_bytes = auth_string.encode("ascii")
-        base64_bytes = base64.b64encode(auth_bytes)
-        base64_string = base64_bytes.decode("ascii")
-        return f"Basic {base64_string}"
 
     def get_attrs(self, attrs_data, category_id='null'):
         # Initialize dictionaries
