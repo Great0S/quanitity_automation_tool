@@ -1187,7 +1187,6 @@ class AmazonListingManager:
                             }
                         ],
                         "litter_box_type": [{"value": "disposable_litter_box"}],
-                        "directions": [{"value": "Kedi tuvalet matı, kum taneciklerinin evin diğer bölgelerine yayılmasını önler. Tuvalet kabının önüne yerleştirilir ve düzenli olarak temizlenir. Haftada en az bir kez yıkanmalı ve ayda bir kez derinlemesine temizlenmelidir. Matın boyutu, tuvalet kabına uygun olmalı ve su geçirmez bir malzeme tercih edilmelidir."}],
                         "item_length_width_height": [
                         {
                             "length": {
@@ -1208,8 +1207,6 @@ class AmazonListingManager:
                         "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
                         "rtip_manufacturer_contact_information": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti; +90 552 361 11 11"}],
                         "warranty_description": [{"value": "30 Days"}],
-                        "is_oem_authorized": [{"value": True}],
-                        "oem_equivalent_part_number": [{"value": product_data["productMainId"]}],
                         "unit_count": [{"type": {"language_tag":"tr_TR", "value":"Adet"}, "value": 1}]
                     },
                     "EXERCISE_MAT": {
@@ -1243,7 +1240,27 @@ class AmazonListingManager:
                         "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
                         "model_name": [{"value": product_data["productMainId"]}],
                         "included_components": [{"value": f"Tek adet {product_data['title']}"}],
-                        "power_source_type": [{"value": ""}],
+                        "power_source_type": [{"value": "hand_powered"}],
+                    },
+                    "ADHESIVE_TAPES": {
+                        "unit_count": [{
+                            "type": {
+                                "value": "Adet"
+                            },
+                            "value": 1
+                        }],
+                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
+                        "included_components": [{"value": f"Tek adet {product_data['title']}"}],
+                    },
+                    "BONDING_ADHESIVES": {
+                        "unit_count": [{
+                            "type": {
+                                "value": "gram"
+                            },
+                            "value": 1
+                        }],
+                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
+                        "included_components": [{"value": f"Tek adet {product_data['title']}"}],
                     },
                 }
         return category_attrs_list[product_type]
@@ -1327,7 +1344,7 @@ class AmazonListingManager:
             json.dump(processed_attrs, attrFile, indent=4)
 
         return processed_attrs
-    
+
     def extract_attributes(self, attributes):
         """
         Extracts relevant attributes from the product's attributes.
@@ -1339,7 +1356,7 @@ class AmazonListingManager:
             dict: Extracted attributes.
         """
         size_match = [1, 1]
-        size, color, feature, materyal, style, thickness, shape = 1, None, None, None, None, 1, "Dikdörtgen"
+        size, color, feature, materyal, style, thickness, shape = 1, None, None, "N/A", None, 1, "Dikdörtgen"
 
         for attr in attributes:
             attr_name = attr["attributeName"]
@@ -1414,8 +1431,15 @@ class AmazonListingManager:
         # Extract attributes        
         self.attributes = self.extract_attributes(product_data["attributes"])
 
+        # Determine the product type
+        if re.search(r"yapıştırıcısı", product_data['categoryName'], re.IGNORECASE):
+            product_type = 'Zemin Kaplamaları Yapıştırıcısı'
+        else:
+            product_type = product_data['categoryName']
+
+
         # Fetch category attributes and build the complete payload
-        raw_category_attrs, category_attrs = self.fetch_category_attributes(product_data["categoryName"])
+        raw_category_attrs, category_attrs = self.fetch_category_attributes(product_type)
 
         payload = {
             "productType": raw_category_attrs["productType"],
@@ -1455,6 +1479,9 @@ class AmazonListingManager:
             ],
         }
 
+        if raw_category_attrs["productType"] == "UTILITY_KNIFE":
+            payload['attributes']['brand'][0]['value'] = "Myfloor"
+
         specific_attrs = self.get_category_type_attrs(raw_category_attrs["productType"], product_data, self.attributes)
         payload["attributes"].update(specific_attrs)
 
@@ -1477,6 +1504,8 @@ class AmazonListingManager:
             sku=product_sku,
             marketplaceIds=self.marketplace_id,
             body=payload,
+            # mode="VALIDATION_PREVIEW",
+            # includedData="issues,identifiers"
         )
         if listing_add_request and listing_add_request.payload["status"] == "ACCEPTED":
             logger.info(f"New product added with code: {product_sku}, qty: {payload['attributes']['fulfillment_availability'][0]['quantity']}")
