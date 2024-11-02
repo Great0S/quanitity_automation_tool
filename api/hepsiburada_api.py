@@ -145,7 +145,7 @@ class Hb_API:
 
         for item_data_list in items:
 
-            if item_data_list['data']['stockCode'] == 'KAREMDHOVKRMBYZ':
+            if item_data_list['data']['stockCode'] == 'EKOYRMALINKRMZ':
                 pass
 
             if isinstance(item_data_list, list):            
@@ -677,12 +677,12 @@ class Hb_API:
 
                                     self.logger.info(
                                         f"""{len(ready_data)} Listings created successfully""")
-                                    break
+                                    continue
 
                                 elif status['importStatus'] == 'PROCESSING':
                                     self.logger.info(
                                         f"""Listing {status['merchantSku']} creation is in progress""")
-                                    continue
+                                    break
 
                                 elif status['importStatus'] == 'FAILED':
                                     self.logger.error(
