@@ -1229,6 +1229,30 @@ class AmazonListingManager:
                             }
                         ],
                     },
+                    "VEHICLE_MAT": {
+                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
+                        "warranty_description": [{"value": ""}],
+                        "included_components": [{"value": f"Tek adet {product_data['title']}"}],
+                        "is_fragile": [{"value": False}],
+                        "automotive_fit_type": [{"value": "universal_fit"}],
+                        "model_name": [{"value": product_data["productMainId"]}],
+                        "item_length_width_thickness": [
+                            {
+                                "thickness": {
+                                    "value": thickness,
+                                    "unit": "millimeters",
+                                },
+                                "width": {
+                                    "value": size_match[1],
+                                    "unit": "centimeters",
+                                },
+                                "length": {
+                                    "value": size_match[0],
+                                    "unit": "centimeters",
+                                },
+                            }
+                        ],
+                    },
                     "UTILITY_KNIFE": {
                         "unit_count": [{
                             "type": {
@@ -1245,12 +1269,23 @@ class AmazonListingManager:
                     "ADHESIVE_TAPES": {
                         "unit_count": [{
                             "type": {
-                                "value": "Adet"
+                                "language_tag": "tr_TR",
+                                "value": "metre"
                             },
                             "value": 1
                         }],
                         "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
                         "included_components": [{"value": f"Tek adet {product_data['title']}"}],
+                    },
+                    "HAND_SEWING_NEEDLE": {
+                        "unit_count": [{
+                            "type": {
+                                "language_tag": "tr_TR",
+                                "value": "Adet"
+                            },
+                            "value": 1
+                        }],
+                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
                     },
                     "BONDING_ADHESIVES": {
                         "unit_count": [{
@@ -1434,6 +1469,8 @@ class AmazonListingManager:
         # Determine the product type
         if re.search(r"yapıştırıcısı", product_data['categoryName'], re.IGNORECASE):
             product_type = 'Zemin Kaplamaları Yapıştırıcısı'
+        elif product_data['categoryName'] == 'Dikiş Makinesi Aksesuarı':
+            product_type = 'Dikiş İğnesi'
         else:
             product_type = product_data['categoryName']
 
@@ -1481,6 +1518,10 @@ class AmazonListingManager:
 
         if raw_category_attrs["productType"] == "UTILITY_KNIFE":
             payload['attributes']['brand'][0]['value'] = "Myfloor"
+        
+        if raw_category_attrs["productType"] == "HAND_SEWING_NEEDLE":
+            del payload['attributes']['customer_package_type']
+
 
         specific_attrs = self.get_category_type_attrs(raw_category_attrs["productType"], product_data, self.attributes)
         payload["attributes"].update(specific_attrs)
