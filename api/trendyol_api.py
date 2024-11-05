@@ -1,268 +1,326 @@
-""" The lines `import json`, `import re`, `import time`, `import os`, and `import requests` are
- importing necessary modules in Python for working with JSON data, regular expressions, time-related
- functions, operating system functionalities, and making HTTP requests, respectively."""
-import json
-import re
-import time
 import os
+import json
+import time
+import re
 import requests
-from app.config import logger
+from typing import Optional, List, Dict, Union
+from dataclasses import dataclass
+from enum import Enum
+from app.config.logging_init import logger
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load environment variables from .env file
+env_path = Path('.') / '.env'
+load_dotenv(dotenv_path=env_path)
 
 
-auth_hash = os.environ.get('TRENDYOLAUTHHASH')
-store_id = os.environ.get('TRENDYOLSTOREID')
-headers = {
-    'User-Agent': f'{store_id} - SelfIntegration',
-    'Content-Type': 'application/json',
-    'Authorization': f'Basic {auth_hash}'
-}
+@dataclass
+class ProductData:
+    """Data class for product information"""
+    sku: str
+    barcode: Optional[str]
+    quantity: int
+    price: float
+    title: Optional[str] = None
+    product_main_id: Optional[str] = None
+    raw_data: Optional[Dict] = None
 
+class RequestType(Enum):
+    """Enum for HTTP request types"""
+    GET = "GET"
+    POST = "POST"
+    DELETE = "DELETE"
 
-def request_data(url_addons, request_type, payload_content):
+class TrendyolAPIError(Exception):
+    """Custom exception for Trendyol API errors"""
+    pass
+
+class TrendyolClient:
     """
-    The function `request_data` sends a request to a specified URL with specified headers, request type,
-    and payload content.
+    A client for interacting with the Trendyol API.
+    
+    This class provides methods for fetching, updating, and deleting product data
+    from Trendyol's e-commerce platform.
     """
-    payload = payload_content
-
-    url = f"https://api.trendyol.com/sapigw/suppliers/{store_id}/products{url_addons}"
-
-    while True:
-
-        api_request = requests.request(request_type, url, headers=headers, data=payload, timeout=3000)
-
-        if api_request.status_code == 200:
-
-            return api_request
-
-        if api_request.status_code == 400:
-
-            return None
-
-        time.sleep(1)
-
-        continue
-
-
-def prepare_data(product_data):
-    """
-    The function prepares the product_data by decoding the response from a request.
-
-    :param request_data: The parameter `request_data` is the product_data that is received from a request made
-    to an API or a server. It could be in the form of a JSON string or any other format
-    :return: the decoded product_data, which is a Python object obtained by parsing the response text as JSON.
-    """
-    response = product_data
-
-    decoded_data = json.loads(response.text)
-
-    return decoded_data
-
-
-def get_trendyol_stock_data(every_product: bool = False, local: bool = False, Filters=''):
-    """
-    The function `get_data` retrieves products product_data from multiple pages and appends it to a list.
-
-    """
-    page = 0
-
-    all_products = []
-
-    products = []
-
-    uri_addon = f"?page={page}&size=100" + Filters
-
-    decoded_data = prepare_data(request_data(uri_addon, "GET", {}))
-
-    while page < int(decoded_data['totalPages']):
-
-        for element in range(len(decoded_data['content'])):
-
-            data = decoded_data['content'][element]
-
-            item = data['stockCode']
-
-            if item:
-
-                pass
-
-            else:
-
-                item = data['productMainId']
-
-            if every_product:
-
-                all_products.append({'sku': item, 'data': data})
-
-            else:
-
-                item_id = data['barcode']
-
-                if item_id is None:
-
-                    pass
-
-                quantity = data['quantity']
-
-                price = data['salePrice']
-
-                products.append({
-                    "id": f"{item_id}",
-                    "sku": f"{item}",
-                    "quantity": quantity,
-                    "price": price
-                })
-
-        page += 1
-
-        uri_addon = re.sub(r"\?page=\d", f"?page={page}", uri_addon)
-
-        decoded_data = prepare_data(request_data(uri_addon, "GET", {}))
-
-    if every_product:
-
-        products = all_products
-
-    logger.info(f"Trendyol fetched {len(products)} products")   
-
-    return products
-
-
-def post_trendyol_data(product: dict):
-    """
-    The function `post_data` sends a POST request to a specified URL with a payload containing a list of
-    products.
-    """
-    uri_addon = "/price-and-inventory"
-
-    post_payload = json.dumps(
-        {
-            "items": [
-                {
-                    "barcode": product['id'],
-                    "quantity": int(product['quantity']),
-                    "salePrice": float(product['price'])
-                }
-            ]
-        })
-    post_response = request_data(uri_addon, "POST", post_payload)
-
-    if post_response.status_code == 200:
-
-        if re.search('failure', post_response.text):
-
-            logger.error(f"Request failure for product {product['code']} | Response: {post_response.text}")
-
-        else:
-
-            batch_requestid = json.loads(post_response.text)['batchRequestId']
-
-            while True:
-
-                batchid_request_raw = request_data(f'/batch-requests/{batch_requestid}', "GET", [])
-
-                batchid_request = json.loads(batchid_request_raw.text)
-
-                if batchid_request['items']:
-
-                    request_status = batchid_request['items'][0]['status']
-
-                    if request_status == 'SUCCESS':
-
-                        logger.info(f'Product with code: {product["sku"]}, New value: {product["quantity"]}, New price: {product["price"]} updated successfully')
-
-                        break
-
-                    elif request_status == 'FAILED':
-
-                        logger.error(f"""Product with code: {
-                            product["sku"]} failed to update || Reason: {
-                            batchid_request["items"][0]["failureReasons"]}""")
-
-                        break
-                else:
-
-                    pass
-
-    elif post_response.status_code == 429:
-
-        time.sleep(15)
-
-    else:
-
-        post_response.raise_for_status()
-
-        logger.error(f"""Request for product {
-               product['sku']} is unsuccessful | Response: {
-                   post_response.text}""")
-
-
-def delete_trendyol_product(ids, include_keyword, exclude_keyword=''):
-
-    url = "https://api.trendyol.com/sapigw/suppliers/120101/v2/products"
-    batch_url = "https://api.trendyol.com/sapigw/suppliers/120101/products/batch-requests/"
-    items = []
-
-    for item in ids:
-
-        if re.search(include_keyword, item['data']['title']):
-
-            if exclude_keyword:
-
-                if not re.search(exclude_keyword, item['data']['title']):
-
-                    items.append({"barcode": item['data']['barcode']})
-
-            items.append({"barcode": item['data']['barcode']})
-
-    payload = json.dumps({
-        "items": items
-    })
-
-    response = requests.request("DELETE", url, headers=headers, data=payload)
-
-    if response.status_code == 200:
-
-        response_json = json.loads(response.text)
-
+    
+    BASE_URL = "https://api.trendyol.com/sapigw/suppliers"
+    BATCH_SIZE = 100
+    MAX_RETRIES = 3
+    RATE_LIMIT_WAIT = 15
+    REQUEST_TIMEOUT = 3000
+
+    def __init__(self, store_id: Optional[str] = None, auth_hash: Optional[str] = None, logger=None):
+        """
+        Initialize the Trendyol client.
+        
+        Args:
+            store_id: The store ID for Trendyol API
+            auth_hash: The authentication hash for Trendyol API
+            logger: Optional custom logger instance
+        """
+        self.store_id = store_id or os.getenv('TRENDYOLSTOREID')
+        self.auth_hash = auth_hash or os.getenv('TRENDYOLAUTHHASH')
+        
+        if not self.store_id or not self.auth_hash:
+            raise ValueError("Store ID and Auth Hash must be provided either directly or through environment variables")
+        
+        self.headers = {
+            'User-Agent': f'{self.store_id} - SelfIntegration',
+            'Content-Type': 'application/json',
+            'Authorization': f'Basic {self.auth_hash}'
+        }
+
+    def _make_request(
+        self, 
+        endpoint: str, 
+        request_type: RequestType, 
+        payload: Optional[Dict] = None,
+        retries: int = MAX_RETRIES
+    ) -> requests.Response:
+        """
+        Make an HTTP request to the Trendyol API with retry logic.
+        
+        Args:
+            endpoint: API endpoint to call
+            request_type: Type of HTTP request
+            payload: Optional request payload
+            retries: Number of retries for failed requests
+            
+        Returns:
+            Response object from the API
+            
+        Raises:
+            TrendyolAPIError: If the request fails after all retries
+        """
+        url = f"{self.BASE_URL}/{self.store_id}{endpoint}"
+        payload_data = json.dumps(payload) if payload else {}
+        
+        for attempt in range(retries):
+            try:
+                response = requests.request(
+                    request_type.value,
+                    url,
+                    headers=self.headers,
+                    data=payload_data,
+                    timeout=self.REQUEST_TIMEOUT
+                )
+                
+                if response.status_code == 200:
+                    return response
+                elif response.status_code == 400:
+                    raise TrendyolAPIError(f"Malformed request: {response.text}")
+                elif response.status_code == 429:
+                    logger.warning("Rate limit reached, waiting...")
+                    time.sleep(self.RATE_LIMIT_WAIT)
+                    continue
+                    
+                response.raise_for_status()
+                
+            except requests.RequestException as e:
+                if attempt == retries - 1:
+                    raise TrendyolAPIError(f"Request failed after {retries} attempts: {str(e)}")
+                    
+                logger.error(f"Request attempt {attempt + 1} failed: {str(e)}")
+                time.sleep(2 ** attempt)  # Exponential backoff
+                
+        raise TrendyolAPIError(f"Request failed after {retries} attempts")
+
+    def _wait_for_batch_completion(self, batch_request_id: str) -> Dict:
+        """
+        Wait for a batch request to complete and return the result.
+        
+        Args:
+            batch_request_id: The ID of the batch request to monitor
+            
+        Returns:
+            Dict containing the batch request results
+        """
         while True:
+            response = self._make_request(
+                f'/batch-requests/{batch_request_id}',
+                RequestType.GET
+            )
+            batch_status = response.json()
+            
+            if batch_status.get('status') == 'COMPLETED':
+                return batch_status
+            
+            time.sleep(5)
 
-            request_response = requests.request(
-                "GET", batch_url + response_json['batchRequestId'], headers=headers, data=payload)
+    def get_stock_data(
+        self, 
+        include_full_data: bool = False, 
+        filters: str = '',
+        page_size: int = BATCH_SIZE
+    ) -> List[ProductData]:
+        """
+        Fetch product stock data from Trendyol.
+        
+        Args:
+            include_full_data: Whether to include complete product data
+            filters: Additional filters for the API request
+            page_size: Number of items per page
+            
+        Returns:
+            List of ProductData objects
+        """
+        
+        page = 0
+        products = []
+        
+        while True:
+            uri_addon = f"?page={page}&size={page_size}{filters}"
+            response = self._make_request(f"/products{uri_addon}", RequestType.GET)
+            data = response.json()
+            
+            if not data['content']:
+                break
+                
+            for item in data['content']:
+                # product = ProductData(
+                #     sku=item.get('stockCode') or item.get('productMainId'),
+                #     barcode=item.get('barcode'),
+                #     quantity=item.get('quantity', 0),
+                #     price=item.get('salePrice', 0.0),
+                #     title=item.get('title'),
+                #     product_main_id=item.get('productMainId'),
+                #     raw_data=item if include_full_data else None
+                # )
+                if include_full_data:
+                    product = {'sku': item.get('stockCode') or item.get('productMainId'), "data": item, "platform": "trendyol"}
+                else:
+                    product = {"sku": item.get('stockCode') or item.get('productMainId'),
+                               "barcode": item.get('barcode'),
+                               "quantity": item.get('quantity', 0),
+                               "price": item.get('salePrice', 0.0),
+                               "title": item.get('title'),
+                               "product_main_id": item.get('productMainId')}
+                products.append(product)
+            
+            if page >= int(data['totalPages']) - 1:
+                break
+                
+            page += 1
+            
+        logger.info(f"Retrieved {len(products)} products from Trendyol")
+        return products
 
-            if request_response.status_code == 200:
+    def update_product(self, product: ProductData) -> bool:
+        """
+        Update a product's price and inventory on Trendyol.
+        
+        Args:
+            product: ProductData object containing the update information
+            
+        Returns:
+            bool indicating success or failure
+        """
+        payload = {
+            "items": [{
+                "barcode": product.barcode,
+                "quantity": int(product.quantity),
+                "salePrice": float(product.price)
+            }]
+        }
+        
+        try:
+            response = self._make_request(
+                "/products/price-and-inventory",
+                RequestType.POST,
+                payload
+            )
+            
+            batch_status = self._wait_for_batch_completion(
+                response.json()['batchRequestId']
+            )
+            
+            if not batch_status['items']:
+                return False
+                
+            status = batch_status['items'][0]['status']
+            
+            if status == 'SUCCESS':
+                logger.info(
+                    f'Product {product.sku} updated: '
+                    f'quantity={product.quantity}, price={product.price}'
+                )
+                return True
+            else:
+                logger.error(
+                    f'Failed to update product {product.sku}: '
+                    f'{batch_status["items"][0].get("failureReasons")}'
+                )
+                return False
+                
+        except TrendyolAPIError as e:
+            logger.error(f"Error updating product {product.sku}: {str(e)}")
+            return False
 
-                batch_feedback = json.loads(request_response.text)
-                failed = []
-
-                if batch_feedback['status'] == 'IN_PROGRESS':
-
-                    time.sleep(5)
-
-                if batch_feedback['status'] == 'COMPLETED':                
-
-                    for item_report in batch_feedback['items']:
-
-                        if item_report['status'] == 'FAILED':
-
-                            failed.append({'barcode': item_report['requestItem']['barcode'], 'reason': item_report['failureReasons'][0]})
-
-                    if failed:
-
-                        logger.info(f"Successfully deleted products: {batch_feedback['itemCount']-len(failed)}\t\t\tFailed to delete: {len(failed)}")
-                        logger.error(f"Failed items:")
-                        for i, item in enumerate(failed):
-
-                            logger.error(f"{i+1}. {item['barcode']}: {item['reason']}")
-
-                        break
-
-                    else:
-
-                        logger.info(f"Successfully deleted products: {batch_feedback['itemCount']}")
-
-                        break
-
-
-# products = get_trendyol_stock_data(True, '&archived=True')
-# delete_trendyol_product(products, include_keyword="'lı", exclude_keyword="16'lı")
+    def delete_products(
+        self, 
+        products: List[ProductData], 
+        include_pattern: str,
+        exclude_pattern: Optional[str] = None
+    ) -> Dict[str, int]:
+        """
+        Delete multiple products from Trendyol based on title patterns.
+        
+        Args:
+            products: List of ProductData objects to potentially delete
+            include_pattern: Regex pattern for titles to include
+            exclude_pattern: Optional regex pattern for titles to exclude
+            
+        Returns:
+            Dict containing counts of successful and failed deletions
+        """
+        items_to_delete = []
+        
+        for product in products:
+            if not product.title or not product.barcode:
+                continue
+                
+            if re.search(include_pattern, product.title):
+                if exclude_pattern and re.search(exclude_pattern, product.title):
+                    continue
+                    
+                items_to_delete.append({"barcode": product.barcode})
+        
+        if not items_to_delete:
+            return {"successful": 0, "failed": 0}
+            
+        try:
+            response = self._make_request(
+                "/v2/products",
+                RequestType.DELETE,
+                {"items": items_to_delete}
+            )
+            
+            batch_status = self._wait_for_batch_completion(
+                response.json()['batchRequestId']
+            )
+            
+            failed_items = [
+                item for item in batch_status['items']
+                if item['status'] == 'FAILED'
+            ]
+            
+            for failed in failed_items:
+                logger.error(
+                    f"Failed to delete {failed['requestItem']['barcode']}: "
+                    f"{failed['failureReasons'][0]}"
+                )
+            
+            successful = batch_status['itemCount'] - len(failed_items)
+            logger.info(
+                f"Deleted {successful} products, {len(failed_items)} failed"
+            )
+            
+            return {
+                "successful": successful,
+                "failed": len(failed_items)
+            }
+            
+        except TrendyolAPIError as e:
+            logger.error(f"Error in batch deletion: {str(e)}")
+            return {"successful": 0, "failed": len(items_to_delete)}

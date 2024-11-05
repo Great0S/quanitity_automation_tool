@@ -4,10 +4,8 @@ import json
 import os
 import re
 import requests
-from app.config import logger
 import time
-import time
-import time
+from app.config.logging_init import logger
 
 
 class N11RestAPI:

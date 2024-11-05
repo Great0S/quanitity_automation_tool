@@ -4,6 +4,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from glob import glob
+from app.config.logging_init import logger
 import textwrap
 from urllib import parse
 import json
@@ -23,8 +24,12 @@ from sp_api.api import (
 )
 from sp_api.base.reportTypes import ReportType
 from datetime import datetime
-from app.config import logger
+from dotenv import load_dotenv
+from pathlib import Path
 
+# Load environment variables from .env file
+env_path = Path('.') / '.env'
+load_dotenv(dotenv_path=env_path)
 
 # DATA KIOSK API
 client = DataKiosk()
@@ -42,7 +47,6 @@ credentials = {
 }
 
 session = requests.session()
-# logger = logging.getLogger(__name__)
 
 
 def get_access_token():

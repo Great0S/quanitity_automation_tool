@@ -2,7 +2,7 @@ import json
 import os
 import re
 from woocommerce import API
-from app.config import logger
+from app.config.logging_init import logger
 
 
 wcapi = API(

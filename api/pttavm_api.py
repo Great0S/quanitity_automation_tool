@@ -6,12 +6,18 @@ import re
 import time
 import requests
 import xmltodict
-from app.config import logger
+from app.config.logging_init import logger
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load environment variables from .env file
+env_path = Path('.') / '.env'
+load_dotenv(dotenv_path=env_path)
 
 
-username = os.environ.get('PTTAVMUSERNAME')
-password = os.environ.get('PTTAVMPASSWORD')
-TedarikciId = os.environ.get('PTTAVMTEDARIKCIID')
+username = os.getenv('PTTAVMUSERNAME')
+password = os.getenv('PTTAVMPASSWORD')
+TedarikciId = os.getenv('PTTAVMTEDARIKCIID')
 
 
 def requestdata(method: str = 'POST', uri: str = '', params: dict = None, data: list = ''):

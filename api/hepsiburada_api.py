@@ -9,10 +9,9 @@ import time
 import json
 import requests
 from circuitbreaker import CircuitBreaker
-from app.config import logger
+from app.config.logging_init import logger
 
 products = []
-
 
 class Hb_API:
 
