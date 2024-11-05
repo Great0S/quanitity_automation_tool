@@ -4,7 +4,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from glob import glob
-import logging
 import textwrap
 from urllib import parse
 import json
