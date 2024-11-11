@@ -1,1357 +1,200 @@
 """ importing necessary modules and libraries for performing various
  tasks related to handling data, making HTTP requests, and working with concurrency """
 
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
-from glob import glob
-from app.config.logging_init import logger
-import textwrap
-from urllib import parse
-import json
+import asyncio
 import os
-import re
-import csv
-import io
-import time
-import requests
-from sp_api.api import DataKiosk
-from sp_api.api import (
-    ListingsItems,
-    ProductTypeDefinitions,
-    CatalogItems,
-    CatalogItemsVersion,
-    ReportsV2,
-)
-from sp_api.base.reportTypes import ReportType
-from datetime import datetime
-from dotenv import load_dotenv
+import json
 from pathlib import Path
-
-# Load environment variables from .env file
-env_path = Path('.') / '.env'
-load_dotenv(dotenv_path=env_path)
-
-# DATA KIOSK API
-client = DataKiosk()
-
-
-client_id = os.environ.get("LWA_APP_ID")
-client_secret = os.environ.get("LWA_CLIENT_SECRET")
-refresh_token = os.environ.get("SP_API_REFRESH_TOKEN")
-MarketPlaceID = os.environ.get("AMAZONTURKEYMARKETID")
-AmazonSA_ID = os.environ.get("AMAZONSELLERACCOUNTID")
-credentials = {
-    "refresh_token": refresh_token,
-    "lwa_app_id": client_id,
-    "lwa_client_secret": client_secret,
-}
-
-session = requests.session()
-
-
-def get_access_token():
-    """
-    The function `get_access_token` retrieves an access token by sending a POST request to a specified
-    URL with necessary parameters.
-    :return: The function `get_access_token` is returning the access token obtained from the API
-    response after making a POST request to the token URL with the provided payload containing the
-    client ID, client secret, and refresh token.
-    """
-
-    token_url = "https://api.amazon.com/auth/o2/token"
-
-    payload = f"""grant_type=refresh_token&client_id={client_id}&client_secret={
-        client_secret}&refresh_token={refresh_token}"""
-
-    headers = {"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"}
-
-    token_response = requests.request(
-        "POST", token_url, headers=headers, data=payload, timeout=300
-    )
-
-    response_content = json.loads(token_response.text)
-
-    access_token_data = response_content["access_token"]
-
-    return access_token_data
-
-
-def request_data(
-    session_data=None,
-    operation_uri="",
-    params: dict = None,
-    payload=None,
-    method="GET",
-    url=None,
-):
-    """
-    The function `request_data` sends a request to a specified API endpoint with optional parameters and
-    handles various response scenarios.
-    """
-
-    endpoint_url = f"https://sellingpartnerapi-eu.amazon.com{operation_uri}?"
-    request_url = ""
-
-    if params:
-
-        uri = "&".join([f"{k}={params[k]}" for k, v in params.items()])
-
-    else:
-
-        uri = ""
-
-    if url:
-
-        request_url = url
-
-    else:
-
-        request_url = endpoint_url + uri
-
-    # Get the current time
-    current_time = datetime.now(timezone.utc)
-
-    # Format the time in the desired format
-    formatted_time = current_time.strftime("%Y%m%dT%H%M%SZ")
-
-    access_token = get_access_token()
-
-    headers = {
-        "Accept-Encoding": "gzip",
-        "Content-Type": "application/json",
-        "x-amz-access-token": f"{access_token}",
-        "x-amz-date": formatted_time,
-    }
-    while True:
-
-        if session_data:
-
-            session_data.headers = headers
-            try:
-
-                init_request = session_data.get(f"{request_url}", data=payload)
-            except ConnectionError:
-
-                logger.error(
-                    "Amazon request had a ConnectionError, sleeping for 5 seconds!"
-                )
-
-                time.sleep(5)
-
-        else:
-
-            init_request = requests.request(
-                method, f"{request_url}", headers=headers, data=payload, timeout=30
-            )
-
-        if init_request.status_code in (200, 400):
-
-            if init_request.text:
-
-                jsonify = json.loads(init_request.text)
-
-            else:
-
-                logger.error("SP-API Has encountred an error. Try again later!")
-                jsonify = None
-
-            return jsonify
-
-        if init_request.status_code == 403:
-
-            session_data.headers["x-amz-access-token"] = access_token
-
-        elif init_request.status_code == 429:
-
-            time.sleep(65)
-
-        else:
-
-            error_message = json.loads(init_request.text)["errors"][0]["message"]
-
-            if re.search("not found", error_message):
-
-                return None
-
-            else:
-
-                logger.error(f"An error has occured || {error_message}")
-
-                return None
-
-
-def spapi_get_orders():
-    """
-    The function `spapi_get_orders` retrieves orders with a status of 'Shipped' from a specified
-    marketplace and processes them in batches of 30.
-    """
-
-    params = {
-        "MarketplaceIds": MarketPlaceID,
-        "OrderStatuses": "Shipped",
-        "MaxResultsPerPage": 100,
-        "CreatedAfter": "2019-10-07T17:58:48.017Z",
-    }
-
-    formatted_data = request_data("/orders/v0/orders/", params)["payload"]
-
-    orders = formatted_data["Orders"]
-
-    orders_dict = []
-
-    request_count = 1
-
-    count = 0
-
-    next_token = formatted_data.get("NextToken")
-
-    def spapi_getorderitems(max_requests, orders_list):
-        """
-        The function `spapi_getOrderItems` retrieves order items data for a list of orders and processes
-        it to extract basic order information.
-
-        :param max_requests: The `max_requests` parameter in the `spapi_getOrderItems` function
-        represents the maximum number of requests that can be made before processing the collected data.
-        In this case, it is used to control how many requests are made before processing the order items
-        data
-        :param orders_list: It seems like the code snippet you provided is incomplete. You mentioned
-        that you wanted to provide information about the `orders_list`, but the code snippet cuts off
-        before the `orders_list` is shown. Could you please provide the `orders_list` data so that I can
-        assist you further with understanding the
-        :return: The function `spapi_getOrderItems` returns the `orders_list` and `count` variables
-        after processing the order items and extracting basic information about each order.
-        """
-
-        count = 0
-        params = {"MarketplaceIds": MarketPlaceID}
-
-        items_dict = []
-        item_request_count = 1
-
-        with ThreadPoolExecutor(max_workers=7) as executor:
-
-            futures = []
-
-            for order in orders_list:
-
-                if "ASIN" not in order:
-
-                    futures.append(
-                        executor.submit(
-                            request_data,
-                            f"""/orders/v0/orders/{
-                            order['AmazonOrderId']}/orderItems""",
-                            params,
-                        )
-                    )
-
-                    item_request_count += 1
-
-                    if item_request_count % max_requests == 0:
-
-                        for future in futures:
-
-                            result = future.result()["payload"]
-
-                            if result:
-                                items_dict.append(result)
-
-                        orderbasic_info(orders_list=orders_list, item_list=items_dict)
-
-                        item_request_count = 0
-
-                        items_dict = []
-
-        return orders_list, count
-
-    def orderbasic_info(item_list, orders_list):
-        """
-        The function `orderBasic_info` processes item and order data to extract relevant information and
-        append it to a list.
-
-        :param item_list: The `item_list` parameter is a list containing information about items, such
-        as their ASIN, quantity shipped, price, seller SKU, title, etc. Each item in the list is
-        represented as a dictionary with various key-value pairs
-        :param orders_list: The function `orderbasic_info` takes two parameters: `item_list` and
-        `orders_list`. The `item_list` parameter is a list of items with their information, and the
-        `orders_list` parameter is a list of orders with order details
-        :return: The function `orderbasic_info` returns two values:
-        1. The updated `orders_list` after processing the item and order data.
-        2. The count of items processed and added to the `orders_list`.
-        """
-
-        city = None
-        county = None
-        count = 0
-
-        for order in orders_list:
-
-            for item_data in item_list:
-
-                if item_data["AmazonOrderId"] == order["AmazonOrderId"]:
-
-                    try:
-                        if (
-                            "ShippingAddress" in order
-                            and order["FulfillmentChannel"] == "MFN"
-                            and isinstance(order["ShippingAddress"], dict)
-                        ):
-                            city = order["ShippingAddress"]["City"]
-                            county = order["ShippingAddress"].get("County", None)
-
-                        # Create a dictionary for each item's information and append it to data_list
-                        if "ASIN" not in order:
-
-                            for item in item_data["OrderItems"]:
-
-                                data = {
-                                    "AmazonOrderId": order.get("AmazonOrderId", None),
-                                    "OrderStatus": order.get("OrderStatus", None),
-                                    "EarliestShipDate": order.get(
-                                        "EarliestShipDate", None
-                                    ),
-                                    "LatestShipDate": order.get("LatestShipDate", None),
-                                    "PurchaseDate": order.get("PurchaseDate", None),
-                                    "City": city,
-                                    "County": county,
-                                    "ASIN": item.get("ASIN", None),
-                                    "QuantityShipped": item.get(
-                                        "QuantityShipped", None
-                                    ),
-                                    "Amount": item["ItemPrice"]["Amount"],
-                                    "SellerSKU": item.get("SellerSKU", None),
-                                    "Title": item.get("Title", None),
-                                }
-                                orders_list.append(data)
-                                count += 1
-
-                    except KeyError:
-
-                        if order in orders_list:
-
-                            orders_list.remove(order)
-
-        for index, order in enumerate(orders_list):
-            for item_data in item_list:
-                if (
-                    item_data["AmazonOrderId"] == order["AmazonOrderId"]
-                    and "ASIN" not in order
-                ):
-                    del orders_list[index]
-
-        return orders_list, count
-
-    while orders:
-
-        futures = []
-
-        if next_token:
-            params = {
-                "MarketplaceIds": MarketPlaceID,
-                "NextToken": parse.quote(formatted_data["NextToken"]),
-            }
-
-            futures = request_data("/orders/v0/orders/", params)
-
-            result = futures["payload"]
-
-            next_token = result.get("NextToken", None)
-
-            orders = result.get("Orders")
-
-            request_count += 1
-
-            for oi in orders:
-
-                if orders_dict:
-
-                    for io in orders_dict:
-
-                        if io["AmazonOrderId"] == oi["AmazonOrderId"]:
-
-                            break
-
-                        count += 1
-
-                        orders_dict.append(oi)
-
-                        break
-                else:
-                    count += 1
-                    orders_dict.append(oi)
-
-            logger.info(f"{count} orders has been added")
-
-            if request_count % 30 == 0:
-                logger.info(f"Processing {count} orders please wait!")
-
-                spapi_getorderitems(30, orders_dict)
-
-                logger.info(
-                    f"Processed {count} orders || Orders left: {len(orders_dict) - count}"
-                )
-
-                request_count = 0
-
-            else:
-                pass
-
-    for data in orders_dict:
-
-        if "MarketplaceId" in data:
-
-            spapi_getorderitems(30, orders_dict)
-
-            break
-
-    return orders_dict
-
-
-def spapi_getlistings(every_product: bool = False, local: bool = False):
-    """
-    The function `spapi_getListings` retrieves a report from an API, downloads and decompresses the
-    report file, converts it from CSV to JSON format, and returns the inventory items as a list of
-    dictionaries.
-    """
-
-    def process_list_in_chunks(my_list, chunk_size=20):
-        """Processes a list in chunks of specified size.
-
-        Args:
-          my_list: The list to process.
-          chunk_size: The size of each chunk. Defaults to 20.
-
-        Yields:
-          A chunk of the list.
-        """
-        for i in range(0, len(my_list), chunk_size):
-            yield my_list[i : i + chunk_size]
-
-    if local:
-
-        dir_path = os.getcwd()
-        matching_files = glob(os.path.join(dir_path, f"*{file_saved}*"))
-
-        for file in matching_files:
-
-            if re.search(r"\.csv", file):
-
-                file_saved = file
-
-    products = []
-    report_items_request = ReportsV2().create_report(
-        reportType=ReportType.GET_MERCHANT_LISTINGS_ALL_DATA,
-        marketplaceIds=[MarketPlaceID],
-    )
-
-    while True:
-
-        report_items_response = ReportsV2().get_report(
-            reportId=report_items_request.payload["reportId"]
-        )
-
-        if report_items_response.payload["processingStatus"] == "DONE":
-
-            break
-
-        time.sleep(1)
-
-    get_report_items_document = ReportsV2().get_report_document(
-        reportDocumentId=report_items_response.payload["reportDocumentId"],
-        download=True,
-        decrypt=True,
-    )
-    report_string = get_report_items_document.payload["document"]
-
-    if report_string.startswith("\ufeff"):
-
-        report_string = report_string[1:]
-
-    report_items_document = io.StringIO(report_string)
-    report_reader = csv.DictReader(report_items_document, delimiter="\t")
-    report_items_data = list(report_reader)
-    products = [
-    {
-        "id": i["product-id"],
-        "sku": i["seller-sku"],
-        "listing-id": i["listing-id"],
-        "quantity": int(i["quantity"]),
-        "price": float(i['price']) if i['price'] else 0
-    }
-    for i in report_items_data
-    if "quantity" in i and not re.search(r"\_fba", i["seller-sku"])]
-
-    if not every_product:
-        return products
+import time
+import logging
+import re
+import textwrap
+from dotenv import load_dotenv
+import requests
+import io
+import csv
+from glob import glob
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict, dataclass
+from typing import Dict, List, Any, Optional, TypedDict, Union, Tuple
+from datetime import datetime, timezone
+from sp_api.base import Marketplaces, ReportType
+from sp_api.api import ProductTypeDefinitions, ListingsItems, ReportsV2, CatalogItems, ProductTypeDefinitions, ListingsItems, DataKiosk
+from sp_api.api.catalog_items.catalog_items import CatalogItemsVersion
+from urllib3 import Retry
+from app.config.logging_init import logger
+
+# Type definitions
+class ProductFeatures(TypedDict):
+    thickness: Union[int, str]
+    size_match: List[Union[int, float]]
+    feature: Optional[str]
+    shape: str
+
+class ProductAttribute(TypedDict):
+    attributeName: str
+    attributeValue: Any
+
+@dataclass
+class ListingReport:
+    """Data class for storing listing report information."""
+    report_id: str
+    document_id: str
+    status: str
+    data: Optional[List[Dict[str, Any]]] = None
+
+@dataclass
+class ProductData(TypedDict):
+    title: str
+    brand: str
+    description: str
+    images: List[Dict[str, str]]
+    attributes: List[ProductAttribute]
+    quantity: int
+    listPrice: float
+    salePrice: float
+    productMainId: str
+    stockCode: str
+    categoryName: str
+    catalog_data: Optional[Dict[str, Any]] = None
+    inventory_data: Optional[Dict[str, Any]] = None
+    pricing_data: Optional[Dict[str, Any]] = None
+
+@dataclass
+class AmazonConfig:
+    marketplace_id: str
+    seller_id: str
+
+class ListingFetchError(Exception):
+    """Custom exception for listing fetch errors."""
+    def __init__(self, message):
+        super().__init__(message)
+        logger.error(f"Error fetching listings: {message}")
+
+class RetryHandler:
+    """Handles retry logic with exponential backoff."""
     
-    items_skus = [
-        item["seller-sku"]
-        for item in report_items_data
-        if not re.search(r"\_fba", item["seller-sku"])
-    ]
-
-    catalog_item = CatalogItems()
-    catalog_item.version = CatalogItemsVersion.V_2022_04_01
-    items_skus_string_list = process_list_in_chunks(items_skus, 20)
-    start_time = time.time()
-    end_time = start_time + 2
-
-    while time.time() < end_time:
-
-        for sku_string in items_skus_string_list:
-
-            sku_strings = ",".join(sku_string)
-            catalog_items_request = catalog_item.search_catalog_items(
-                marketplaceIds=[MarketPlaceID],
-                includedData="attributes,identifiers,images,productTypes,summaries",
-                locale="tr_TR",
-                sellerId=AmazonSA_ID,
-                identifiersType="SKU",
-                identifiers=sku_strings,
-                pageSize=20,
-            )
-
-            if catalog_items_request:
-                for item in catalog_items_request.payload["items"]:
-
-                    summaries = item["summaries"][0]
-
-                    identifiers = {
-                        f"""{k}_{i['identifierType']}""": v
-                        for i in item["identifiers"][0]["identifiers"]
-                        for k, v in i.items()
-                    }
-
-                    sku = identifiers['identifier_SKU']
-                    attributes = item["attributes"]
-
-                    images = {
-                        f"""link{item['images'][0]['images'].index(i)}""": i["link"]
-                        for i in item["images"][0]["images"]
-                        for k, v in i.items()
-                        if v == 1000
-                    }
-
-                    combined_dict = {**identifiers, **summaries, **attributes, **images}
-
-                    for pd in products:
-
-                        if pd["sku"] == sku:
-
-                            pd["data"] = combined_dict
-
-            time.sleep(1)
-
-    # products = [
-    #     {"sku": kd['sku'], "data": f} for kd in products for k, v in kd.items() for c, f in v.items()
-    # ]
-    logger.info(f"Amazon fetched {len(products)} products")
-
-    return products
-
-
-
-def filter_order_data(orders_list, order, result, items):
-    """
-    The function `filter_orderData` updates order data in a list based on specified items and order
-    information.
-    """
-
-    for item in items:
-
-        try:
-
-            logger.info(result.get("AmazonOrderId", None))
-
-            data = {
-                "ASIN": item.get("ASIN", None),
-                "QuantityShipped": item.get("QuantityShipped", None),
-                "Amount": item["ItemPrice"]["Amount"],
-                "SellerSKU": item.get("SellerSKU", None),
-                "Title": item.get("Title", None),
-            }
-
-            for order_item in orders_list:
-
-                if result["AmazonOrderId"] == order_item["AmazonOrderId"]:
-
-                    orders_list.remove(order_item)
-
-                    order_item.update(data)
-
-                    orders_list.append(order_item)
-
-                    break
-
-        except KeyError:
-
-            if order in orders_list:
-
-                orders_list.remove(order)
-
-            continue
-
-    return orders_list
-
-
-def save_to_csv(data, filename=""):
-    """
-    The function `save_to_csv` takes a list of dictionaries, extracts keys from the dictionaries, and
-    writes the data to a CSV file.
-
-    :param data: The `data` parameter in the `save_to_csv` function is expected to be a list of
-    dictionaries where each dictionary represents a row of data to be written to the CSV file. Each
-    dictionary should have keys that represent the column headers in the CSV file, and the values
-    represent the data for each
-    :param filename: The `filename` parameter in the `save_to_csv` function is a string that represents
-    the name of the CSV file where the data will be saved. If no filename is provided, the default value
-    is an empty string
-    """
-
-    if data:
-
-        keys = set()
-
-        for item in data:
-
-            keys.update(item.keys())
-
-        with open(
-            f"{filename}_data_list.csv", "w", newline="", encoding="utf-8"
-        ) as csvfile:
-
-            file_writer = csv.DictWriter(csvfile, fieldnames=sorted(keys))
-
-            file_writer.writeheader()
-
-            for d in data:
-
-                file_writer.writerow(d)
-
-
-def spapi_add_listing(data):
-
-    for data_item in data.items():
-
-        data_items = data_item[1]
-
-        for product in data_items:
-            
-            product_data = product["data"]
-            product_sku = product_data['stockCode']
-            source_product_attrs = product_data["attributes"]
-            product_images = {}
-            bullet_points_list = textwrap.wrap(
-                product_data["description"], width=len(product_data["description"]) // 5
-            )
-            bullet_points = [{"value": bullet_point} for bullet_point in bullet_points_list]
-            size_match = [1, 1]
-            size = 1
-            color = None
-            feature = None
-            materyal = None
-            style = None
-            thickness = 1
-            shape = None
-
-            for i in enumerate(product_data["images"]):
-
-                if i[0] == 0:
-
-                    product_images["main_product_image_locator"] = [
-                        {"media_location": i[1]["url"]}
-                    ]
-
-                else:
-
-                    product_images[f"other_product_image_locator_{i[0]}"] = [
-                        {"media_location": i[1]["url"]}
-                    ]
-
-            for atrr in source_product_attrs:
-
-                if re.search("Boyut/Ebat", atrr["attributeName"]) or re.search(
-                    "Beden", atrr["attributeName"]
-                ):
-                    if isinstance(atrr["attributeValue"], (int, float)):
-                        size = atrr["attributeValue"]
-                        size_match = atrr["attributeValue"].split("x")
-
-                if re.search(r"Renk|Color", atrr["attributeName"]):
-
-                    color = atrr["attributeValue"]
-
-                if re.search("Özellik", atrr["attributeName"]):
-
-                    feature = atrr["attributeValue"]
-
-                if re.search("Materyal", atrr["attributeName"]):
-
-                    materyal = atrr["attributeValue"]
-
-                if re.search("Tema", atrr["attributeName"]):
-
-                    style = atrr["attributeValue"]
-
-                if re.search("Hav Yüksekliği", atrr["attributeName"]):
-
-                    thickness = atrr["attributeValue"]
-                    match = re.search(r"\d+", thickness)
-
-                    if match:
-
-                        result = match.group()
-                        thickness = result
-
-                if re.search("Şekil", atrr["attributeName"]):
-
-                    shape = atrr["attributeValue"]
-
-                else:
-
-                    shape = "Dikdörtgen"
-
-            while True:
-                try:
-
-                    product_definitions = ProductTypeDefinitions().search_definitions_product_types(
-                        itemName=product_data["categoryName"],
-                        marketplaceIds=MarketPlaceID,
-                        searchLocale="tr_TR",
-                        locale="tr_TR",
-                    )
-                    
-                    if product_definitions.payload['productTypes'] is not []:
-                        
-                        break
-
-                except Exception as e:
-
-                    time.sleep(3)
-                    continue            
-
-            product_attrs = ProductTypeDefinitions().get_definitions_product_type(
-                productType=product_definitions.payload["productTypes"][0]["name"],
-                marketplaceIds=MarketPlaceID,
-                requirements="LISTING",
-                locale="tr_TR",
-            )
-            if product_attrs:
-                file_path = f'amazon_{product_attrs.payload["productType"]}_attrs.json'
-                if os.path.isfile(file_path):
-                    pass
-                else:
-                    product_scheme = requests.get(
-                        url=product_attrs.payload["schema"]["link"]["resource"]
-                    )
-                    scheme_json = json.loads(product_scheme.text)
-                    category_attrs = extract_category_item_attrs(
-                        file_data=scheme_json,
-                        file_name=product_attrs.payload["productType"],
-                    )
-                data_payload = {
-                    "productType": product_attrs.payload["productType"],
-                    "requirements": "LISTING",
-                    "attributes": {
-                        "item_name": [{"value": product_data["title"]}],  #
-                        "brand": [{"value": product_data["brand"]}],  #
-                        "supplier_declared_has_product_identifier_exemption": [
-                            {"value": True}
-                        ],  #
-                        "recommended_browse_nodes": [{"value": "13028044031"}],  #
-                        "bullet_point": bullet_points,  #
-                        "condition_type": [{"value": "new_new"}],  #
-                        "fulfillment_availability": [
-                            {
-                                "fulfillment_channel_code": "DEFAULT",
-                                "quantity": product_data["quantity"],
-                                "lead_time_to_ship_max_days": "5",
-                            }
-                        ],  #
-                        "gift_options": [
-                            {"can_be_messaged": "false", "can_be_wrapped": "false"}
-                        ],  #
-                        "generic_keyword": [
-                            {"value": product_data["title"].split(" ")[0]}  #
-                        ],
-                        "list_price": [
-                            {
-                                "currency": "TRY",
-                                "value_with_tax": product_data["listPrice"],
-                            }
-                        ],  #
-                        "manufacturer": [
-                            {"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti."}
-                        ],
-                        "material": [{"value": materyal}],  #
-                        "model_number": [{"value": product_data["productMainId"]}],  #
-                        "number_of_items": [{"value": 1}],  #
-                        "color": [{"value": color}],  #
-                        "size": [{"value": size}],  #
-                        "style": [{"value": style}],  #
-                        "part_number": [{"value": product_sku}],  #
-                        "pattern": [{"value": "Düz"}],  #
-                        "product_description": [
-                            {"value": product_data["description"]}
-                        ],  #
-                        "purchasable_offer": [
-                        {
-                            "currency": "TRY",
-                            "our_price": [
-                                {
-                                    "schedule": [
-                                        {
-                                            "value_with_tax": product_data[
-                                                "salePrice"
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ],
-                        }
-                    ],  #
-                        "country_of_origin": [{"value": "TR"}],  #
-                         #
-                        "package_level": [{"value": "unit"}],
-                        "customer_package_type": [{"value": "Standart Paketleme"}],
-                    },
-                    "offers": [
-                        {
-                            "offerType": "B2C",
-                            "price": {
-                                "currency": "TRY",
-                                "currencyCode": "TRY",
-                                "amount": product_data["salePrice"],
-                            },
-                        }
-                    ],
-                }
-                category_attrs_list = {
-                    "RUG": {
-                        "product_site_launch_date": [
-                            {"value": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
-                        ], 
-                         "included_components": [
-                            {"value": f"Tek adet {product_data['title']}"}
-                        ],  #
-                         "item_dimensions": [
-                            {
-                                "length": {"value": thickness, "unit": "millimeters"},
-                                "width": {
-                                    "value": size_match[1],
-                                    "unit": "centimeters",
-                                },
-                                "height": {
-                                    "value": size_match[0],
-                                    "unit": "centimeters",
-                                },
-                            }
-                        ],
-                        "special_feature": [{"value": feature}],
-                        "item_shape": [{"value": shape}],
-                        "pile_height": [{"value": "Düşük Hav"}],
-                        "item_thickness": [
-                            {"decimal_value": thickness, "unit": "millimeters"}
-                        ],
-                        "item_length_width": [
-                            {
-                                "length": {
-                                    "unit": "centimeters",
-                                    "value": size_match[0],
-                                },
-                                "width": {
-                                    "unit": "centimeters",
-                                    "value": size_match[1],
-                                },
-                            }
-                        ],
-                        "rug_form_type": [{"value": "doormat"}],
-                    },
-                    "LITTER_BOX": {
-                        "included_components": [
-                            {"value": f"Tek adet {product_data['title']}"}
-                        ],  
-                        "target_audience_keyword": [
-                            {
-                                "value": "Kediler",
-                            }
-                        ],
-                        "model_name": [
-                            {
-                                "value": product_data["productMainId"],
-                            }
-                        ],
-                        "litter_box_type": [{"value": "disposable_litter_box"}],
-                        "directions": [{"value": "Kedi tuvalet matı, kum taneciklerinin evin diğer bölgelerine yayılmasını önler. Tuvalet kabının önüne yerleştirilir ve düzenli olarak temizlenir. Haftada en az bir kez yıkanmalı ve ayda bir kez derinlemesine temizlenmelidir. Matın boyutu, tuvalet kabına uygun olmalı ve su geçirmez bir malzeme tercih edilmelidir."}],
-                        "item_length_width_height": [
-                        {
-                            "length": {
-                                "value": thickness,
-                                "unit": "millimeters",
-                            },
-                            "width": {
-                                "value": size_match[1],
-                                "unit": "centimeters",
-                            },
-                            "height": {
-                                "value": size_match[0],
-                                "unit": "centimeters",
-                            },
-                        }
-                    ],
-                        "specific_uses_for_product": [{"value": "Cats"}],
-                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
-                        "rtip_manufacturer_contact_information": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti; +90 552 361 11 11"}],
-                        "warranty_description": [{"value": "30 Days"}],
-                        "is_oem_authorized": [{"value": True}],
-                        "oem_equivalent_part_number": [{"value": product_data["productMainId"]}],
-                        "unit_count": [{"type": {"language_tag":"tr_TR", "value":"Adet"}, "value": 1}]
-                    },
-                    "EXERCISE_MAT": {
-                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
-                        "sport_type": [{"value": "Pilates"}],
-                        "item_length_width_thickness": [
-                            {
-                                "thickness": {
-                                    "value": thickness,
-                                    "unit": "millimeters",
-                                },
-                                "width": {
-                                    "value": size_match[1],
-                                    "unit": "centimeters",
-                                },
-                                "length": {
-                                    "value": size_match[0],
-                                    "unit": "centimeters",
-                                },
-                            }
-                        ],
-                    },
-                    "UTILITY_KNIFE": {
-                        "supplier_declared_dg_hz_regulation": "not_applicable",
-                    },
-                }
-                data_payload["attributes"].update(product_images)
-                data_payload["attributes"].update(
-                    category_attrs_list[product_attrs.payload["productType"]]
-                )
-                while True:
-                    try:
-                        listing_add_request = ListingsItems().put_listings_item(
-                            sellerId=AmazonSA_ID,
-                            sku=product_sku,
-                            marketplaceIds=["A33AVAJ2PDY3EV"],
-                            body=data_payload,
-                        )
-                        break
-                    except Exception as e:
-                        time.sleep(3)
-                        continue
-                if (
-                    listing_add_request
-                    and listing_add_request.payload["status"] == "ACCEPTED"
-                ):
-                    logger.info(
-                        f"""New product added with code: {
-                        product_sku}, qty: {product_data['quantity']}"""
-                    )
-                else:
-                    logger.error(
-                        f"""New product with code: {product_sku} creation has failed
-                            || Reason: {listing_add_request}"""
-                    )
-
-
-def extract_category_item_attrs(file_data, file_name=""):
-
-    amazon_attrs = file_data
-    processed_attrs = {}
-    temporary_attr = {}
-
-    # Get the 'properties' from the loaded JSON
-    properties = amazon_attrs.get("properties", {})
-
-    for attribute_name, attribute_details in properties.items():
-
-        sub_attributes = attribute_details
-        temporary_attr[attribute_name] = {}
-
-        if "items" in sub_attributes:
-            items_attributes = sub_attributes["items"]
-            items_properties = items_attributes.get("properties", {})
-
-            for property_name, property_details in items_properties.items():
-                temporary_attr[attribute_name][property_name] = {}
-
-                if "examples" in property_details:
-                    temporary_attr[attribute_name][property_name] = (
-                        property_details.get("examples", [None])[0]
-                    )
-                else:
-                    if "items" in property_details:
-                        nested_items = property_details["items"]
-
-                        if "required" in nested_items:
-                            for required_obj in nested_items.get("required", []):
-                                temporary_attr[attribute_name][property_name][
-                                    required_obj
-                                ] = {}
-
-                                if "properties" in nested_items.get("properties", {}):
-                                    obj_properties = nested_items["properties"].get(
-                                        required_obj, {}
-                                    )
-                                    temporary_attr[attribute_name][property_name][
-                                        required_obj
-                                    ] = obj_properties.get("examples", [None])[0]
-                                else:
-                                    nested_properties = (
-                                        nested_items["properties"]
-                                        .get(required_obj, {})
-                                        .get("items", {})
-                                    )
-
-                                    if "properties" in nested_properties:
-                                        for sub_required in nested_properties.get(
-                                            "required", []
-                                        ):
-                                            sub_property_details = nested_properties[
-                                                "properties"
-                                            ].get(sub_required, {})
-                                            temporary_attr[attribute_name][
-                                                property_name
-                                            ][required_obj][
-                                                sub_required
-                                            ] = sub_property_details.get(
-                                                "examples", [None]
-                                            )[
-                                                0
-                                            ]
-                    else:
-                        if "properties" in property_details:
-                            for (
-                                inner_property_name,
-                                inner_property_details,
-                            ) in property_details["properties"].items():
-                                temporary_attr[attribute_name][property_name][
-                                    inner_property_name
-                                ] = inner_property_details.get("examples", [None])[0]
-
-        # Determine the type of the attribute
-        attribute_type = sub_attributes.get("type")
-
-        if attribute_type == "array":
-            processed_attrs[attribute_name] = [temporary_attr[attribute_name]]
-        else:
-            processed_attrs[attribute_name] = temporary_attr[attribute_name]
-
-    # Save the result to a new JSON file
-    with open(f"amazon_{file_name}_attrs.json", "w", encoding="utf-8") as attrFile:
-        json.dump(processed_attrs, attrFile, indent=4)
-    return processed_attrs
-
-class AmazonListingManager:
-
-    def __init__(self) -> None:
-        
-        self.marketplace_id = os.environ.get("AMAZONTURKEYMARKETID")
-        self.seller_id = os.environ.get("AMAZONSELLERACCOUNTID")
-
-    def retry_with_backoff(self, func, *args, retries=5, **kwargs):
-        """
-        Retries a function with exponential backoff.
-
-        Args:
-            func (function): The function to retry.
-            *args: Positional arguments for the function.
-            retries (int): Number of retry attempts.
-            **kwargs: Keyword arguments for the function.
-
-        Returns:
-            Any: The result of the function if successful.
-
-        Raises:
-            Exception: If the function fails after all retries.
-        """
+    @staticmethod
+    def retry_with_backoff(func: callable, *args, retries: int = 5, **kwargs) -> Any:
         attempt = 0
         while attempt < retries:
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying...")
-                time.sleep(2 ** attempt)  # Exponential backoff
+                logging.warning(f"Attempt {attempt + 1} failed: {e}. Retrying...")
+                time.sleep(2 ** attempt)
                 attempt += 1
         raise Exception(f"All {retries} retries failed for function {func.__name__}")
 
-    def fetch_category_attributes(self, category_name):
-        """
-        Fetches category-specific attributes based on the product type.
+class AttributeManager:
+    """Handles attribute-related operations for Amazon listings."""
+    
+    @staticmethod
+    def extract_attributes(attributes: List[ProductAttribute]) -> Dict[str, Any]:
+        """Extracts and processes product attributes."""
+        default_attrs = {
+            "size_match": [1, 1],
+            "size": 1,
+            "color": None,
+            "feature": None,
+            "material": "N/A",
+            "style": None,
+            "thickness": 1,
+            "shape": "Dikdörtgen"
+        }
+        
+        attr_patterns = {
+            r"Boyut/Ebat|Beden": lambda v: ("size", "size_match", v),
+            r"Renk|Color": lambda v: ("color", v),
+            r"Özellik": lambda v: ("feature", v),
+            r"Materyal": lambda v: ("material", v),
+            r"Tema": lambda v: ("style", v),
+            r"Hav Yüksekliği": lambda v: ("thickness", re.search(r"\d+", v).group() if re.search(r"\d+", v) else 1),
+            r"Şekil": lambda v: ("shape", v)
+        }
+        
+        for attr in attributes:
+            attr_name = attr["attributeName"]
+            attr_value = attr["attributeValue"]
+            
+            for pattern, processor in attr_patterns.items():
+                if re.search(pattern, attr_name):
+                    result = processor(attr_value)
+                    if len(result) == 3:  # Special case for size
+                        if isinstance(attr_value, (int, float)):
+                            default_attrs[result[0]] = attr_value
+                            default_attrs[result[1]] = str(attr_value).split("x")
+                    else:
+                        default_attrs[result[0]] = result[1]
+                    break
+                    
+        return default_attrs
 
-        Args:
-            category_name (str): The name of the product category.
-
-        Returns:
-            dict: Category attributes for the product.
-        """
-        while True:
-            product_definitions = self.retry_with_backoff(
-                ProductTypeDefinitions().search_definitions_product_types,
-                itemName=category_name,
-                marketplaceIds=self.marketplace_id,
-                searchLocale="tr_TR",
-                locale="tr_TR",
-            )
-            if len(product_definitions.payload['productTypes']) > 0:
-                break
-
-            logger.warning(f"The product type {category_name} was not found. using the default type!")
-
-            product_definitions = self.retry_with_backoff(
-                    ProductTypeDefinitions().search_definitions_product_types,
-                    itemName='Halı',
-                    marketplaceIds=self.marketplace_id,
-                    searchLocale="tr_TR",
-                    locale="tr_TR",
-                    )
-            break
-
+class CategoryManager:
+    """Manages category-related operations for Amazon listings."""
+    
+    def __init__(self, config: AmazonConfig):
+        self.config = config
+        self.retry = RetryHandler.retry_with_backoff
+        
+    def fetch_category_attributes(self, category_name: str) -> tuple:
+        """Fetches category-specific attributes."""
+        product_definitions = self._get_product_definitions(category_name)
         product_type = product_definitions.payload["productTypes"][0]["name"]
-
-        product_attrs = self.retry_with_backoff(
+        
+        product_attrs = self.retry(
             ProductTypeDefinitions().get_definitions_product_type,
             productType=product_type,
-            marketplaceIds=self.marketplace_id,
+            marketplaceIds=self.config.marketplace_id,
             requirements="LISTING",
             locale="tr_TR",
         )
-
-        return self.download_attribute_schema(product_attrs.payload)
-
-    def get_category_type_attrs(self, product_type, product_data, features: dict):
-
-        thickness = features['thickness']
-        size_match = features['size_match']
-        feature = features['feature']
-        shape = features['shape']
-
-        category_attrs_list = {
-                    "RUG": {
-                        "product_site_launch_date": [
-                            {"value": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
-                        ], 
-                         "included_components": [
-                            {"value": f"Tek adet {product_data['title']}"}
-                        ],  #
-                         "item_dimensions": [
-                            {
-                                "length": {"value": thickness, "unit": "millimeters"},
-                                "width": {
-                                    "value": size_match[1],
-                                    "unit": "centimeters",
-                                },
-                                "height": {
-                                    "value": size_match[0],
-                                    "unit": "centimeters",
-                                },
-                            }
-                        ],
-                        "special_feature": [{"value": feature}],
-                        "item_shape": [{"value": shape}],
-                        "pile_height": [{"value": "Düşük Hav"}],
-                        "item_thickness": [
-                            {"decimal_value": thickness, "unit": "millimeters"}
-                        ],
-                        "item_length_width": [
-                            {
-                                "length": {
-                                    "unit": "centimeters",
-                                    "value": size_match[0],
-                                },
-                                "width": {
-                                    "unit": "centimeters",
-                                    "value": size_match[1],
-                                },
-                            }
-                        ],
-                        "rug_form_type": [{"value": "doormat"}],
-                    },
-                    "LITTER_BOX": {
-                        "included_components": [
-                            {"value": f"Tek adet {product_data['title']}"}
-                        ],  
-                        "target_audience_keyword": [
-                            {
-                                "value": "Kediler",
-                            }
-                        ],
-                        "model_name": [
-                            {
-                                "value": product_data["productMainId"],
-                            }
-                        ],
-                        "litter_box_type": [{"value": "disposable_litter_box"}],
-                        "item_length_width_height": [
-                        {
-                            "length": {
-                                "value": thickness,
-                                "unit": "millimeters",
-                            },
-                            "width": {
-                                "value": size_match[1],
-                                "unit": "centimeters",
-                            },
-                            "height": {
-                                "value": size_match[0],
-                                "unit": "centimeters",
-                            },
-                        }
-                    ],
-                        "specific_uses_for_product": [{"value": "Cats"}],
-                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
-                        "rtip_manufacturer_contact_information": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti; +90 552 361 11 11"}],
-                        "warranty_description": [{"value": "30 Days"}],
-                        "unit_count": [{"type": {"language_tag":"tr_TR", "value":"Adet"}, "value": 1}]
-                    },
-                    "EXERCISE_MAT": {
-                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
-                        "sport_type": [{"value": "Pilates"}],
-                        "item_length_width_thickness": [
-                            {
-                                "thickness": {
-                                    "value": thickness,
-                                    "unit": "millimeters",
-                                },
-                                "width": {
-                                    "value": size_match[1],
-                                    "unit": "centimeters",
-                                },
-                                "length": {
-                                    "value": size_match[0],
-                                    "unit": "centimeters",
-                                },
-                            }
-                        ],
-                    },
-                    "VEHICLE_MAT": {
-                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
-                        "warranty_description": [{"value": ""}],
-                        "included_components": [{"value": f"Tek adet {product_data['title']}"}],
-                        "is_fragile": [{"value": False}],
-                        "automotive_fit_type": [{"value": "universal_fit"}],
-                        "model_name": [{"value": product_data["productMainId"]}],
-                        "item_length_width_thickness": [
-                            {
-                                "thickness": {
-                                    "value": thickness,
-                                    "unit": "millimeters",
-                                },
-                                "width": {
-                                    "value": size_match[1],
-                                    "unit": "centimeters",
-                                },
-                                "length": {
-                                    "value": size_match[0],
-                                    "unit": "centimeters",
-                                },
-                            }
-                        ],
-                    },
-                    "UTILITY_KNIFE": {
-                        "unit_count": [{
-                            "type": {
-                                "language_tag": "tr_TR",
-                                "value": "Adet"
-                            },
-                            "value": 1
-                        }],
-                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
-                        "model_name": [{"value": product_data["productMainId"]}],
-                        "included_components": [{"value": f"Tek adet {product_data['title']}"}],
-                        "power_source_type": [{"value": "hand_powered"}],
-                    },
-                    "ADHESIVE_TAPES": {
-                        "unit_count": [{
-                            "type": {
-                                "language_tag": "tr_TR",
-                                "value": "metre"
-                            },
-                            "value": 1
-                        }],
-                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
-                        "included_components": [{"value": f"Tek adet {product_data['title']}"}],
-                    },
-                    "HAND_SEWING_NEEDLE": {
-                        "unit_count": [{
-                            "type": {
-                                "language_tag": "tr_TR",
-                                "value": "Adet"
-                            },
-                            "value": 1
-                        }],
-                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
-                    },
-                    "BONDING_ADHESIVES": {
-                        "unit_count": [{
-                            "type": {
-                                "value": "gram"
-                            },
-                            "value": 1
-                        }],
-                        "supplier_declared_dg_hz_regulation": [{"value": "not_applicable"}],
-                        "included_components": [{"value": f"Tek adet {product_data['title']}"}],
-                    },
-                }
-        return category_attrs_list[product_type]
-
-    def download_attribute_schema(self, raw_category_attrs):
-        """
-        Downloads and caches the attribute schema for a product type.
-
-        Args:
-            raw_category_attrs (dict): The product attribute data.
-
-        Returns:
-            dict: The schema for the product attributes.
-        """
+        
+        return self._download_attribute_schema(product_attrs.payload)
+    
+    def _get_product_definitions(self, category_name: str):
+        """Gets product definitions, falling back to default if necessary."""
+        while True:
+            definitions = self.retry(
+                ProductTypeDefinitions().search_definitions_product_types,
+                itemName=category_name,
+                marketplaceIds=self.config.marketplace_id,
+                searchLocale="tr_TR",
+                locale="tr_TR",
+            )
+            
+            if len(definitions.payload['productTypes']) > 0:
+                return definitions
+                
+            logging.warning(f"Product type {category_name} not found, using default type.")
+            return self.retry(
+                ProductTypeDefinitions().search_definitions_product_types,
+                itemName='Halı',
+                marketplaceIds=self.config.marketplace_id,
+                searchLocale="tr_TR",
+                locale="tr_TR",
+            )
+    
+    def _download_attribute_schema(self, raw_category_attrs: Dict) -> tuple:
+        """Downloads and caches the attribute schema."""
         file_path = f'amazon_{raw_category_attrs["productType"]}_attrs.json'
+        
         if os.path.isfile(file_path):
             with open(file_path, 'r') as file:
                 return raw_category_attrs, json.load(file)
-        else:
-            product_scheme = requests.get(url=raw_category_attrs["schema"]["link"]["resource"])
-            scheme_json = product_scheme.json()
-            category_attrs = extract_category_item_attrs(file_data=scheme_json, file_name=raw_category_attrs["productType"])
-            with open(file_path, 'w') as file:
-                json.dump(category_attrs, file)
-            return raw_category_attrs, category_attrs
-
-    def extract_category_item_attrs(self, file_data, file_name=""):
-        """
-        Extracts and processes the attribute properties from Amazon category item data.
-
-        Args:
-            file_data (dict): The JSON data containing Amazon item attributes.
-            file_name (str): The name to be used when saving the extracted attributes to a file.
-
-        Returns:
-            dict: A dictionary of processed attributes.
-        """
-
-        processed_attrs = {}
-
-        # Get the 'properties' from the loaded JSON
-        properties = file_data.get("properties", {})
-
-        def process_property_details(property_details):
-            """
-            Processes the property details, extracting examples or nested required properties.
-
-            Args:
-                property_details (dict): The details of a property.
-
-            Returns:
-                dict or any: Processed property details or the example value if available.
-            """
+        
+        product_scheme = requests.get(raw_category_attrs["schema"]["link"]["resource"])
+        scheme_json = product_scheme.json()
+        category_attrs = self._extract_category_item_attrs(scheme_json, raw_category_attrs["productType"])
+        
+        with open(file_path, 'w') as file:
+            json.dump(category_attrs, file)
+            
+        return raw_category_attrs, category_attrs
+    
+    def _extract_category_item_attrs(self, file_data: Dict, file_name: str = "") -> Dict:
+        """Extracts category item attributes from schema."""
+        def process_property_details(property_details: Dict) -> Any:
             if "examples" in property_details:
                 return property_details.get("examples", [None])[0]
             if "items" in property_details:
@@ -1368,245 +211,691 @@ class AmazonListingManager:
                 }
             return {}
 
+        processed_attrs = {}
+        properties = file_data.get("properties", {})
+
         for attribute_name, attribute_details in properties.items():
             attribute_type = attribute_details.get("type")
             processed_attr = process_property_details(attribute_details)
+            processed_attrs[attribute_name] = [processed_attr] if attribute_type == "array" else processed_attr
 
-            if attribute_type == "array":
-                processed_attrs[attribute_name] = [processed_attr]
-            else:
-                processed_attrs[attribute_name] = processed_attr
-
-        # Save the result to a new JSON file
         with open(f"amazon_{file_name}_attrs.json", "w", encoding="utf-8") as attrFile:
             json.dump(processed_attrs, attrFile, indent=4)
 
         return processed_attrs
-
-    def extract_attributes(self, attributes):
-        """
-        Extracts relevant attributes from the product's attributes.
-
-        Args:
-            attributes (list): List of product attributes.
-
-        Returns:
-            dict: Extracted attributes.
-        """
-        size_match = [1, 1]
-        size, color, feature, materyal, style, thickness, shape = 1, None, None, "N/A", None, 1, "Dikdörtgen"
-
-        for attr in attributes:
-            attr_name = attr["attributeName"]
-            attr_value = attr["attributeValue"]
-            if re.search(r"Boyut/Ebat|Beden", attr_name):
-                if isinstance(attr_value, (int, float)):
-                    size = attr_value
-                    size_match = str(attr_value).split("x")
-            elif re.search(r"Renk|Color", attr_name):
-                color = attr_value
-            elif re.search(r"Özellik", attr_name):
-                feature = attr_value
-            elif re.search(r"Materyal", attr_name):
-                materyal = attr_value
-            elif re.search(r"Tema", attr_name):
-                style = attr_value
-            elif re.search(r"Hav Yüksekliği", attr_name):
-                match = re.search(r"\d+", attr_value)
-                if match:
-                    thickness = match.group()
-            elif re.search(r"Şekil", attr_name):
-                shape = attr_value
-
-        return {
-            "size": size,
-            "size_match": size_match,
-            "color": color,
-            "feature": feature,
-            "style": style,
-            "material": materyal,
-            "thickness": thickness,
-            "shape": shape,
-        }
-
-    def build_image_payload(self, images):
-        """
-        Builds the image payload for the listing.
-
-        Args:
-            images (list): List of image URLs.
-
-        Returns:
-            dict: Image payload dictionary.
-        """
+        
+class PayloadBuilder:
+    """Builds payloads for Amazon listing operations."""
+    
+    @staticmethod
+    def build_image_payload(images: List[Dict[str, str]]) -> Dict[str, List[Dict[str, str]]]:
+        """Builds the image payload structure."""
         product_images = {}
         for i, image in enumerate(images):
-            if i == 0:
-                product_images["main_product_image_locator"] = [{"media_location": image["url"]}]
-            else:
-                product_images[f"other_product_image_locator_{i}"] = [{"media_location": image["url"]}]
+            key = "main_product_image_locator" if i == 0 else f"other_product_image_locator_{i}"
+            product_images[key] = [{"media_location": image["url"]}]
         return product_images
+    
+    @staticmethod
+    def build_bullet_points(description: str) -> List[Dict[str, str]]:
+        """Builds bullet points from product description."""
+        if not description:
+            return [{'value': ''}]
+        bullet_points_list = textwrap.wrap(description, width=len(description) // 5)
+        return [{"value": bullet_point} for bullet_point in bullet_points_list]
+
+class AmazonListingManager:
+    """Main class for managing Amazon listings."""
    
-    def build_payload(self, product_data):
+    def __init__(self):
+        self.config = AmazonConfig(
+            marketplace_id=os.environ.get("AMAZONTURKEYMARKETID"),
+            seller_id=os.environ.get("AMAZONSELLERACCOUNTID")
+        )
+        self.category_manager = CategoryManager(self.config)
+        self.retry = RetryHandler.retry_with_backoff
+        self.attribute_manager = AttributeManager()
+        self.payload_builder = PayloadBuilder()
+
+        # Load environment variables from .env file
+        env_path = Path('.') / '.env'
+        load_dotenv(dotenv_path=env_path)
+
+        # DATA KIOSK API
+        self.client = DataKiosk()
+        self.client_id = os.environ.get("LWA_APP_ID")
+        self.client_secret = os.environ.get("LWA_CLIENT_SECRET")
+        self.refresh_token = os.environ.get("SP_API_REFRESH_TOKEN")
+        self.marketplace_id = os.environ.get("AMAZONTURKEYMARKETID")
+        self.amazon_sa_id = os.environ.get("AMAZONSELLERACCOUNTID")
+        self.credentials = {
+            "refresh_token": self.refresh_token,
+            "lwa_app_id": self.client_id,
+            "lwa_client_secret": self.client_secret,
+        }
+        self.session = requests.session()
+        self.max_retries = 3
+        self.retry_delay = 2
+        self.timeout = 300  # 5 minutes timeout for report generation
+        self.chunk_size = 20
+        self.max_workers = 5
+
+    def get_access_token(self):
         """
-        Builds the payload required for adding a listing to Amazon.
-
-        Args:
-            product_data (dict): The product data.
-
-        Returns:
-            dict: The payload required for the SP-API request.
+        The function `get_access_token` retrieves an access token by sending a POST request to a specified
+        URL with necessary parameters.
+        :return: The function `get_access_token` is returning the access token obtained from the API
+        response after making a POST request to the token URL with the provided payload containing the
+        client ID, client secret, and refresh token.
         """
-        # Prepare bullet points
-        bullet_points = [{'value': ''}]
-        if product_data["description"]:
-            bullet_points_list = textwrap.wrap(product_data["description"], width=len(product_data["description"]) // 5)
-            bullet_points = [{"value": bullet_point} for bullet_point in bullet_points_list]
+        token_url = "https://api.amazon.com/auth/o2/token"
+        payload = f"grant_type=refresh_token&client_id={self.client_id}&client_secret={self.client_secret}&refresh_token={self.refresh_token}"
+        headers = {"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"}
+        token_response = requests.request(
+            "POST", token_url, headers=headers, data=payload, timeout=300
+        )
+        response_content = json.loads(token_response.text)
+        access_token_data = response_content["access_token"]
+        return access_token_data
 
-        # Prepare product images
-        product_images = self.build_image_payload(product_data["images"])
-
-        # Extract attributes        
-        self.attributes = self.extract_attributes(product_data["attributes"])
-
-        # Determine the product type
-        if re.search(r"yapıştırıcısı", product_data['categoryName'], re.IGNORECASE):
-            product_type = 'Zemin Kaplamaları Yapıştırıcısı'
-        elif product_data['categoryName'] == 'Dikiş Makinesi Aksesuarı':
-            product_type = 'Dikiş İğnesi'
+    def request_data(
+        self,
+        session_data=None,
+        operation_uri="",
+        params: dict = None,
+        payload=None,
+        method="GET",
+        url=None,
+    ):
+        """
+        The function `request_data` sends a request to a specified API endpoint with optional parameters and
+        handles various response scenarios.
+        """
+        endpoint_url = f"https://sellingpartnerapi-eu.amazon.com{operation_uri}?"
+        request_url = ""
+        if params:
+            uri = "&".join([f"{k}={params[k]}" for k, v in params.items()])
         else:
-            product_type = product_data['categoryName']
+            uri = ""
+        if url:
+            request_url = url
+        else:
+            request_url = endpoint_url + uri
+        # Get the current time
+        current_time = datetime.now(timezone.utc)
+        # Format the time in the desired format
+        formatted_time = current_time.strftime("%Y%m%dT%H%M%SZ")
+        access_token = self.get_access_token()
+        headers = {
+            "Accept-Encoding": "gzip",
+            "Content-Type": "application/json",
+            "x-amz-access-token": f"{access_token}",
+            "x-amz-date": formatted_time,
+        }
+        while True:
+            if session_data:
+                session_data.headers = headers
+                try:
+                    init_request = session_data.get(f"{request_url}", data=payload)
+                except ConnectionError:
+                    logger.error(
+                        "Amazon request had a ConnectionError, sleeping for 5 seconds!"
+                    )
+                    time.sleep(5)
+            else:
+                init_request = requests.request(
+                    method, f"{request_url}", headers=headers, data=payload, timeout=30
+                )
+            if init_request.status_code in (200, 400):
+                if init_request.text:
+                    jsonify = json.loads(init_request.text)
+                else:
+                    logger.error("SP-API Has encountred an error. Try again later!")
+                    jsonify = None
+                return jsonify
+            if init_request.status_code == 403:
+                session_data.headers["x-amz-access-token"] = access_token
+            elif init_request.status_code == 429:
+                time.sleep(65)
+            else:
+                error_message = json.loads(init_request.text)["errors"][0]["message"]
+                if re.search("not found", error_message):
+                    return None
+                else:
+                    logger.error(f"An error has occured || {error_message}")
+                    return None
+        
+    def build_payload(self, product_data: ProductData) -> Dict:
+        """Builds the complete payload for Amazon listing."""
+        bullet_points = self.payload_builder.build_bullet_points(product_data["description"])
+        product_images = self.payload_builder.build_image_payload(product_data["images"])
+        attributes = self.attribute_manager.extract_attributes(product_data["attributes"])
+        
+        product_type = self._determine_product_type(product_data['categoryName'])
+        raw_category_attrs, category_attrs = self.category_manager.fetch_category_attributes(product_type)
+        
+        base_payload = self._build_base_payload(product_data, bullet_points, product_images, attributes)
+        specific_attrs = self._get_category_specific_attrs(raw_category_attrs["productType"], product_data, attributes)
+        
+        base_payload["attributes"].update(specific_attrs)
+        self._apply_special_rules(base_payload, raw_category_attrs["productType"])
+        
+        return base_payload
+    
+    def process_product_images(self, images: List[Dict[str, str]]) -> Dict[str, List[Dict[str, str]]]:
+        """Process and format product images for Amazon listing."""
+        product_images = {}
+        
+        for idx, image in enumerate(images):
+            if idx == 0:
+                product_images["main_product_image_locator"] = [
+                    {"media_location": image["url"]}
+                ]
+            else:
+                product_images[f"other_product_image_locator_{idx}"] = [
+                    {"media_location": image["url"]}
+                ]
+        
+        return product_images
 
+    def extract_product_attributes(self, source_attrs: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Extract and process product attributes from source data."""
+        attrs = {
+            'size': 1,
+            'size_match': [1, 1],
+            'color': None,
+            'feature': None,
+            'material': None,
+            'style': None,
+            'thickness': 1,
+            'shape': 'Dikdörtgen'
+        }
 
-        # Fetch category attributes and build the complete payload
-        raw_category_attrs, category_attrs = self.fetch_category_attributes(product_type)
+        for attr in source_attrs:
+            attr_name = attr["attributeName"]
+            attr_value = attr["attributeValue"]
+
+            if re.search("Boyut/Ebat|Beden", attr_name):
+                if isinstance(attr_value, (int, float)):
+                    attrs['size'] = attr_value
+                    attrs['size_match'] = str(attr_value).split('x')
+
+            elif re.search(r"Renk|Color", attr_name):
+                attrs['color'] = attr_value
+
+            elif re.search("Özellik", attr_name):
+                attrs['feature'] = attr_value
+
+            elif re.search("Materyal", attr_name):
+                attrs['material'] = attr_value
+
+            elif re.search("Tema", attr_name):
+                attrs['style'] = attr_value
+
+            elif re.search("Hav Yüksekliği", attr_name):
+                thickness = attr_value
+                match = re.search(r"\d+", thickness)
+                attrs['thickness'] = match.group() if match else 1
+
+            elif re.search("Şekil", attr_name):
+                attrs['shape'] = attr_value
+
+        return attrs
+
+    @Retry
+    def get_product_definitions(self, category_name: str) -> Dict[str, Any]:
+        """Get product type definitions from Amazon."""
+        product_definitions = ProductTypeDefinitions().search_definitions_product_types(
+            itemName=category_name,
+            marketplaceIds=[self.marketplace_id],
+            searchLocale="tr_TR",
+            locale="tr_TR",
+        )
+        
+        if not product_definitions.payload['productTypes']:
+            raise ValueError(f"No product types found for category: {category_name}")
+            
+        return product_definitions.payload["productTypes"][0]
+
+    def build_base_payload(self, product_data: Dict[str, Any], product_type: str, 
+                          attrs: Dict[str, Any], images: Dict[str, List[Dict[str, str]]]) -> Dict[str, Any]:
+        """Build the base payload for product listing."""
+        bullet_points = [
+            {"value": point} for point in textwrap.wrap(
+                product_data["description"], 
+                width=len(product_data["description"]) // 5
+            )
+        ]
 
         payload = {
-            "productType": raw_category_attrs["productType"],
+            "productType": product_type,
             "requirements": "LISTING",
             "attributes": {
                 "item_name": [{"value": product_data["title"]}],
                 "brand": [{"value": product_data["brand"]}],
-                "supplier_declared_has_product_identifier_exemption": [{"value": True}],
-                "recommended_browse_nodes": [{"value": "13028044031"}],
-                "bullet_point": bullet_points,  
-                "condition_type": [{"value": "new_new"}],  
-                "fulfillment_availability": [{"fulfillment_channel_code": "DEFAULT","quantity": product_data["quantity"],"lead_time_to_ship_max_days": "5"}],
-                "gift_options": [{"can_be_messaged": "false", "can_be_wrapped": "false"}], 
-                "generic_keyword": [{"value": product_data["title"].split(" ")[0]}],
-                "list_price": [{"currency": "TRY","value_with_tax": product_data["listPrice"],}],
-                "manufacturer": [{"value": "Eman Halıcılık San. Ve Tic. Ltd. Şti."}],
-                "material": [{"value": self.attributes["material"]}],
-                "model_number": [{"value": product_data["productMainId"]}],
-                "number_of_items": [{"value": 1}], 
-                "color": [{"value": self.attributes["color"]}],
-                "size": [{"value": self.attributes["size"]}],
-                "style": [{"value": self.attributes["style"]}],
-                "part_number": [{"value": product_data["productMainId"]}],
-                "pattern": [{"value": "Düz"}],
-                "product_description": [{"value": product_data["description"]}],
-                "purchasable_offer": [{"currency": "TRY","our_price": [{"schedule": [{"value_with_tax": product_data["salePrice"]}]}],}],
-                "country_of_origin": [{"value": "TR"}],
-                "package_level": [{"value": "unit"}],
-                "customer_package_type": [{"value": "Standart Paketleme"}],
-                **product_images,
+                "bullet_point": bullet_points,
+                "condition_type": [{"value": "new_new"}],
+                "fulfillment_availability": [{
+                    "fulfillment_channel_code": "DEFAULT",
+                    "quantity": product_data["quantity"],
+                    "lead_time_to_ship_max_days": "5"
+                }],
+                "color": [{"value": attrs['color']}],
+                "size": [{"value": attrs['size']}],
+                "style": [{"value": attrs['style']}],
+                # ... other base attributes ...
+            }
+        }
+        
+        # Add images to payload
+        payload["attributes"].update(images)
+        
+        return payload
+
+    def add_category_specific_attributes(self, payload: Dict[str, Any], 
+                                       product_type: str, attrs: Dict[str, Any], 
+                                       product_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Add category-specific attributes to the payload."""
+        category_attrs = {
+            "RUG": {
+                "product_site_launch_date": [
+                    {"value": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
+                ],
+                "item_dimensions": [{
+                    "length": {"value": attrs['thickness'], "unit": "millimeters"},
+                    "width": {"value": attrs['size_match'][1], "unit": "centimeters"},
+                    "height": {"value": attrs['size_match'][0], "unit": "centimeters"}
+                }],
+                # ... other RUG specific attributes ...
             },
-            "offers": [
-                {
-                    "offerType": "B2C",
-                    "price": {"currency": "TRY", "currencyCode": "TRY", "amount": product_data["salePrice"]},
-                }
-            ],
+            "LITTER_BOX": {
+                # ... LITTER_BOX specific attributes ...
+            },
+            # ... other categories ...
         }
 
-        if raw_category_attrs["productType"] == "UTILITY_KNIFE":
-            payload['attributes']['brand'][0]['value'] = "Myfloor"
-        
-        if raw_category_attrs["productType"] == "HAND_SEWING_NEEDLE":
-            del payload['attributes']['customer_package_type']
-
-
-        specific_attrs = self.get_category_type_attrs(raw_category_attrs["productType"], product_data, self.attributes)
-        payload["attributes"].update(specific_attrs)
+        if product_type in category_attrs:
+            payload["attributes"].update(category_attrs[product_type])
 
         return payload
 
-    def submit_listing(self, product_sku, payload):
-        """
-        Submits the listing to Amazon.
+    def _handle_api_error(self, operation: str, error: Exception) -> None:
+        """Handle API errors with proper logging and potential recovery actions."""
+        error_msg = f"Error during {operation}: {str(error)}"
+        logger.error(error_msg)
+        
+        if "Rate exceeded" in str(error):
+            logger.info("Rate limit exceeded, implementing exponential backoff")
+            time.sleep(self.retry_delay)
+            self.retry_delay *= 2
+        elif "Token expired" in str(error):
+            logger.info("Token expired, refreshing credentials")
+            self._refresh_credentials()
+        
+        raise ListingFetchError(error_msg)
 
-        Args:
-            product_sku (str): The SKU of the product.
-            payload (dict): The payload for the SP-API request.
+    async def _refresh_credentials(self) -> None:
+        """Refresh API credentials."""
+        try:
+            # Implement credential refresh logic here
+            pass
+        except Exception as e:
+            logger.error(f"Failed to refresh credentials: {str(e)}")
+            raise
 
-        Returns:
-            None
-        """
-        listing_add_request = self.retry_with_backoff(
-            func=ListingsItems().put_listings_item,
-            sellerId=self.seller_id,
-            sku=product_sku,
-            marketplaceIds=self.marketplace_id,
-            body=payload,
-            # mode="VALIDATION_PREVIEW",
-            # includedData="issues,identifiers"
+    @staticmethod
+    def validate_report_data(report_data: List[Dict[str, Any]]) -> bool:
+        """Validate report data structure and content."""
+        required_fields = {"product-id", "seller-sku", "listing-id", "quantity", "price"}
+        
+        if not report_data:
+            return False
+            
+        return all(
+            all(field in item for field in required_fields)
+            for item in report_data
         )
-        if listing_add_request and listing_add_request.payload["status"] == "ACCEPTED":
-            logger.info(f"New product added with code: {product_sku}, qty: {payload['attributes']['fulfillment_availability'][0]['quantity']}")
-        else:
-            logger.error(f"New product with code: {product_sku} creation has failed || Reason: {listing_add_request.payload['issues']}")
 
-    def add_listings(self, product_data):
+    async def get_report_async(self, report_type: str) -> ListingReport:
+        """Asynchronously create and retrieve a report."""
+        try:
+            # Create report request
+            report_request = self.retry(
+                lambda: ReportsV2().create_report(
+                    reportType=report_type,
+                    marketplaceIds=[self.marketplace_id],
+                )
+            )
+            
+            report_id = report_request.payload["reportId"]
+            start_time = time.time()
+            
+            # Wait for report completion
+            while time.time() - start_time < self.timeout:
+                report_status = self.retry(
+                    lambda: ReportsV2().get_report(reportId=report_id)
+                )
+                
+                if report_status.payload["processingStatus"] == "DONE":
+                    return ListingReport(
+                        report_id=report_id,
+                        document_id=report_status.payload["reportDocumentId"],
+                        status="DONE"
+                    )
+                    
+                elif report_status.payload["processingStatus"] == "CANCELLED":
+                    raise ListingFetchError("Report generation was cancelled")
+                
+                await asyncio.sleep(30)
+            
+            raise ListingFetchError("Report generation timed out")
+            
+        except Exception as e:
+            self._handle_api_error("report generation", e)
+
+    def process_report_document(self, document: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Process the report document and extract relevant data."""
+        try:
+            report_string = document.payload["document"]
+            if report_string.startswith("\ufeff"):
+                report_string = report_string[1:]
+
+            report_file = io.StringIO(report_string)
+            report_data = list(csv.DictReader(report_file, delimiter="\t"))
+            
+            if not self.validate_report_data(report_data):
+                raise ListingFetchError("Invalid report data structure")
+                
+            return report_data
+            
+        except Exception as e:
+            self._handle_api_error("report processing", e)
+
+    def process_product_data(self, raw_data: Dict[str, Any]) -> ProductData:
+        """Process raw product data into structured format."""
+        try:
+            basic_info = {
+                "id": raw_data["product-id"],
+                "sku": raw_data["seller-sku"],
+                "listing_id": raw_data["listing-id"],
+                "quantity": int(raw_data["quantity"]),
+                "price": float(raw_data['price']) if raw_data['price'] else 0,
+                "status": raw_data.get("status", "ACTIVE"),
+                "condition": raw_data.get("item-condition", "NEW"),
+                "last_updated": datetime.now().isoformat()
+            }
+            
+            # return ProductData(basic_info=basic_info)
+            return basic_info
+            
+        except Exception as e:
+            logger.error(f"Error processing product data: {str(e)}")
+            return None
+
+    async def fetch_catalog_data_batch(self, skus: List[str]) -> List[Dict[str, Any]]:
+        """Fetch catalog data for a batch of SKUs."""
+        try:
+            catalog_item = CatalogItems()
+            catalog_item.version = CatalogItemsVersion.V_2022_04_01
+            
+            sku_string = ",".join(skus)
+            response = await self.retry(
+                lambda: catalog_item.search_catalog_items(
+                    marketplaceIds=[self.marketplace_id],
+                    includedData="attributes,identifiers,images,productTypes,summaries,relationships,dimensions,salesRanks",
+                    locale="tr_TR",
+                    sellerId=self.amazon_sa_id,
+                    identifiersType="SKU",
+                    identifiers=sku_string,
+                    pageSize=len(skus),
+                )
+            )
+            
+            return response.payload.get("items", [])
+            
+        except Exception as e:
+            self._handle_api_error(f"catalog data fetch for SKUs {sku_string}", e)
+            return []
+
+    def get_listings(self, 
+                          every_product: bool = False,
+                          include_inventory: bool = False,
+                          include_pricing: bool = False,
+                          status_filter: Optional[List[str]] = None) -> List[ProductData]:
         """
-        Adds product listings to Amazon.
-
+        Enhanced method to retrieve Amazon listings with various options and filters.
+        
         Args:
-            data (dict): A dictionary containing product data to be listed on Amazon.
-
+            every_product (bool): Fetch detailed catalog data for each product
+            include_inventory (bool): Include current inventory levels
+            include_pricing (bool): Include current pricing information
+            status_filter (List[str]): Filter products by status (e.g., ['ACTIVE', 'INACTIVE'])
+            
         Returns:
-            None
+            List[ProductData]: List of processed product data
         """
-        for product in product_data:
-                pd_data = product["data"]
-                product_sku = pd_data['stockCode']
-
-                if product['data']['quantity'] > 0:
+        try:
+            # Get basic report
+            report = asyncio.run(self.get_report_async(ReportType.GET_MERCHANT_LISTINGS_ALL_DATA))
+            report_document = self.retry(
+                lambda: ReportsV2().get_report_document(
+                    reportDocumentId=report.document_id,
+                    download=True,
+                    decrypt=True,
+                )
+            )
+            
+            # Process report data
+            raw_data = self.process_report_document(report_document)
+            
+            # Filter by status if needed
+            if status_filter:
+                raw_data = [
+                    item for item in raw_data 
+                    if item.get("status", "ACTIVE") in status_filter
+                ]
+            
+            # Process basic product data
+            products = [
+                self.process_product_data(item) 
+                for item in raw_data 
+                if not re.search(r"\_fba", item["seller-sku"])
+            ]
+            
+            if not every_product:
+                return products
+            
+            # Get SKUs for detailed data
+            skus = [p["sku"] for p in products if p]
+            
+            # Fetch detailed data in parallel
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                # Split SKUs into chunks
+                sku_chunks = list(self.chunk_list(skus, self.chunk_size))
+                
+                # Create tasks for parallel execution
+                tasks = []
+                
+                # Catalog data tasks
+                if every_product:
+                    tasks.extend([
+                        executor.submit(self.fetch_catalog_data_batch, chunk)
+                        for chunk in sku_chunks
+                    ])
+                
+                # Inventory data tasks
+                if include_inventory:
+                    tasks.extend([
+                        executor.submit(self.fetch_inventory_data_batch, chunk)
+                        for chunk in sku_chunks
+                    ])
+                
+                # Pricing data tasks
+                if include_pricing:
+                    tasks.extend([
+                        executor.submit(self.fetch_pricing_data_batch, chunk)
+                        for chunk in sku_chunks
+                    ])
+                
+                # Wait for all tasks to complete
+                results = {}
+                for future in as_completed(tasks):
                     try:
-                        payload = self.build_payload(pd_data)
-                        self.submit_listing(product_sku, payload)
+                        data = future.result()
+                        results.update(data)
                     except Exception as e:
-                        logger.error(f"Failed to process product {product_sku}: {e}", exc_info=True)
+                        logger.error(f"Error in parallel execution: {str(e)}")
+            
+            # Merge all data
+            self.merge_product_data(products, results)
+            
+            logger.info(f"Successfully fetched {len(products)} products with detailed data")
+            return products
+            
+        except Exception as e:
+            self._handle_api_error("listing retrieval", e)
+            return []
 
-    def update_listing(self, product_data: dict):
+    def merge_product_data(self, products: List[ProductData], 
+                          additional_data: Dict[str, Any]) -> None:
+        """Merge additional data into product objects."""
+        for product in products:
+            if not product:
+                continue
+                
+            sku = product.basic_info["sku"]
+            
+            # Merge catalog data
+            if "catalog" in additional_data and sku in additional_data["catalog"]:
+                product.catalog_data = additional_data["catalog"][sku]
+            
+            # Merge inventory data
+            if "inventory" in additional_data and sku in additional_data["inventory"]:
+                product.inventory_data = additional_data["inventory"][sku]
+            
+            # Merge pricing data
+            if "pricing" in additional_data and sku in additional_data["pricing"]:
+                product.pricing_data = additional_data["pricing"][sku]
+
+    def export_listings(self, products: List[ProductData], 
+                       format: str = "json",
+                       file_path: Optional[str] = None) -> Optional[str]:
         """
-        The function `spapi_updateListing` updates a product listing on Amazon Seller Central with a new
-        quantity value.
-
-        :param product: The `spapi_updateListing` function is designed to update a listing on Amazon
-        Seller Central using the Selling Partner API
+        Export listings data to various formats.
+        
+        Args:
+            products: List of product data to export
+            format: Export format ('json', 'csv', or 'excel')
+            file_path: Optional path to save the file
+            
+        Returns:
+            str: Path to the exported file if file_path is provided
         """
+        try:
+            if format == "json":
+                data = [asdict(p) for p in products if p]
+                if file_path:
+                    with open(file_path, 'w') as f:
+                        json.dump(data, f, indent=2)
+                return data
+            
+            elif format == "csv":
+                # Implement CSV export
+                pass
+            
+            elif format == "excel":
+                # Implement Excel export
+                pass
+                
+        except Exception as e:
+            logger.error(f"Error exporting listings: {str(e)}")
+            return None
 
-        sku = product_data["sku"]    
-        qty = product_data["quantity"]
-        price = product_data["price"]
-        params = {"marketplaceIds": MarketPlaceID, "issueLocale": "en_US"}
-
-        data_payload = json.dumps(
-            {
-                "productType": "HOME_BED_AND_BATH",
-                "patches": [
-                    {
-                        "op": "replace",
-                        "path": "/attributes/fulfillment_availability",
-                        "value": [
-                            {
-                                "fulfillment_channel_code": "DEFAULT",
-                                "quantity": qty,
-                                "marketplace_id": "A33AVAJ2PDY3EV",
-                            }
-                        ],
-                    },
-                    {
+    @Retry
+    def add_listing(self, data: Dict[str, Any]) -> None:
+        """Create a new product listing on Amazon."""
+        for _, data_items in data.items():
+            for product in data_items:
+                try:
+                    product_data = product["data"]
+                    product_sku = product_data['stockCode']
+                    
+                    # Process images and attributes
+                    images = self.process_product_images(product_data["images"])
+                    attrs = self.extract_product_attributes(product_data["attributes"])
+                    
+                    # Get product definitions
+                    product_def = self.get_product_definitions(product_data["categoryName"])
+                    product_type = product_def["name"]
+                    
+                    # Build payload
+                    payload = self.build_base_payload(product_data, product_type, attrs, images)
+                    payload = self.add_category_specific_attributes(payload, product_type, attrs, product_data)
+                    
+                    # Create listing
+                    response = ListingsItems().put_listings_item(
+                        sellerId=self.amazon_sa_id,
+                        sku=product_sku,
+                        marketplaceIds=[self.marketplace_id],
+                        body=payload
+                    )
+                    
+                    if response and response.payload["status"] == "ACCEPTED":
+                        logger.info(f"New product added with code: {product_sku}, qty: {product_data['quantity']}")
+                    else:
+                        logger.error(f"New product with code: {product_sku} creation has failed || Reason: {response}")
+                        
+                except Exception as e:
+                    logger.error(f"Error creating listing for SKU {product_sku}: {str(e)}")
+                    continue
+    
+    def update_listing(self, product_data: Dict[str, Any]) -> None:
+        """Updates an existing Amazon listing."""
+        try:
+            payload = self._build_update_payload(product_data)
+            response = self._submit_update(product_data["sku"], payload)
+            self._handle_update_response(response, product_data)
+        except Exception as e:
+            logging.error(f"Failed to update product {product_data['sku']}: {e}", exc_info=True)
+    
+    def _determine_product_type(self, category_name: str) -> str:
+        """Determines the product type based on category name."""
+        if re.search(r"yapıştırıcısı", category_name, re.IGNORECASE):
+            return 'Zemin Kaplamaları Yapıştırıcısı'
+        elif category_name == 'Dikiş Makinesi Aksesuarı':
+            return 'Dikiş İğnesi'
+        return category_name
+    
+    def _submit_listing(self, product_sku: str, payload: Dict) -> None:
+        """Submits a listing to Amazon."""
+        listing_add_request = self.retry(
+            func=ListingsItems().put_listings_item,
+            sellerId=self.config.seller_id,
+            sku=product_sku,
+            marketplaceIds=self.config.marketplace_id,
+            body=payload
+        )
+        
+        if listing_add_request and listing_add_request.payload["status"] == "ACCEPTED":
+            logging.info(f"New product added with code: {product_sku}, qty: {payload['attributes']['fulfillment_availability'][0]['quantity']}")
+        else:
+            logging.error(f"New product with code: {product_sku} creation has failed || Reason: {listing_add_request.payload['issues']}")
+    
+    def _build_update_payload(self, product_data: Dict[str, Any]) -> Dict:
+        """Builds payload for updating an existing listing."""
+        return {
+            "productType": "HOME_BED_AND_BATH",
+            "patches": [
+                {
+                    "op": "replace",
+                    "path": "/attributes/fulfillment_availability",
+                    "value": [{
+                        "fulfillment_channel_code": "DEFAULT",
+                        "quantity": product_data["quantity"],
+                        "marketplace_id": "A33AVAJ2PDY3EV",
+                    }]
+                },
+                {
                     "op": 'replace',
                     "path": '/attributes/purchasable_offer',
                     "value": [{
@@ -1614,37 +903,45 @@ class AmazonListingManager:
                             "currency": "TRY",
                             "our_price": [{
                                 "schedule": [{
-                                    "value_with_tax": price
+                                    "value_with_tax": product_data["price"]
                                 }]
                             }],
                             "marketplace_id": 'A33AVAJ2PDY3EV'
                         }],
                     }]
                 }
-                ]
-            }
-        )
+            ]
+        }
 
-        listing_update_request = request_data(
-            operation_uri=f"/listings/2021-08-01/items/{AmazonSA_ID}/{sku}",
-            params=params,
-            payload=data_payload,
-            method="PATCH",
-        )
-
-        if listing_update_request and listing_update_request["status"] == "ACCEPTED":
-
-            logger.info(
-                f"""Product with code: {
-                product_data["sku"]}, New value: {product_data["quantity"]}, New price: {product_data["price"]} updated successfully"""
-            )
-
-        else:
-
-            logger.error(
-                f"""Product with code: {product_data["sku"]} failed
-                  to update || Reason: {listing_update_request}"""
-            )
-
-
-
+# Example usage:
+# if __name__ == "__main__":
+#     # Initialize the manager
+#     manager = AmazonListingManager()
+    
+#     # Example product data
+#     product_data = {
+#         "data": {
+#             "title": "Example Product",
+#             "brand": "Example Brand",
+#             "description": "Product description",
+#             "images": [{"url": "http://example.com/image.jpg"}],
+#             "attributes": [],
+#             "quantity": 10,
+#             "listPrice": 99.99,
+#             "salePrice": 89.99,
+#             "productMainId": "123",
+#             "stockCode": "ABC123",
+#             "categoryName": "RUG"
+#         }
+#     }
+    
+#     # Add new listing
+#     manager.add_listings([product_data])
+    
+#     # Update existing listing
+#     update_data = {
+#         "sku": "ABC123",
+#         "quantity": 15,
+#         "price": 94.99
+#     }
+#     manager.update_listing(update_data)

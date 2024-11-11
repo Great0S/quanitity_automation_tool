@@ -12,16 +12,12 @@ from api.n11_rest_api import N11RestAPI
 from tui import ProductManagerApp
 from rich.prompt import Prompt
 from typing import Dict, List, Any, Optional, Tuple
-from api.amazon_seller_api import AmazonListingManager, spapi_getlistings
+from api.amazon_seller_api import AmazonListingManager
 from api.hepsiburada_api import Hb_API
 from api.pazarama_api import PazaramaAPIClient
 from api.pttavm_api import getpttavm_procuctskdata, pttavm_updatedata
 from api.trendyol_api import TrendyolClient
-from api.wordpress_api import (
-    create_wordpress_products,
-    get_wordpress_products,
-    update_wordpress_products,
-)
+from api.wordpress_api import WooCommerceAPIClient
 
 
 hpApi = Hb_API()
@@ -29,6 +25,7 @@ n11Api = N11RestAPI()
 amznApi = AmazonListingManager()
 pazaramaApi = PazaramaAPIClient()
 trendyolApi = TrendyolClient()
+woocommerceApi = WooCommerceAPIClient()
 
 
 def group_product_variants(matching_items: Dict[Any, List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:
@@ -187,7 +184,7 @@ class App:
             'pttavm': pttavm_updatedata,
             'pazarama': pazaramaApi.update_product,
             'trendyol': trendyolApi.update_product,
-            'wordpress': update_wordpress_products,
+            'wordpress': woocommerceApi.update_product,
         }
 
     def load_initial_data(self, load_all: bool, platforms: list[str] = None) -> dict:
@@ -209,9 +206,9 @@ class App:
             "n11": lambda: n11Api.get_products(raw_data=load_all),
             "hepsiburada": lambda: hpApi.get_listings(load_all),
             "pazarama": lambda: pazaramaApi.get_products(load_all),
-            "wordpress": lambda: get_wordpress_products(load_all),
+            "wordpress": lambda: woocommerceApi.get_all_products(load_all),
             "pttavm": lambda: getpttavm_procuctskdata(load_all),
-            "amazon": lambda: spapi_getlistings(every_product=load_all),
+            "amazon": lambda: amznApi.get_listings(every_product=load_all),
         }
 
         data = {}
@@ -636,11 +633,11 @@ class App:
         platform_to_function = {
         "n11": n11Api.create_product,
         "hepsiburada": hpApi.create_listing,
-        "amazon": amznApi.add_listings,
+        "amazon": amznApi.add_listing,
         "pttavm": pttavm_updatedata,
         "pazarama": pazaramaApi.create_products,
         "trendyol": trendyolApi.update_product,
-        "wordpress": create_wordpress_products,
+        "wordpress": woocommerceApi.create_product,
     }
 
         data_lists = self.retrieve_stock_data(
