@@ -853,8 +853,12 @@ class AmazonListingManager:
         """Updates an existing Amazon listing."""
         try:
             payload = self._build_update_payload(product_data)
-            response = self._submit_update(product_data["sku"], payload)
-            self._handle_update_response(response, product_data)
+            response = self._submit_update(sku=product_data["sku"], payload=payload)
+            
+            if response and response.payload["status"] == "ACCEPTED":
+                logger.info(f"Product with code: {response.payload['sku']}, new qty: {product_data['quantity']}")
+            else:
+                logger.error(f"Product with code: {response.payload['sku']} update has failed || Reason: {response.payload}")
         except Exception as e:
             logging.error(f"Failed to update product {product_data['sku']}: {e}", exc_info=True)
     
@@ -881,6 +885,34 @@ class AmazonListingManager:
         else:
             logging.error(f"New product with code: {product_sku} creation has failed || Reason: {listing_add_request.payload['issues']}")
     
+    def _submit_update(self, payload: Dict[str, Any], sku: str) -> None:
+        """
+        Submits an update to Amazon for a specific SKU.
+        
+        Args:
+            payload (Dict[str, Any]): The update payload to submit
+            sku (str): The SKU of the product to update
+        
+        Raises:
+            Exception: If the update submission fails
+        """
+        try:
+            response = ListingsItems().patch_listings_item(
+                marketplaceIds=[self.config.marketplace_id],
+                sellerId=self.config.seller_id,
+                body=payload,
+                sku=sku
+            )
+            
+            if not response.payload['status'] == "ACCEPTED":
+                raise Exception(f"Failed to update listing for SKU {sku}: {response.errors}")
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error updating listing for SKU {sku}: {str(e)}")
+            raise
+
     def _build_update_payload(self, product_data: Dict[str, Any]) -> Dict:
         """Builds payload for updating an existing listing."""
         return {
