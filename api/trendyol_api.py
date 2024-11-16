@@ -2,6 +2,7 @@ import os
 import json
 import time
 import re
+from box import Box
 import requests
 from typing import Optional, List, Dict, Union
 from dataclasses import dataclass
@@ -138,12 +139,12 @@ class TrendyolClient:
         """
         while True:
             response = self._make_request(
-                f'/batch-requests/{batch_request_id}',
+                f'/products//batch-requests/{batch_request_id}',
                 RequestType.GET
             )
             batch_status = response.json()
             
-            if batch_status.get('status') == 'COMPLETED':
+            if len(batch_status['items']) > 0 and batch_status['items'][0].get('status') == 'SUCCESS':
                 return batch_status
             
             time.sleep(5)
@@ -191,7 +192,7 @@ class TrendyolClient:
                     product = {'sku': item.get('stockCode') or item.get('productMainId'), "data": item, "platform": "trendyol"}
                 else:
                     product = {"sku": item.get('stockCode') or item.get('productMainId'),
-                               "barcode": item.get('barcode'),
+                               "id": item.get('barcode'),
                                "quantity": item.get('quantity', 0),
                                "price": item.get('salePrice', 0.0),
                                "title": item.get('title'),
@@ -216,9 +217,10 @@ class TrendyolClient:
         Returns:
             bool indicating success or failure
         """
+        product = Box(product)
         payload = {
             "items": [{
-                "barcode": product.barcode,
+                "barcode": product.id,
                 "quantity": int(product.quantity),
                 "salePrice": float(product.price)
             }]
