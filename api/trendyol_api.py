@@ -146,6 +146,9 @@ class TrendyolClient:
             
             if len(batch_status['items']) > 0 and batch_status['items'][0].get('status') == 'SUCCESS':
                 return batch_status
+            elif batch_status['items'][0]['status'] == 'FAILED':
+                raise TrendyolAPIError(f"Batch request failed: {batch_status['items'][0]['failureReasons']}")
+            
             
             time.sleep(5)
 
