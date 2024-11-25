@@ -146,7 +146,7 @@ class TrendyolClient:
             
             if len(batch_status['items']) > 0 and batch_status['items'][0].get('status') == 'SUCCESS':
                 return batch_status
-            elif batch_status['items'][0]['status'] == 'FAILED':
+            elif len(batch_status['items']) > 0 and batch_status['items'][0]['status'] == 'FAILED':
                 raise TrendyolAPIError(f"Batch request failed: {batch_status['items'][0]['failureReasons']}")
             
             
@@ -248,7 +248,7 @@ class TrendyolClient:
             if status == 'SUCCESS':
                 logger.info(
                     f'Product {product.sku} updated: '
-                    f'quantity={product.quantity}, price={product.price}'
+                    f'quantity {product.quantity}, price {product.price}'
                 )
                 return True
             else:

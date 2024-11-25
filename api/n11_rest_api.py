@@ -108,7 +108,7 @@ class N11RestAPI:
                         if mk['value'] == attrs[current_attr_name]:
                             value_id = mk['id']
                             custom_value = 'null'
-                            break  
+                            break
 
                 n11_attrs[current_attr_name] = {
                     "id": n11_attr['attributeId'],
@@ -126,13 +126,13 @@ class N11RestAPI:
                             value_id = mk['id']
                             custom_value = 'null'
                             break
-                
+
                 n11_attrs[current_attr_name] = {
                     "id": n11_attr['attributeId'],
                     "valueId": value_id,
                     "customValue": custom_value
                 }
-            
+
             if current_attr_name == 'Şekil':
                 value_id = 3137563
                 custom_value = 'null'
@@ -142,7 +142,7 @@ class N11RestAPI:
                             value_id = mk['id']
                             custom_value = 'null'
                             break
-                
+
                 n11_attrs[current_attr_name] = {
                     "id": n11_attr['attributeId'],
                     "valueId": value_id,
@@ -165,7 +165,7 @@ class N11RestAPI:
                     "customValue": custom_value
                 }
                 continue
-            
+
             # Skip if attribute is not in our mapping
             if current_attr_name not in n11_attrs_names.values():
                 continue
@@ -213,7 +213,7 @@ class N11RestAPI:
             n11_attrs['Renk']['valueId'] = 662004
 
         if attrs_data['data']['categoryName'] == 'Merdiven Aparatı':
-            
+
             thickness = 'null'
             length = 'null'
             value_id = 'null'
@@ -223,17 +223,17 @@ class N11RestAPI:
             thickness = matches.group(1)
             if thickness == 'Ince':
                 thickness = 'İnce'
-            length = matches.group(2)   
+            length = matches.group(2)
             size_value = f"{thickness} - {length} CM"
 
             for mk in n11_attr['attributeValues']:
                 if mk['value'] == size_value:
                     value_id = mk['id']
                     custom_value = 'null'
-                    break 
+                    break
 
             if value_id == 'null':
-                pass        
+                pass
 
             n11_attrs['Seçenekler'] = {
                 "id": 6369,
@@ -258,7 +258,8 @@ class N11RestAPI:
             all_fields.update(key for key in sku.keys() if key != 'images')
             # Handle nested 'attributes' structure
             if 'attributes' in sku:
-                all_fields.update(f"attribute_{attr['id']}" for attr in sku['attributes'])
+                all_fields.update(
+                    f"attribute_{attr['id']}" for attr in sku['attributes'])
 
         # Convert set to sorted list for consistent column order
         fields = sorted(all_fields)
@@ -276,13 +277,16 @@ class N11RestAPI:
                 for field in fields:
                     if field.startswith('attribute_'):
                         attr_id = int(field.split('_')[1])
-                        attr = next((a for a in sku.get('attributes', []) if a['id'] == attr_id), None)
-                        row[field] = f"{attr['valueId']}:{attr['customValue']}" if attr else ''
+                        attr = next(
+                            (a for a in sku.get('attributes', []) if a['id'] == attr_id), None)
+                        row[field] = f"{attr['valueId']}:{
+                            attr['customValue']}" if attr else ''
                     else:
                         row[field] = sku.get(field, '')
                 writer.writerow(row)
 
-        print(f"CSV file with all SKU fields (except images) has been created at: {csv_file_path}")
+        print(f"CSV file with all SKU fields (except images) has been created at: {
+              csv_file_path}")
 
     def create_product(self, product_data):
         """Create products using the N11 API."""
@@ -299,14 +303,14 @@ class N11RestAPI:
             image_list = []
 
             if 'KPKHC' in product["data"]["stockCode"]:
-                product['data']['title'] = product['data']['title'].replace('Koko Paspas - ', '')
+                product['data']['title'] = product['data']['title'].replace(
+                    'Koko Paspas - ', '')
 
             if product["data"]['description'] == '':
                 product["data"]['description'] = 'Türkiyede Üretimi'
 
             if any(char.isalpha() for char in product['data']['barcode']):
                 product['data']['barcode'] = ''
-
 
             for index, img in enumerate(images, start=1):
                 image_list.append({"url": img["url"], "order": index})
@@ -378,7 +382,8 @@ class N11RestAPI:
                         logger.info(
                             f"{item['itemCode']} is successfully created")
                     else:
-                        logger.error(f"{item['itemCode']} Not created || Reason: {item['reasons']}")
+                        logger.error(f"{item['itemCode']} Not created || Reason: {
+                                     item['reasons']}")
         except requests.exceptions.RequestException as e:
             logger.error(f"An error occurred: {e}")
             return 'null'
@@ -463,14 +468,29 @@ class N11RestAPI:
                 )
 
                 if task_response.status_code == 200:
-                    if task_response.json().get("status") == "PROCESSED":
 
-                        task_response_json = task_response.json()
+                    res_json = task_response.json()
 
-                        logger.info(f"""Product with code: {
-                            product["sku"]}, New value: {product["quantity"]}, New price: {product["price"]} updated successfully""")
+                    if res_json.get("status") == "PROCESSED":
 
-                        return
+                        for item in res_json["skus"]["content"]:
+
+                            if item["status"] == "SUCCESS":
+
+                                logger.info(
+                                    f"""Product with code: {
+                                        product["sku"]} updated successfully"""
+                                )
+
+                                return
+
+                            logger.error(
+                                f"""Request for product {
+                                    product['sku']} is unsuccessful | listPrice:{int(product['price']) * 2}, "salePrice": {int(
+                                        product['price'])} | Response: {
+                                    item['sku']['reasons']}"""
+                            )
+                            return
 
                     continue
 
@@ -486,4 +506,3 @@ class N11RestAPI:
                     product['sku']} is unsuccessful | Response: {
                     post_response.text}"""
             )
-
