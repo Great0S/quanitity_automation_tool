@@ -841,7 +841,7 @@ class AmazonListingManager:
                     )
                     
                     if response and response.payload["status"] == "ACCEPTED":
-                        logger.info(f"New product added with code: {product_sku}, qty: {product_data['quantity']}")
+                        logger.info(f"New product added with code: {product_sku}, quantity: {product_data['quantity']}")
                     else:
                         logger.error(f"New product with code: {product_sku} creation has failed || Reason: {response}")
                         
@@ -856,7 +856,7 @@ class AmazonListingManager:
             response = self._submit_update(sku=product_data["sku"], payload=payload)
             
             if response and response.payload["status"] == "ACCEPTED":
-                logger.info(f"Product with code: {response.payload['sku']}, new qty: {product_data['quantity']}")
+                logger.info(f"Product with code: {response.payload['sku']}, new quantity: {product_data['quantity']}")
             else:
                 logger.error(f"Product with code: {response.payload['sku']} update has failed || Reason: {response.payload}")
         except Exception as e:
@@ -881,7 +881,7 @@ class AmazonListingManager:
         )
         
         if listing_add_request and listing_add_request.payload["status"] == "ACCEPTED":
-            logging.info(f"New product added with code: {product_sku}, qty: {payload['attributes']['fulfillment_availability'][0]['quantity']}")
+            logging.info(f"New product added with code: {product_sku}, quantity: {payload['attributes']['fulfillment_availability'][0]['quantity']}")
         else:
             logging.error(f"New product with code: {product_sku} creation has failed || Reason: {listing_add_request.payload['issues']}")
     

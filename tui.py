@@ -253,7 +253,7 @@ class ProductManagerApp(App[str]):
             if event.pressed.id == "quantity":
 
                 self.query_one(Log).write_line("Partial update for quantity selected.")                
-                self.exit(result={'update': {'source': self.source, 'target': self.target, 'options': "qty", "user_input": self.sku_input}})
+                self.exit(result={'update': {'source': self.source, 'target': self.target, 'options': "quantity", "user_input": self.sku_input}})
 
             if event.pressed.id == "price":
 

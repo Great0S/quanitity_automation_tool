@@ -92,7 +92,7 @@ class WooCommerceAPIClient:
         filtered_products = []
         
         for item in products:
-            qty = item.get('stock_quantity', 0)
+            quantity = item.get('stock_quantity', 0)
             
             if every_product:
                 filtered_products.append({
@@ -104,7 +104,7 @@ class WooCommerceAPIClient:
                     'id': item['id'],
                     'sku': item['sku'],
                     'price': float(item.get('price', 0)),
-                    'quantity': qty
+                    'quantity': quantity
                 })
                 
         return filtered_products

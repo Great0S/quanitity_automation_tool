@@ -560,14 +560,14 @@ class PazaramaAPIClient:
         uri = ''
         product_id = product_data["id"]
         sku = product_data["sku"]
-        qty = product_data["quantity"]
+        quantity = product_data["quantity"]
         price = product_data["price"]
 
         if price_match:
             update_payload = {"items": [{"code": product_id, "listPrice": int(price) * 2, "salePrice": int(price)}]}
             uri = "product/updatePrice-v2"
         else:
-            update_payload = {"items": [{"code": product_id, "stockCount": int(qty)}]}
+            update_payload = {"items": [{"code": product_id, "stockCount": int(quantity)}]}
             uri = "product/updateStock-v2"
 
         update_request, elapsed_time = self.request_processing(
@@ -579,7 +579,7 @@ class PazaramaAPIClient:
             if update_request["success"] == True:
 
                 logger.info(
-                    f"""Product with code: {sku}, New value: {qty}, New price: {price} updated successfully || Elapsed time: {elapsed_time:.2f} seconds."""
+                    f"""Product with code: {sku}, New value: {quantity}, New price: {price} updated successfully || Elapsed time: {elapsed_time:.2f} seconds."""
                 )
 
             else:

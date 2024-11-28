@@ -143,17 +143,17 @@ class N11SoapAPI:
 
             else:
 
-                product_qty = self.__extract_quantity__(
+                product_quantity = self.__extract_quantity__(
                     stock_items=stock_items, product_code=product_code
                 )
-                if product_qty is None:
-                    product_qty = 0
+                if product_quantity is None:
+                    product_quantity = 0
 
                 raw_elements.append(
                     {
                         "id": product["id"],
                         "sku": product_code,
-                        "qty": product_qty,
+                        "quantity": product_quantity,
                         "price": product_price,
                     }
                 )
@@ -577,7 +577,7 @@ class N11SoapAPI:
             client = self.client
         else:
             client = self.__create_client__()
-            
+
         if client is None:
             return []
 
@@ -689,7 +689,7 @@ class N11SoapAPI:
 
                 stockItem.append(self.get_stock_items(
                     attrs, image_elements, item_data))
-                
+
             if item_sku == "EKOANTDKG":
                 pass
 
@@ -763,11 +763,13 @@ class N11SoapAPI:
 
                 if response.result.errorCode == "GTIN.n11CatalogIdNotUnique":
 
-                    product_dt = {"auth": operations_structure["auth"], "sellerCode": item_sku}
-                    product_id = client.service.GetProductBySellerCode(**product_dt)
+                    product_dt = {
+                        "auth": operations_structure["auth"], "sellerCode": item_sku}
+                    product_id = client.service.GetProductBySellerCode(
+                        **product_dt)
                     if product_id.product:
-                        
-                        product_dat = {"auth": operations_structure["auth"], 
+
+                        product_dat = {"auth": operations_structure["auth"],
                                        "productId": product_id,
                                        "productSellerCode": item_sku,
                                        "price": operations_structure['product']['price'],
@@ -775,10 +777,10 @@ class N11SoapAPI:
                                        "stockItems": stockItem,
                                        "description": operations_structure['product']['description'],
                                        }
-                        product_dat_res = client.service.UpdateProductBasic(**product_dat)
+                        product_dat_res = client.service.UpdateProductBasic(
+                            **product_dat)
 
                         continue
-
 
                 self.logger.error(
                     f"""Product created with {
@@ -804,7 +806,7 @@ class N11SoapAPI:
         if group_item_data['quantity'] == 0:
 
             return Item
-        
+
         Item = {
             "bundle": False,
             "n11CatalogId": 1000722,
@@ -835,7 +837,8 @@ class N11SoapAPI:
             for item in attr_name:
 
                 if re.search(attr["attributeName"], item):
-                    attrs[attr["attributeName"]] = attr["attributeValue"].replace(" Taban", "")
+                    attrs[attr["attributeName"]
+                          ] = attr["attributeValue"].replace(" Taban", "")
 
         return attrs
 
@@ -863,7 +866,7 @@ class N11SoapAPI:
                                   <stockItems>
                                     <stockItem>
                                       <sellerStockCode>{data['sku']}</sellerStockCode>
-                                      <quantity>{data['qty']}</quantity>
+                                      <quantity>{data['quantity']}</quantity>
                                     </stockItem>
                                   </stockItems>
                                 </sch:UpdateStockByStockSellerCodeRequest>
@@ -896,7 +899,7 @@ class N11SoapAPI:
 
                 self.logger.info(
                     f"""Product with code: {
-                        data["sku"]}, New value: {data["qty"]}"""
+                        data["sku"]}, New value: {data["quantity"]}"""
                 )
 
         elif post_response.status_code == 429:

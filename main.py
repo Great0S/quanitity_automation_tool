@@ -584,16 +584,16 @@ class App:
                 )
 
         while True:
-            user_input = Prompt.ask("1. Update by date \n2. Update by SKU\n3. Continue without date\n4. Exit\nChoose an option:", choices=["1", "2", "3", "4"])
+            user_input = Prompt.ask("1. Update by date \n2. Continue without date\n3. Exit\nChoose an option:", choices=["1", "2", "3"])
             
-            if user_input == "3":
+            if user_input == "2":
                 pass
 
-            elif user_input == "4":
+            elif user_input == "3":
                 logger.info("Exiting the program.")
                 break
 
-            elif user_input in ["1", "2"]:
+            elif user_input == '1':
                 date_input = Prompt.ask("1. Update by last month \n2. Custom date\n3. Exit\nChoose an option:", choices=["1", "2", "3"])
                 if date_input == "3":
                     logger.info("Exiting the program.")

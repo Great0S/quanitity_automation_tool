@@ -135,7 +135,7 @@ def pttavm_updatedata(product_data: dict):
 
     sku = product_data['sku']
     item_id = product_data['id']
-    qty = product_data['quantity']
+    quantity = product_data['quantity']
     price = product_data['price']
     # price_kdvsiz = product['price'] - product['price'] * 0.1
 
@@ -147,7 +147,7 @@ def pttavm_updatedata(product_data: dict):
             <ept:KDVOran>10</ept:KDVOran>
             <ept:KDVli>{price}</ept:KDVli>
             <ept:KDVsiz>0</ept:KDVsiz>
-            <ept:Miktar>{qty}</ept:Miktar>
+            <ept:Miktar>{quantity}</ept:Miktar>
             <ept:ShopId>{TedarikciId}</ept:ShopId>
         </tem:item>
     </tem:StokFiyatGuncelle3>"""
@@ -160,7 +160,7 @@ def pttavm_updatedata(product_data: dict):
             'StokFiyatGuncelle3Response']['StokFiyatGuncelle3Result']
 
         logger.info(f"""Product success: {
-            responses_msg['a:Success']}, sku: {sku}, New stock: {qty}, New price: {price} updated successfully""")
+            responses_msg['a:Success']}, sku: {sku}, New stock: {quantity}, New price: {price} updated successfully""")
 
     else:
 
