@@ -271,6 +271,11 @@ class App:
             except Exception as e:
                 logger.error(f"An error occurred while retrieving stock data: {e}")
                 return {}
+            
+        if source_platform and not use_local_data:
+
+            source_data = self.retrieve_data(include_all_products, use_local_data, [source_platform])
+            return source_data
 
         self.load_initial_data(include_all_products)
         return self.platform_data_cache
@@ -658,7 +663,9 @@ class App:
 
         if filtered_data:
 
-            platform_to_function[TARGET_PLATFORM](product_data=filtered_data)
+            for product in filtered_data:
+
+                platform_to_function[TARGET_PLATFORM](product_data=product['data'])
 
         logger.info("Done")
 

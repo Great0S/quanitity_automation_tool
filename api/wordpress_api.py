@@ -1,11 +1,14 @@
-from typing import List, Dict, Optional, Union, Any
-import logging
+from typing import List, Dict, Optional, Any
+from typing_extensions import TypedDict
+import os
 import re
 import json
+
 from woocommerce import API
 from dataclasses import dataclass
-import os
-from typing_extensions import TypedDict
+from app.config.logging_init import logger
+
+
 
 
 
@@ -34,16 +37,19 @@ class WooCommerceProduct(TypedDict):
 
 @dataclass
 class WooCommerceAPIConfig:
-    url: str = "https://www.emanzemin.com"
-    consumer_key: str = os.environ.get("EMANZEMIN_KEY")
-    consumer_secret: str = os.environ.get("EMANZEMIN_SECRET")
+    # url: str = "https://www.emanzemin.com"
+    # consumer_key: str = os.environ.get("EMANZEMIN_KEY")
+    # consumer_secret: str = os.environ.get("EMANZEMIN_SECRET")
+    url: str = "https://magaza.emanhali.com"
+    consumer_key: str = os.environ.get("EMANHALISHOP_KEY")
+    consumer_secret: str = os.environ.get("EMANHALISHOP_SECRET")
     version: str = "wc/v3"
     timeout: int = 3000
 
 class WooCommerceAPIClient:
     def __init__(self, config: WooCommerceAPIConfig = WooCommerceAPIConfig()):
         """Initialize WooCommerce API client with configuration."""
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger
         self.wcapi = API(
             url=config.url,
             consumer_key=config.consumer_key,
@@ -173,7 +179,7 @@ class WooCommerceAPIClient:
                 self.logger.info(f"Created new product successfully - SKU: {product_data['stockCode']}")
                 return True
                 
-            error = self._handle_api_response(response, "Product creation")
+            error = response.json() if response.text else {}
             self.logger.error(
                 f"Failed to create product - SKU: {product_data['stockCode']}, "
                 f"Error: {error.get('message') if error else 'Unknown error'}"

@@ -24,7 +24,7 @@ class ProductManagerApp(App[str]):
             "specific_update_op_container",
             "specific_sku_op_container",
             "specific_partial_op_choice_container",
-            "storage_container",
+            "compare_container",
             "specific_partial_op_source_platform_container",
             "specific_partial_op_target_platform_container"
         ])
@@ -63,12 +63,12 @@ class ProductManagerApp(App[str]):
                         for button in self.platform_radio_set():
                             yield button
 
-            with Horizontal(id="storage_container"):
+            with Horizontal(id="compare_container"):
 
-                yield Label("Which storage do you want to use?")
-                with RadioSet(id="storage_choice"):
-                    yield RadioButton("Online storage", id="online_storage")
-                    yield RadioButton("Offline storage", id="offline_storage")
+                yield Label("How do you want to copy the products?")
+                with RadioSet(id="compare_choice"):
+                    yield RadioButton("Check exisiting and copy", id="check_exisiting_and_copy")
+                    yield RadioButton("Copy directly", id="copy_directly")
 
             with Horizontal(id="update_container"):
 
@@ -190,17 +190,17 @@ class ProductManagerApp(App[str]):
 
             self.target = event.pressed.id
             self.hide_containers(["copy_container"])
-            self.show_container("storage_container")
+            self.show_container("compare_container")
 
-        if event.radio_set.id == "storage_choice":
+        if event.radio_set.id == "compare_choice":
 
-            if event.pressed.id == "online_storage":
+            if event.pressed.id == "check_exisiting_and_copy":
 
-                self.exit(result={'create': {'source': self.source, 'target': self.target, 'options': "copy", 'local_data': False}})
+                self.exit(result={'create': {'source': self.source, 'target': self.target, 'options': "check_existing", 'local_data': True}})
 
-            elif event.pressed.id == "offline_storage":
+            elif event.pressed.id == "copy_directly":
 
-                self.exit(result={'create': {'source': self.source, 'target': self.target, 'options': None, 'local_data': True}})
+                self.exit(result={'create': {'source': self.source, 'target': self.target, 'options': "copy_directly", 'local_data': False}})
 
         if event.radio_set.id == "update_choice":
 
