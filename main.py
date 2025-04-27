@@ -1,17 +1,10 @@
-import os
-import webbrowser
+import secrets
+import base64
 
+# Generate a secure random key (32 bytes = 256 bits)
+secret_key = secrets.token_bytes(32)
 
-def launch_streamlit_gui():
-    """Launches the new Streamlit-based GUI for the Product Manager."""
-    try:
-        webbrowser.open("http://localhost:8501")
-        os.system("streamlit run app.py")
-    except KeyboardInterrupt:
-        print("\nExiting GUI...")
-    except Exception as e:
-        print(f"Error launching GUI: {e}")
+# Convert to base64 for easier storage
+secret_key_b64 = base64.b64encode(secret_key).decode('utf-8')
 
-
-if __name__ == "__main__":
-    launch_streamlit_gui()
+print(f"Generated JWT_SECRET_KEY: {secret_key_b64}")
