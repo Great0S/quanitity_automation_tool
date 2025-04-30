@@ -1,64 +1,72 @@
+import asyncio
+from typing import Dict, Any, List, Optional
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Optional
-import requests
-import logging
+import aiohttp
 from core.exceptions import APIError
-from config.settings import Settings
+from core.logger import logger
 
 class BaseAPIClient(ABC):
     def __init__(self):
-        self.settings = Settings()
-        self.logger = logging.getLogger(__name__)
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'QuantityAutomationTool/1.0'
-        })
-        self.timeout = self.settings.get('api_timeout', 30)
-        self.max_retries = self.settings.get('max_retries', 3)
+        self.session: Optional[aiohttp.ClientSession] = None
+        self.authenticated: bool = False
+        self.rate_limit_wait: int = 60
+        self.request_timeout: int = 30
+        self.max_retries: int = 3
+
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.session:
+            await self.session.close()
 
     @abstractmethod
-    def authenticate(self) -> None:
+    async def authenticate(self) -> None:
         """Authenticate with the API"""
         pass
 
     @abstractmethod
-    def get_products(self, **kwargs) -> List[Dict[str, Any]]:
-        """Get products from the platform"""
+    async def get_products(self, **kwargs) -> List[Dict[str, Any]]:
+        """Get products from the API"""
         pass
 
     @abstractmethod
-    def update_product(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Update a product on the platform"""
+    async def update_product(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update product in the API"""
         pass
 
-    def _make_request(
-        self, 
-        method: str, 
-        endpoint: str, 
-        data: Optional[Dict] = None, 
-        params: Optional[Dict] = None
-    ) -> Dict[str, Any]:
-        """Make an API request with retry logic"""
+    async def _make_request(
+        self,
+        method: str,
+        url: str,
+        **kwargs
+    ) -> Any:
+        """Make HTTP request with retry mechanism"""
+        if not self.session:
+            self.session = aiohttp.ClientSession()
+
         for attempt in range(self.max_retries):
             try:
-                response = self.session.request(
+                async with self.session.request(
                     method=method,
-                    url=endpoint,
-                    json=data,
-                    params=params,
-                    timeout=self.timeout
-                )
-                response.raise_for_status()
-                return response.json()
-            except requests.exceptions.RequestException as e:
-                self.logger.error(f"API request failed: {str(e)}")
+                    url=url,
+                    timeout=aiohttp.ClientTimeout(total=self.request_timeout),
+                    **kwargs
+                ) as response:
+                    if response.status == 429:  # Rate limit
+                        await asyncio.sleep(self.rate_limit_wait)
+                        continue
+                    
+                    response.raise_for_status()
+                    return await response.json()
+                    
+            except Exception as e:
                 if attempt == self.max_retries - 1:
-                    raise APIError(f"API request failed after {self.max_retries} attempts: {str(e)}")
-                continue
+                    raise APIError(f"Request failed after {self.max_retries} attempts: {str(e)}")
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
 
     def _validate_response(self, response: Dict[str, Any]) -> None:
         """Validate API response"""
         if not isinstance(response, dict):
             raise APIError("Invalid response format")
-        if response.get('status') == 'error':
-            raise APIError(response.get('message', 'Unknown error'))

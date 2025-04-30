@@ -1,29 +1,47 @@
+from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Type
 from api.base_client import BaseAPIClient
 from core.exceptions import ServiceError
 import logging
 
-class ProductService:
-    def __init__(self, api_client: Type[BaseAPIClient]):
-        self.api_client = api_client()
+class BaseProductService(ABC):
+    """Abstract base class for product services"""
+    
+    @abstractmethod
+    async def get_products(self, **kwargs) -> List[Dict[str, Any]]:
+        """Fetch products from the platform"""
+        pass
+
+    @abstractmethod
+    async def update_products(self, products: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+        """Update multiple products"""
+        pass
+
+class ProductService(BaseProductService):
+    """Concrete implementation of product service"""
+    
+    def __init__(self, api_client: BaseAPIClient):
+        self.api_client = api_client
         self.logger = logging.getLogger(__name__)
 
-    def fetch_products(self, **kwargs) -> List[Dict[str, Any]]:
+    async def get_products(self, **kwargs) -> List[Dict[str, Any]]:
         """Fetch products from the platform"""
         try:
-            return self.api_client.get_products(**kwargs)
+            # Await the API client's get_products call
+            products = await self.api_client.get_products(**kwargs)
+            return products
         except Exception as e:
             self.logger.error(f"Error fetching products: {str(e)}")
             raise ServiceError(f"Failed to fetch products: {str(e)}")
 
-    def update_products(self, products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def update_products(self, products: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """Update multiple products"""
         results = []
         errors = []
 
         for product in products:
             try:
-                result = self.api_client.update_product(product)
+                result = await self.api_client.update_product(product)
                 results.append(result)
             except Exception as e:
                 self.logger.error(f"Error updating product {product.get('sku')}: {str(e)}")

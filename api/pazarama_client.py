@@ -36,6 +36,29 @@ class PazaramaClient(BaseAPIClient):
             "X-SELLER-ID": self.seller_id
         }
 
+    async def authenticate(self) -> None:
+        """Authenticate with Pazarama API using API key"""
+        try:
+            headers = {
+                'X-API-KEY': self.api_key,
+                'X-SELLER-ID': self.seller_id
+            }
+            
+            test_response = await self._make_request(
+                endpoint="/products",
+                headers=headers,
+                params={'limit': 1}
+            )
+            
+            if not test_response or 'status' not in test_response:
+                raise AuthenticationError("Pazarama authentication failed")
+                
+            self.logger.info("Pazarama authentication successful")
+            
+        except Exception as e:
+            self.logger.error(f"Pazarama authentication failed: {str(e)}")
+            raise AuthenticationError(f"Pazarama authentication failed: {str(e)}")
+
     def _setup_endpoints(self) -> None:
         """Setup API endpoints"""
         self.base_url = "https://api.pazarama.com/seller/v2"

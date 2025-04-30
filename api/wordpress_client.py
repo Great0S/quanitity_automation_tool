@@ -3,11 +3,8 @@ Handles WooCommerce product management
 """
 
 import os
-import json
-import asyncio
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, cast
 from datetime import datetime
-import aiohttp
 from woocommerce import API
 from core.exceptions import APIError, AuthenticationError
 from core.logger import logger
@@ -21,6 +18,30 @@ class WordPressClient(BaseAPIClient):
         self._setup_credentials()
         self.logger = logger
 
+    async def authenticate(self) -> None:
+        """Authenticate with WordPress/WooCommerce API using consumer credentials"""
+        try:
+            # Create auth dict with explicit type casting
+            auth: Dict[str, str] = {
+                'consumer_key': str(self.consumer_key),
+                'consumer_secret': str(self.consumer_secret)
+            }
+            
+            test_response = await self._make_request(
+                endpoint="/wp-json/wc/v3/products",
+                auth=auth,
+                params={'per_page': 1}
+            )
+            
+            if not test_response or not isinstance(test_response, list):
+                raise AuthenticationError("WordPress/WooCommerce authentication failed")
+                
+            self.logger.info("WordPress/WooCommerce authentication successful")
+            
+        except Exception as e:
+            self.logger.error(f"WordPress/WooCommerce authentication failed: {str(e)}")
+            raise AuthenticationError(f"WordPress/WooCommerce authentication failed: {str(e)}")
+
     def _setup_credentials(self) -> None:
         """Setup WooCommerce API credentials"""
         self.site_url = os.getenv('WP_SITE_URL')
@@ -30,12 +51,16 @@ class WordPressClient(BaseAPIClient):
         if not all([self.site_url, self.consumer_key, self.consumer_secret]):
             raise AuthenticationError("Missing WordPress/WooCommerce API credentials")
             
+        # Initialize WooCommerce API client
         self.wcapi = API(
-            url=self.site_url,
-            consumer_key=self.consumer_key,
-            consumer_secret=self.consumer_secret,
+            url=str(self.site_url),
+            consumer_key=str(self.consumer_key),
+            consumer_secret=str(self.consumer_secret),
             version="wc/v3"
         )
+        
+        # Set base URL
+        self.base_url = str(self.site_url)
 
     async def get_products(self, **kwargs) -> List[Dict[str, Any]]:
         """Fetch products from WooCommerce"""
@@ -47,17 +72,17 @@ class WordPressClient(BaseAPIClient):
             }
             
             # WooCommerce API doesn't support async, so we run it in a thread
-            response = await asyncio.to_thread(
-                self.wcapi.get,
-                "products",
-                params=params
+            response = await self._make_request(
+                endpoint="/wp-json/wc/v3/products",
+                params=params,
+                auth={
+                    'consumer_key': str(self.consumer_key),
+                    'consumer_secret': str(self.consumer_secret)
+                }
             )
             
-            if response.status_code != 200:
-                raise APIError(f"Failed to fetch products: {response.text}")
-            
             products = []
-            for item in response.json():
+            for item in response:
                 product = self._format_product(item)
                 if product:
                     products.append(product)
@@ -72,17 +97,17 @@ class WordPressClient(BaseAPIClient):
         """Format product data"""
         try:
             return {
-                'sku': item.get('sku'),
+                'sku': item.get('sku', ''),
                 'data': {
-                    'title': item.get('name'),
-                    'description': item.get('description'),
+                    'title': item.get('name', ''),
+                    'description': item.get('description', ''),
                     'price': float(item.get('regular_price', 0)),
                     'sale_price': float(item.get('sale_price', 0)),
                     'quantity': int(item.get('stock_quantity', 0)),
-                    'category': [cat['name'] for cat in item.get('categories', [])],
-                    'images': [img['src'] for img in item.get('images', [])],
+                    'category': [cat.get('name', '') for cat in item.get('categories', [])],
+                    'images': [img.get('src', '') for img in item.get('images', [])],
                     'attributes': item.get('attributes', []),
-                    'status': item.get('status'),
+                    'status': item.get('status', ''),
                     'lastUpdate': datetime.now().isoformat()
                 }
             }
@@ -93,8 +118,8 @@ class WordPressClient(BaseAPIClient):
     async def update_product(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
         """Update product on WooCommerce"""
         try:
-            sku = product_data['sku']
-            data = product_data['data']
+            sku = product_data.get('sku', '')
+            data = product_data.get('data', {})
             
             # First, find product ID by SKU
             product_id = await self._get_product_id_by_sku(sku)
@@ -102,22 +127,23 @@ class WordPressClient(BaseAPIClient):
                 raise APIError(f"Product with SKU {sku} not found")
             
             update_data = {
-                'name': data['title'],
-                'regular_price': str(data['price']),
-                'stock_quantity': data['quantity'],
+                'name': data.get('title', ''),
+                'regular_price': str(data.get('price', 0)),
+                'stock_quantity': data.get('quantity', 0),
                 'description': data.get('description', ''),
                 'images': [{'src': img} for img in data.get('images', [])]
             }
             
             # Update product
-            response = await asyncio.to_thread(
-                self.wcapi.put,
-                f"products/{product_id}",
-                update_data
+            response = await self._make_request(
+                endpoint=f"/wp-json/wc/v3/products/{product_id}",
+                method="PUT",
+                data=update_data,
+                auth={
+                    'consumer_key': str(self.consumer_key),
+                    'consumer_secret': str(self.consumer_secret)
+                }
             )
-            
-            if response.status_code not in [200, 201]:
-                raise APIError(f"Failed to update product: {response.text}")
             
             return product_data
             
@@ -128,36 +154,19 @@ class WordPressClient(BaseAPIClient):
     async def _get_product_id_by_sku(self, sku: str) -> Optional[int]:
         """Get WooCommerce product ID by SKU"""
         try:
-            response = await asyncio.to_thread(
-                self.wcapi.get,
-                "products",
-                params={'sku': sku}
+            response = await self._make_request(
+                endpoint="/wp-json/wc/v3/products",
+                params={'sku': sku},
+                auth={
+                    'consumer_key': str(self.consumer_key),
+                    'consumer_secret': str(self.consumer_secret)
+                }
             )
             
-            if response.status_code == 200:
-                products = response.json()
-                if products:
-                    return products[0]['id']
+            if response and isinstance(response, list) and len(response) > 0:
+                return int(response[0].get('id', 0))
             return None
             
         except Exception as e:
             self.logger.error(f"Error getting product ID for SKU {sku}: {str(e)}")
             return None
-
-    async def get_categories(self) -> List[Dict[str, Any]]:
-        """Get WooCommerce categories"""
-        try:
-            response = await asyncio.to_thread(
-                self.wcapi.get,
-                "products/categories",
-                params={'per_page': 100}
-            )
-            
-            if response.status_code != 200:
-                raise APIError(f"Failed to fetch categories: {response.text}")
-                
-            return response.json()
-            
-        except Exception as e:
-            self.logger.error(f"Failed to fetch categories: {str(e)}")
-            raise APIError(f"Failed to fetch categories: {str(e)}")

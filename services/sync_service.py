@@ -1,17 +1,37 @@
 from typing import Dict, List, Any
 from services.product_service import ProductService
 from core.exceptions import SyncError
-import logging
 from datetime import datetime
+from core.logger import logger
 
 class SyncService:
     def __init__(self, source_service: ProductService, target_service: ProductService):
+        """
+        Initialize sync service
+        
+        Args:   
+            source_service: Source platform service
+            target_service: Target platform service
+        """
+        if not isinstance(source_service, ProductService):
+            raise ValueError("source_service must implement ProductService")
+        if not isinstance(target_service, ProductService):
+            raise ValueError("target_service must implement ProductService")
+            
         self.source_service = source_service
         self.target_service = target_service
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger
 
-    def sync_products(self, products: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Sync products from source to target"""
+    async def sync_products(self, products: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Sync products from source to target
+        
+        Args:
+            products: List of products to sync
+            
+        Returns:
+            Dict with sync results
+        """
         try:
             start_time = datetime.now()
             self.logger.info(f"Starting product sync at {start_time}")
@@ -34,7 +54,7 @@ class SyncService:
                         raise SyncError(f"Product validation failed: {errors}")
 
                     # Update product
-                    self.target_service.update_products([product])
+                    await self.target_service.update_products([product])
                     results['successful'] += 1
 
                 except Exception as e:

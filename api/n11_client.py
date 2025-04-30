@@ -34,7 +34,7 @@ class N11Client(BaseAPIClient):
         """
         try:
             # Test authentication by making a simple API call
-            test_response = await self._make_request(
+            test_response = self._make_request(
                 endpoint=f"{self.endpoints['products']}GetProductList",
                 params={'currentPage': 1, 'pageSize': 1}
             )
@@ -72,7 +72,7 @@ class N11Client(BaseAPIClient):
         }
 
     def _make_request(self, endpoint: str, method: str = 'GET', 
-                     params: Dict[str, Any] = None) -> Dict[str, Any]:
+                     params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Make API request to N11
         

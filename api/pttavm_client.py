@@ -21,6 +21,33 @@ class PTTAVMClient(BaseAPIClient):
         self._setup_endpoints()
         self.logger = logger
 
+    async def authenticate(self) -> None:
+        """Authenticate with PTTAVM API using API credentials"""
+        try:
+            auth_data = {
+                'username': self.username,
+                'password': self.password,
+                'grant_type': 'password'
+            }
+            
+            test_response = await self._make_request(
+                endpoint="/auth/token",
+                method="POST",
+                data=auth_data
+            )
+            
+            if not test_response or 'access_token' not in test_response:
+                raise AuthenticationError("PTTAVM authentication failed")
+                
+            self.access_token = test_response['access_token']
+            self.headers['Authorization'] = f"Bearer {self.access_token}"
+            
+            self.logger.info("PTTAVM authentication successful")
+            
+        except Exception as e:
+            self.logger.error(f"PTTAVM authentication failed: {str(e)}")
+            raise AuthenticationError(f"PTTAVM authentication failed: {str(e)}")
+
     def _setup_credentials(self) -> None:
         """Setup API credentials"""
         self.api_key = os.getenv('PTTAVM_API_KEY')
