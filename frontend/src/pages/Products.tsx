@@ -216,7 +216,7 @@ interface Product {
 
 interface ProductUpdateData {
   sku: string;
-  [key: string]: any;
+  data?: Record<string, any>;
 }
 
 const Products: React.FC = () => {
@@ -294,8 +294,8 @@ const Products: React.FC = () => {
           params.size = pageSize;
           break;
         case 'Hepsiburada':
-          params.offset = (currentPage - 1) * pageSize;
-          params.limit = pageSize;
+          params.page = currentPage;
+          params.size = pageSize;
           break;
         default:
           params.page = currentPage;
@@ -403,12 +403,12 @@ const Products: React.FC = () => {
           // Create a new product object with updated data
           const newProduct = { ...updatedProducts[index] };
           
-          // Update all fields from updatedProduct
-          Object.entries(updatedProduct).forEach(([key, value]) => {
-            if (key !== 'sku') {
+          // Update all fields from updatedProduct.data
+          if (updatedProduct.data) {
+            Object.entries(updatedProduct.data).forEach(([key, value]) => {
               newProduct.data[key] = value;
-            }
-          });
+            });
+          }
           
           updatedProducts[index] = newProduct;
         }

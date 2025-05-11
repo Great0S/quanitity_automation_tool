@@ -177,3 +177,4 @@ amazon_VEHICLE_MAT_attrs.json
 test.csv
 .env.EmanHali
 .env.backup
+data/products.db

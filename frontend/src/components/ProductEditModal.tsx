@@ -18,7 +18,7 @@ const ModalContent = styled.div`
   background-color: white;
   border-radius: 8px;
   padding: 24px;
-  width: 500px;
+  width: 600px;
   max-width: 90%;
   max-height: 90vh;
   overflow-y: auto;
@@ -189,6 +189,39 @@ const NoImagePlaceholder = styled.div`
   margin-bottom: 16px;
 `;
 
+const TabContainer = styled.div`
+  margin-bottom: 20px;
+`;
+
+const TabButtons = styled.div`
+  display: flex;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 20px;
+`;
+
+interface TabButtonProps {
+  $active: boolean;
+}
+
+const TabButton = styled.button<TabButtonProps>`
+  padding: 10px 16px;
+  background: ${props => props.$active ? '#0f3460' : 'transparent'};
+  color: ${props => props.$active ? 'white' : '#333'};
+  border: none;
+  border-bottom: 2px solid ${props => props.$active ? '#0f3460' : 'transparent'};
+  cursor: pointer;
+  font-weight: ${props => props.$active ? '600' : '400'};
+  transition: all 0.2s;
+  
+  &:hover {
+    background-color: ${props => props.$active ? '#0f3460' : '#f5f5f5'};
+  }
+`;
+
+const TabContent = styled.div`
+  padding: 10px 0;
+`;
+
 // Helper function to get image URL based on platform
 const getImageUrl = (product: Product, platform: string): string | null => {
   // Different platforms store image URLs in different fields
@@ -221,23 +254,27 @@ const getImageUrl = (product: Product, platform: string): string | null => {
              product.data.pictureUrl || 
              null;
     case 'Trendyol':
-      return product.data.images?.[0] || 
+      return Array.isArray(product.data.images) && product.data.images.length > 0 ? 
+             (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) || 
              product.data.image || 
-             null;
+             null : null;
     case 'Hepsiburada':
-      return product.data.images?.[0]?.url || 
+      return Array.isArray(product.data.images) && product.data.images.length > 0 ? 
+             (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) || 
              product.data.imageUrl || 
-             null;
+             null : null;
     case 'N11':
-      return product.data.images?.[0] || 
+      return Array.isArray(product.data.images) && product.data.images.length > 0 ? 
+             (typeof product.data.images[0] === 'string' ? product.data.images[0] : null) || 
              product.data.imageUrl || 
-             null;
+             null : null;
     default:
       // Try common field names
       return product.data.image || 
              product.data.imageUrl || 
              product.data.img_url || 
-             product.data.images?.[0] || 
+             (Array.isArray(product.data.images) && product.data.images.length > 0 ? 
+              (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) : null) || 
              null;
   }
 };
@@ -259,7 +296,7 @@ interface Product {
 
 interface ProductUpdateData {
   sku: string;
-  [key: string]: any;
+  data?: Record<string, any>;
 }
 
 interface ProductEditModalProps {
@@ -295,11 +332,18 @@ const selectFields = {
   'status': ['active', 'inactive', 'draft', 'pending']
 };
 
+// Platform-specific field groupings
+const fieldGroups = {
+  'basic': ['title', 'price', 'list_price', 'quantity', 'status', 'description'],
+  'details': ['barcode', 'brand', 'brand_id', 'category_id', 'category_name', 'product_main_id', 'vat_rate'],
+  'shipping': ['preparing_day', 'shipment_template', 'max_purchase_quantity'],
+  'advanced': [] // Will be populated with remaining fields
+};
+
 const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, onSave, platform }) => {
   // Initialize form data with all editable fields from product
-  const [formData, setFormData] = useState<ProductUpdateData>({
-    sku: product.sku
-  });
+  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [activeTab, setActiveTab] = useState<string>('basic');
   
   // Add all editable fields from product.data
   useEffect(() => {
@@ -312,11 +356,18 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
       }
     });
     
-    setFormData(prev => ({
-      ...prev,
-      ...editableFields
-    }));
+    setFormData(editableFields);
   }, [product]);
+  
+  // Populate the advanced tab with fields not in other tabs
+  useEffect(() => {
+    const allFields = Object.keys(formData);
+    const assignedFields = [...fieldGroups.basic, ...fieldGroups.details, ...fieldGroups.shipping];
+    
+    fieldGroups.advanced = allFields.filter(field => 
+      !assignedFields.includes(field) && !nonEditableFields.includes(field)
+    );
+  }, [formData]);
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target as HTMLInputElement;
@@ -328,91 +379,180 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    
+    // Prepare the update data in the format expected by the API
+    const updateData: ProductUpdateData = {
+      sku: product.sku,
+      data: formData
+    };
+    
+    onSave(updateData);
   };
   
-  // Determine which fields are editable based on the platform
-  const renderDynamicFields = () => {
+  // Render fields for the current tab
+  const renderTabFields = (tabName: string) => {
     const fields = [];
+    const fieldsToRender = fieldGroups[tabName as keyof typeof fieldGroups] || [];
     
-    // Add all fields from formData except sku (which is always shown first and disabled)
-    Object.entries(formData).forEach(([key, value]) => {
-      if (key === 'sku') return;
-      
-      // Skip non-editable fields
-      if (nonEditableFields.includes(key)) return;
-      
-      // Format field label
-      const fieldLabel = key
-        .replace(/_/g, ' ')
-        .split(' ')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
-      
-      // Determine field type
-      if (textareaFields.includes(key)) {
-        // Render as textarea
-        fields.push(
-          <FormGroup key={key}>
-            <Label htmlFor={key}>{fieldLabel}</Label>
-            <TextArea
-              id={key}
-              name={key}
-              value={value || ''}
-              onChange={handleChange}
-              rows={4}
-            />
-          </FormGroup>
-        );
-      } else if (key in selectFields) {
-        // Render as select
-        fields.push(
-          <FormGroup key={key}>
-            <Label htmlFor={key}>{fieldLabel}</Label>
-            <Select
-              id={key}
-              name={key}
-              value={value || ''}
-              onChange={handleChange}
-            >
-              {selectFields[key as keyof typeof selectFields].map(option => (
-                <option key={option} value={option}>
-                  {option.charAt(0).toUpperCase() + option.slice(1)}
-                </option>
-              ))}
-            </Select>
-          </FormGroup>
-        );
-      } else {
-        // Determine input type
-        let fieldType = 'text';
-        if (typeof value === 'number') {
-          fieldType = 'number';
-        } else if (key.includes('date') || key.includes('time')) {
-          fieldType = 'datetime-local';
-        } else if (key.includes('email')) {
-          fieldType = 'email';
-        } else if (key.includes('url')) {
-          fieldType = 'url';
+    // Add fields from formData that belong to this tab
+    for (const key of fieldsToRender) {
+      if (key in formData) {
+        const value = formData[key];
+        
+        // Format field label
+        const fieldLabel = key
+          .replace(/_/g, ' ')
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        
+        // Determine field type
+        if (textareaFields.includes(key)) {
+          // Render as textarea
+          fields.push(
+            <FormGroup key={key}>
+              <Label htmlFor={key}>{fieldLabel}</Label>
+              <TextArea
+                id={key}
+                name={key}
+                value={value || ''}
+                onChange={handleChange}
+                rows={4}
+              />
+            </FormGroup>
+          );
+        } else if (key in selectFields) {
+          // Render as select
+          fields.push(
+            <FormGroup key={key}>
+              <Label htmlFor={key}>{fieldLabel}</Label>
+              <Select
+                id={key}
+                name={key}
+                value={value || ''}
+                onChange={handleChange}
+              >
+                {selectFields[key as keyof typeof selectFields].map(option => (
+                  <option key={option} value={option}>
+                    {option.charAt(0).toUpperCase() + option.slice(1)}
+                  </option>
+                ))}
+              </Select>
+            </FormGroup>
+          );
+        } else {
+          // Determine input type
+          let fieldType = 'text';
+          if (typeof value === 'number') {
+            fieldType = 'number';
+          } else if (key.includes('date') || key.includes('time')) {
+            fieldType = 'datetime-local';
+          } else if (key.includes('email')) {
+            fieldType = 'email';
+          } else if (key.includes('url')) {
+            fieldType = 'url';
+          }
+          
+          // Default field rendering
+          fields.push(
+            <FormGroup key={key}>
+              <Label htmlFor={key}>{fieldLabel}</Label>
+              <Input
+                id={key}
+                type={fieldType}
+                name={key}
+                value={value || ''}
+                onChange={handleChange}
+                step={fieldType === 'number' && key === 'price' ? '0.01' : fieldType === 'number' ? '1' : undefined}
+                min={fieldType === 'number' ? '0' : undefined}
+              />
+            </FormGroup>
+          );
+        }
+      }
+    }
+    
+    // If this is the advanced tab, render all remaining fields
+    if (tabName === 'advanced') {
+      Object.entries(formData).forEach(([key, value]) => {
+        // Skip fields that are in other tabs or non-editable
+        if ([...fieldGroups.basic, ...fieldGroups.details, ...fieldGroups.shipping].includes(key) || 
+            nonEditableFields.includes(key)) {
+          return;
         }
         
-        // Default field rendering
-        fields.push(
-          <FormGroup key={key}>
-            <Label htmlFor={key}>{fieldLabel}</Label>
-            <Input
-              id={key}
-              type={fieldType}
-              name={key}
-              value={value || ''}
-              onChange={handleChange}
-              step={fieldType === 'number' && key === 'price' ? '0.01' : fieldType === 'number' ? '1' : undefined}
-              min={fieldType === 'number' ? '0' : undefined}
-            />
-          </FormGroup>
-        );
-      }
-    });
+        // Format field label
+        const fieldLabel = key
+          .replace(/_/g, ' ')
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        
+        // Determine field type
+        if (textareaFields.includes(key)) {
+          // Render as textarea
+          fields.push(
+            <FormGroup key={key}>
+              <Label htmlFor={key}>{fieldLabel}</Label>
+              <TextArea
+                id={key}
+                name={key}
+                value={value || ''}
+                onChange={handleChange}
+                rows={4}
+              />
+            </FormGroup>
+          );
+        } else if (key in selectFields) {
+          // Render as select
+          fields.push(
+            <FormGroup key={key}>
+              <Label htmlFor={key}>{fieldLabel}</Label>
+              <Select
+                id={key}
+                name={key}
+                value={value || ''}
+                onChange={handleChange}
+              >
+                {selectFields[key as keyof typeof selectFields].map(option => (
+                  <option key={option} value={option}>
+                    {option.charAt(0).toUpperCase() + option.slice(1)}
+                  </option>
+                ))}
+              </Select>
+            </FormGroup>
+          );
+        } else {
+          // Determine input type
+          let fieldType = 'text';
+          if (typeof value === 'number') {
+            fieldType = 'number';
+          } else if (key.includes('date') || key.includes('time')) {
+            fieldType = 'datetime-local';
+          } else if (key.includes('email')) {
+            fieldType = 'email';
+          } else if (key.includes('url')) {
+            fieldType = 'url';
+          }
+          
+          // Default field rendering
+          fields.push(
+            <FormGroup key={key}>
+              <Label htmlFor={key}>{fieldLabel}</Label>
+              <Input
+                id={key}
+                type={fieldType}
+                name={key}
+                value={value || ''}
+                onChange={handleChange}
+                step={fieldType === 'number' && key === 'price' ? '0.01' : fieldType === 'number' ? '1' : undefined}
+                min={fieldType === 'number' ? '0' : undefined}
+              />
+            </FormGroup>
+          );
+        }
+      });
+    }
     
     return fields;
   };
@@ -440,12 +580,47 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
               id="sku" 
               type="text" 
               name="sku" 
-              value={formData.sku} 
+              value={product.sku} 
               disabled 
             />
           </FormGroup>
           
-          {renderDynamicFields()}
+          <TabContainer>
+            <TabButtons>
+              <TabButton 
+                type="button"
+                $active={activeTab === 'basic'} 
+                onClick={() => setActiveTab('basic')}
+              >
+                Basic Info
+              </TabButton>
+              <TabButton 
+                type="button"
+                $active={activeTab === 'details'} 
+                onClick={() => setActiveTab('details')}
+              >
+                Details
+              </TabButton>
+              <TabButton 
+                type="button"
+                $active={activeTab === 'shipping'} 
+                onClick={() => setActiveTab('shipping')}
+              >
+                Shipping
+              </TabButton>
+              <TabButton 
+                type="button"
+                $active={activeTab === 'advanced'} 
+                onClick={() => setActiveTab('advanced')}
+              >
+                Advanced
+              </TabButton>
+            </TabButtons>
+            
+            <TabContent>
+              {renderTabFields(activeTab)}
+            </TabContent>
+          </TabContainer>
           
           <ButtonGroup>
             <CancelButton type="button" onClick={onClose}>
