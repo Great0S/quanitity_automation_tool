@@ -556,17 +556,17 @@ const Products: React.FC = () => {
       <div style={{ position: 'relative' }}>
         <Table {...getTableProps()}>
           <thead>
-            {headerGroups.map(headerGroup => {
+            {headerGroups.map((headerGroup, i) => {
               const { key, ...headerGroupProps } = headerGroup.getHeaderGroupProps();
               return (
-                <tr key={headerGroup.id} {...headerGroupProps}>
-                  {headerGroup.headers.map(column => {
+                <tr key={`header-group-${i}-${headerGroup.id || i}`} {...headerGroupProps}>
+                  {headerGroup.headers.map((column, j) => {
                     const sortByProps = (column as any).getSortByToggleProps ? 
                       (column as any).getSortByToggleProps() : {};
                     const { key: columnKey, ...columnProps } = column.getHeaderProps(sortByProps);
                     
                     return (
-                      <th key={column.id} {...columnProps}>
+                      <th key={`header-${i}-${j}-${column.id || j}`} {...columnProps}>
                         {column.render('Header')}
                         <span>
                           {(column as any).isSorted
@@ -584,15 +584,17 @@ const Products: React.FC = () => {
             })}
           </thead>
           <tbody {...getTableBodyProps()}>
-            {page.map(row => {
+            {page.map((row, i) => {
               prepareRow(row);
               const { key: rowKey, ...rowProps } = row.getRowProps();
               return (
-                <tr key={row.id} {...rowProps}>
-                  {row.cells.map(cell => {
+                <tr key={`row-${i}-${row.id || i}`} {...rowProps}>
+                  {row.cells.map((cell, j) => {
                     const { key: cellKey, ...cellProps } = cell.getCellProps();
                     return (
-                      <td key={cell.id} {...cellProps}>{cell.render('Cell')}</td>
+                      <td key={`cell-${i}-${j}-${cell.column.id || j}`} {...cellProps}>
+                        {cell.render('Cell')}
+                      </td>
                     );
                   })}
                 </tr>
@@ -620,7 +622,7 @@ const Products: React.FC = () => {
               {'>'}
             </PageButton>
             <PageButton onClick={() => gotoPage(pageCount - 1)} disabled={!canNextPage}>
-              {'>>'}
+              {'>>'} 
             </PageButton>
           </PageButtons>
         </Pagination>

@@ -50,7 +50,8 @@ const PlatformCard = styled(Card)`
   flex-direction: column;
 `;
 
-const PlatformStatus = styled.div<{ isActive: boolean }>`
+// Changed isActive to $isActive (transient prop) to fix the warning
+const PlatformStatus = styled.div<{ $isActive: boolean }>`
   display: flex;
   align-items: center;
   margin-bottom: 10px;
@@ -61,7 +62,7 @@ const PlatformStatus = styled.div<{ isActive: boolean }>`
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background-color: ${props => props.isActive ? '#4caf50' : '#f44336'};
+    background-color: ${props => props.$isActive ? '#4caf50' : '#f44336'};
     margin-right: 8px;
   }
 `;
@@ -274,7 +275,8 @@ const Dashboard: React.FC = () => {
         {platforms.map((platform) => (
           <PlatformCard key={platform.name}>
             <CardTitle>{platform.name}</CardTitle>
-            <PlatformStatus isActive={platform.isActive}>
+            {/* Changed isActive to $isActive to fix the warning */}
+            <PlatformStatus $isActive={platform.isActive}>
               <PlatformName>{platform.isActive ? 'Active' : 'Inactive'}</PlatformName>
             </PlatformStatus>
             

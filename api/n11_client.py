@@ -340,7 +340,7 @@ class N11Client(BaseAPIClient):
 
         Args:
             **kwargs: Optional filters
-                - offset: Pagination offset (default: 0)
+                - page: Page number (default: 0)
                 - size: Page size (default: 100)
                 - status: Product status (default: active)
 
@@ -350,17 +350,20 @@ class N11Client(BaseAPIClient):
         try:
             self.logger.info("Fetching products from N11...")
 
-            # Build query parameters
+            # Build query parameters - Updated to match the example
             params = {
-                "offset": kwargs.get("offset", 0),
+                "page": kwargs.get("page", 0),
                 "size": kwargs.get("size", 100),
-                "status": kwargs.get("status", "active"),
             }
+            
+            # Add status if provided
+            if "status" in kwargs:
+                params["status"] = kwargs["status"]
 
-            # Make the API request
+            # Make the API request - Updated to match the example
             response = await self._make_request(
                 method="GET",
-                url=f"{self.base_url}{self.endpoints['product_query']}/products",
+                url=f"{self.base_url}{self.endpoints['product_query']}",
                 params=params,
             )
 
