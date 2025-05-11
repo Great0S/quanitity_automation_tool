@@ -1,13 +1,14 @@
 # pages/auth.py
 import streamlit as st
-from auth.cognito_manager import CognitoManager
+import os
+from auth.simple_auth import SimpleAuthManager
 from core.exceptions import AuthenticationError
 
 def show_login_page():
     st.title("Login")
     
-    # Initialize Cognito manager
-    cognito = CognitoManager()
+    # Initialize auth manager
+    auth_manager = SimpleAuthManager()
     
     # Create tabs for login and registration
     tab1, tab2 = st.tabs(["Login", "Register"])
@@ -20,7 +21,7 @@ def show_login_page():
             
             if submit:
                 try:
-                    auth_result = cognito.login(username, password)
+                    auth_result = auth_manager.login(username, password)
                     # Store tokens in session state
                     st.session_state.access_token = auth_result['AccessToken']
                     st.session_state.refresh_token = auth_result['RefreshToken']
@@ -45,25 +46,22 @@ def show_login_page():
                     return
                     
                 try:
-                    cognito.create_user(new_username, new_password, new_email)
-                    st.success("Registration successful! Please check your email for confirmation code.")
-                    
-                    # Show confirmation code input
-                    with st.form("confirm_form"):
-                        confirmation_code = st.text_input("Confirmation Code")
-                        confirm_submit = st.form_submit_button("Confirm Registration")
-                        
-                        if confirm_submit:
-                            try:
-                                cognito.confirm_user(new_username, confirmation_code)
-                                st.success("Email confirmed! You can now login.")
-                            except AuthenticationError as e:
-                                st.error(f"Confirmation failed: {str(e)}")
-                                
+                    auth_manager.create_user(new_username, new_password, new_email)
+                    st.success("Registration successful! You can now login.")
                 except AuthenticationError as e:
                     st.error(f"Registration failed: {str(e)}")
 
-# Update your main app.py
+def show_main_app():
+    """Show the main application after login"""
+    st.title("Quantity Automation Tool")
+    st.write(f"Welcome, {st.session_state.get('username', 'User')}!")
+    
+    if st.button("Logout"):
+        # Clear session state
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
 def main():
     # Check if user is authenticated
     if not st.session_state.get('authenticated', False):

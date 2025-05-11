@@ -1,50 +1,50 @@
-import core.exceptions
+"""
+Custom exceptions for the application
+"""
 
 class BaseError(Exception):
-    """Base exception for the application"""
+    """Base exception class"""
+    pass
+
+class AuthenticationError(BaseError):
+    """Authentication error"""
     pass
 
 class APIError(BaseError):
-    """Raised when an API request fails"""
-    pass
-
-class ServiceError(BaseError):
-    """Raised when a service operation fails"""
-    pass
-
-class SyncError(BaseError):
-    """Raised when product synchronization fails"""
+    """API error"""
     pass
 
 class ValidationError(BaseError):
-    """Raised when data validation fails"""
+    """Validation error"""
     pass
 
-class ConfigError(BaseError):
-    """Raised when configuration is invalid"""
+class ConfigurationError(BaseError):
+    """Configuration error"""
     pass
 
-class DatabaseError(BaseError):
-    """Raised when a database operation fails"""
+class RateLimitError(APIError):
+    """Rate limit exceeded error"""
     pass
-class NetworkError(BaseError):
-    """Raised when a network operation fails"""
+
+class NetworkError(APIError):
+    """Network connection error"""
     pass
-class AuthenticationError(BaseError):
-    """Raised when authentication fails"""
+
+class ResourceNotFoundError(APIError):
+    """Resource not found error"""
     pass
-class PermissionError(BaseError):
-    """Raised when a user does not have permission to perform an action"""
+
+class DuplicateResourceError(APIError):
+    """Duplicate resource error"""
     pass
-class RateLimitError(BaseError):
-    """Raised when the rate limit for an API is exceeded"""
+
+class InsufficientPermissionsError(AuthenticationError):
+    """Insufficient permissions error"""
     pass
-class TimeoutError(BaseError):
-    """Raised when an operation times out"""
-    pass
-class NotFoundError(BaseError):
-    """Raised when a requested resource is not found"""
+
+class TokenExpiredError(AuthenticationError):
+    """Token expired error"""
     pass
 class ExportError(BaseError):
-    """Raised when an export operation fails"""
+    """Export error"""
     pass

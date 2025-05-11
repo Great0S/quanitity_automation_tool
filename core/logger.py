@@ -149,8 +149,9 @@ class CustomLogger:
                     'message': record.getMessage(),
                 }
                 
-                if hasattr(record, 'props'):
-                    log_data.update(record.props)
+                props = getattr(record, 'props', None)
+                if isinstance(props, dict):
+                    log_data.update(props)
                 
                 if record.exc_info:
                     log_data['exception'] = self.formatException(record.exc_info)
@@ -188,19 +189,10 @@ class CustomLogger:
     def _log(self, level: int, message: str, exc_info: bool = False, **kwargs: Any) -> None:
         """Internal logging method"""
         if kwargs:
-            record = logging.LogRecord(
-                name=self.logger.name,
-                level=level,
-                pathname=__file__,
-                lineno=0,
-                msg=message,
-                args=(),
-                exc_info=None
-            )
-            record.props = kwargs
-            self.logger.handle(record)
-        else:
-            self.logger.log(level, message, exc_info=exc_info)
+            if kwargs:
+                self.logger.log(level, message, exc_info=exc_info, extra={'props': kwargs})
+            else:
+                self.logger.log(level, message, exc_info=exc_info)
 
     def log_performance(self, operation: str, duration: float, **kwargs: Any) -> None:
         """Log performance metrics"""

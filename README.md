@@ -8,6 +8,7 @@ This project is an e-commerce integration system that allows for seamless intera
 - Product synchronization across platforms
 - Inventory and price updates
 - Asynchronous operations for improved performance
+- Streamlit-based user interface
 
 ## Installation
 
@@ -17,39 +18,90 @@ This project is an e-commerce integration system that allows for seamless intera
    cd ecommerce-integration
    ```
 
-2. Install Poetry (if not already installed):
+2. Create and activate a virtual environment:
    ```
-   curl -sSL https://install.python-poetry.org | python3 -
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
 
 3. Install dependencies:
    ```
-   poetry install
+   pip install -r requirements.txt
    ```
 
 4. Set up environment variables:
-   Create a `.env` file in the project root and add your API keys:
+   Copy the `.env.example` file to `.env` and fill in your API keys:
    ```
-   N11_API_KEY=your_n11_api_key
-   HEPSIBURADA_API_KEY=your_hepsiburada_api_key
-   # Add other API keys as needed
+   cp .env.example .env
+   # Edit .env with your actual API keys
    ```
+
+## Configuration
+
+The application uses environment variables for configuration. The following variables are required:
+
+### Authentication
+- `JWT_SECRET_KEY`: Secret key for JWT token generation (for simple auth)
+
+### WordPress/WooCommerce
+- `WP_SITE_URL`: Your WordPress site URL
+- `WC_CONSUMER_KEY`: WooCommerce consumer key
+- `WC_CONSUMER_SECRET`: WooCommerce consumer secret
+
+### Other Platforms
+- See the `.env` file for all required API keys for each platform
 
 ## Usage
 
 To run the application:
 
 ```
-poetry run python app.py
+streamlit run app.py
 ```
 
+The default login credentials are:
+- Username: admin
+- Password: admin
+
+## Project Structure
+
+```
+quanitity_automation_tool/
+├── api/                  # API clients for different platforms
+├── auth/                 # Authentication modules
+├── config/               # Configuration files
+├── core/                 # Core functionality
+├── logs/                 # Log files
+├── pages/                # Streamlit pages
+├── services/             # Business logic services
+├── tests/                # Test files
+├── ui/                   # UI components
+├── utils/                # Utility functions
+├── .env                  # Environment variables
+├── app.py                # Main application file
+├── main.py               # Entry point
+└── requirements.txt      # Dependencies
+```
 
 ## Running Tests
 
 To run the test suite:
 ```
-poetry run pytest
+pytest
 ```
+
+## Troubleshooting
+
+### Authentication Issues
+If you encounter authentication errors:
+1. Check that your API credentials are correctly set in the `.env` file
+2. For simple authentication, make sure `JWT_SECRET_KEY` is set
+3. For AWS Cognito authentication, uncomment and set the Cognito variables in `.env`
+
+### API Connection Issues
+1. Verify your internet connection
+2. Check that the API endpoints are accessible
+3. Verify that your API credentials have the necessary permissions
 
 ## Contributing
 
