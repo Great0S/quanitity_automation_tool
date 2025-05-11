@@ -8,16 +8,18 @@ import base64
 import asyncio
 import aiohttp
 import time
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union, cast
 from datetime import datetime
 from core.exceptions import APIError, AuthenticationError, NetworkError, RateLimitError
 from core.logger import logger
+from core.error_handler import handle_exceptions, safe_execute, error_handler
 from .base_client import BaseAPIClient
+
 
 class HepsiburadaClient(BaseAPIClient):
     """Hepsiburada API Client"""
-    
-    def __init__(self):
+
+    def __init__(self) -> None:
         super().__init__()
         self._setup_credentials()
         self._setup_endpoints()
@@ -26,404 +28,489 @@ class HepsiburadaClient(BaseAPIClient):
 
     def _setup_credentials(self) -> None:
         """Setup API credentials"""
-        self.username = os.getenv('HEPSIBURADA_USERNAME')
-        self.password = os.getenv('HEPSIBURADA_PASSWORD')
-        self.merchant_id = os.getenv('HEPSIBURADA_MERCHANT_ID', self.username)  # Use username as merchant ID if not provided
-        
-        if not all([self.username, self.password]):
-            logger.error("Missing Hepsiburada API credentials")
-            raise AuthenticationError("Missing Hepsiburada API credentials")
-            
-        # Create Basic Auth header
-        auth_string = f"{self.merchant_id}:{self.password}"
-        auth_bytes = auth_string.encode('ascii')
-        auth_b64 = base64.b64encode(auth_bytes).decode('ascii')
-        
-        # API configuration
-        self.base_url = "https://api.hepsiburada.com"
-        self.headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "Authorization": f"Basic {auth_b64}",
-            "User-Agent": self.username
-        }
-        
-        # Log initialization (without sensitive data)
-        logger.debug(f"Hepsiburada client initialized for merchant ID: {self.merchant_id}")
+        try:
+            self.username = os.getenv("HEPSIBURADA_USERNAME")
+            self.password = os.getenv("HEPSIBURADA_PASSWORD")
+            self.merchant_id = os.getenv(
+                "HEPSIBURADA_MERCHANT_ID", self.username
+            )  # Use username as merchant ID if not provided
+
+            if not self.username:
+                error_context = {
+                    "client": "Hepsiburada",
+                    "operation": "_setup_credentials",
+                    "missing": "HEPSIBURADA_USERNAME",
+                }
+                error_handler.log_error(
+                    AuthenticationError("HEPSIBURADA_USERNAME environment variable is not set"),
+                    error_context,
+                )
+                self.logger.error("HEPSIBURADA_USERNAME environment variable is not set")
+
+            if not self.password:
+                error_context = {
+                    "client": "Hepsiburada",
+                    "operation": "_setup_credentials",
+                    "missing": "HEPSIBURADA_PASSWORD",
+                }
+                error_handler.log_error(
+                    AuthenticationError("HEPSIBURADA_PASSWORD environment variable is not set"),
+                    error_context,
+                )
+                self.logger.error("HEPSIBURADA_PASSWORD environment variable is not set")
+
+            if not all([self.username, self.password]):
+                raise AuthenticationError("Missing Hepsiburada API credentials")
+
+            # Create Basic Auth header
+            auth_string = f"{self.merchant_id}:{self.password}"
+            auth_bytes = auth_string.encode("ascii")
+            auth_b64 = base64.b64encode(auth_bytes).decode("ascii")
+
+            # API configuration
+            self.base_url = "https://mpop.hepsiburada.com"  # Correct API endpoint for Hepsiburada
+            self.api_version = "product/api"  # Updated API version path based on Postman example
+            self.headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": f"Basic {auth_b64}",
+                "User-Agent": "sentosyazilim_dev",  # Updated User-Agent based on Postman example
+            }
+
+            # Override base client settings
+            self.request_timeout = 90  # Increase timeout for Hepsiburada
+            self.max_retries = 5  # More retries
+            self.retry_delay = 3  # Longer delay between retries
+
+            # Log initialization (without sensitive data)
+            logger.debug(f"Hepsiburada client initialized for merchant ID: {self.merchant_id}")
+        except Exception as e:
+            error_context = {"client": "Hepsiburada", "operation": "_setup_credentials"}
+            error_handler.log_error(e, error_context)
+            raise
 
     def _setup_endpoints(self) -> None:
         """Setup API endpoints"""
-        self.endpoints = {
-            'listings': '/listings',
-            'products': '/products',
-            'orders': '/orders',
-            'inventory': '/inventory'
-        }
-        logger.debug(f"Hepsiburada endpoints configured: {list(self.endpoints.keys())}")
+        try:
+            # Hepsiburada API endpoints based on their documentation and Postman example
+            self.endpoints = {
+                "listings": "/listings",
+                "products": "/products/all-products-of-merchant",
+                "orders": "/orders",
+                "inventory": "/inventory",
+                "categories": "/categories/get-all-categories",  # Updated based on Postman example
+                "merchants": "/merchants",
+                "status": "/status",
+            }
+            logger.debug(f"Hepsiburada endpoints configured: {list(self.endpoints.keys())}")
+        except Exception as e:
+            error_context = {"client": "Hepsiburada", "operation": "_setup_endpoints"}
+            error_handler.log_error(e, error_context)
+            raise
 
+    @handle_exceptions
     async def authenticate(self) -> None:
         """Authenticate with Hepsiburada API"""
         try:
             logger.info("Authenticating with Hepsiburada API...")
-            
+
+            # Initialize session if not already done
+            if not self.session:
+                # Disable SSL verification for development
+                connector = aiohttp.TCPConnector(
+                    ssl=False,  # Disable SSL verification to avoid certificate issues
+                    use_dns_cache=True,
+                    ttl_dns_cache=300,  # 5 minutes DNS cache
+                    limit=100,  # Connection pool limit
+                )
+                # Create session without timeout
+                self.session = aiohttp.ClientSession(connector=connector)
+
             # Test authentication with a simple request
             try:
+                # Skip status check and go directly to authentication
+                logger.debug(f"Skipping status check and proceeding directly to authentication")
+
+                # Try a simple authenticated request to test credentials using the categories endpoint from Postman example
                 test_response = await self._make_request(
-                    endpoint=f"{self.endpoints['listings']}",
-                    params={'limit': 1}
+                    method="GET",
+                    url=f"{self.base_url}/{self.api_version}/categories/get-all-categories",
+                    headers=self.headers,
+                    params={"size": 10},  # Just get a few categories to test authentication
                 )
-                
+
                 # Print response for debugging
-                logger.debug(f"Hepsiburada authentication response received")
-                
+                logger.debug(f"Hepsiburada authentication response received: {test_response}")
+
                 if not test_response:
                     raise AuthenticationError("Hepsiburada authentication failed: Empty response")
-                    
+
+                # Log the structure of the response to help with debugging
+                if isinstance(test_response, dict):
+                    logger.debug(f"Response keys: {list(test_response.keys())}")
+                elif isinstance(test_response, list):
+                    logger.debug(f"Response is a list with {len(test_response)} items")
+
                 logger.info("Hepsiburada authentication successful")
-                
+
             except aiohttp.ClientConnectorError as e:
-                logger.error(f"Hepsiburada connection error: {str(e)}")
+                error_context = {
+                    "client": "Hepsiburada",
+                    "operation": "authenticate",
+                    "error_type": "ConnectionError",
+                }
+                error_handler.log_error(e, error_context)
                 raise NetworkError(f"Hepsiburada connection error: {str(e)}")
-                
+
             except aiohttp.ClientResponseError as e:
-                if e.status == 401 or e.status == 403:
-                    logger.error(f"Hepsiburada authentication failed: Invalid credentials")
-                    raise AuthenticationError("Hepsiburada authentication failed: Invalid credentials")
-                elif e.status == 429:
-                    logger.error(f"Hepsiburada rate limit exceeded")
+                error_context = {
+                    "client": "Hepsiburada",
+                    "operation": "authenticate",
+                    "error_type": "ResponseError",
+                    "status_code": str(getattr(e, "status", "unknown")),
+                }
+                error_handler.log_error(e, error_context)
+
+                if getattr(e, "status", 0) == 401 or getattr(e, "status", 0) == 403:
+                    raise AuthenticationError(
+                        "Hepsiburada authentication failed: Invalid credentials"
+                    )
+                elif getattr(e, "status", 0) == 429:
                     raise RateLimitError("Hepsiburada rate limit exceeded")
                 else:
-                    logger.error(f"Hepsiburada API error: {str(e)}")
                     raise APIError(f"Hepsiburada API error: {str(e)}")
-                    
+
             except asyncio.TimeoutError:
-                logger.error("Hepsiburada API request timed out")
+                error_context = {
+                    "client": "Hepsiburada",
+                    "operation": "authenticate",
+                    "error_type": "Timeout",
+                }
+                error_handler.log_error(
+                    TimeoutError("Hepsiburada API request timed out"), error_context
+                )
                 raise NetworkError("Hepsiburada API request timed out")
-                
+
         except AuthenticationError as e:
-            logger.error(f"Hepsiburada authentication error: {str(e)}")
+            error_context = {
+                "client": "Hepsiburada",
+                "operation": "authenticate",
+                "error_type": "AuthenticationError",
+            }
+            error_handler.log_error(e, error_context)
             raise
-            
+
         except NetworkError as e:
-            logger.error(f"Hepsiburada network error: {str(e)}")
+            error_context = {
+                "client": "Hepsiburada",
+                "operation": "authenticate",
+                "error_type": "NetworkError",
+            }
+            error_handler.log_error(e, error_context)
             raise
-            
+
         except RateLimitError as e:
-            logger.error(f"Hepsiburada rate limit error: {str(e)}")
+            error_context = {
+                "client": "Hepsiburada",
+                "operation": "authenticate",
+                "error_type": "RateLimitError",
+            }
+            error_handler.log_error(e, error_context)
             raise
-            
+
         except Exception as e:
-            logger.error(f"Unexpected error during Hepsiburada authentication: {str(e)}")
+            error_context = {
+                "client": "Hepsiburada",
+                "operation": "authenticate",
+                "error_type": "UnexpectedError",
+            }
+            error_handler.log_error(e, error_context)
             raise AuthenticationError(f"Hepsiburada authentication failed: {str(e)}")
 
-    async def get_products(self, **kwargs) -> List[Dict[str, Any]]:
+    @handle_exceptions
+    async def get_products(self, **kwargs: Any) -> List[Dict[str, Any]]:
         """
         Fetch products from Hepsiburada
-        
+
         Args:
             **kwargs: Optional filters
-                - offset: Pagination offset (default: 0)
+                - page: Page number (default: 0)
                 - size: Page size (default: 100)
                 - status: Product status (default: active)
-                
+                - barcode: Filter by barcode
+                - sku: Filter by SKU
+                - category_id: Filter by category ID
+
         Returns:
             List of products
         """
         try:
             logger.info("Fetching products from Hepsiburada...")
-            
+
+            # Build query parameters
             params = {
-                'offset': kwargs.get('offset', 0),
-                'limit': kwargs.get('size', 100),
-                'status': kwargs.get('status', 'active')
+                "page": kwargs.get("page", 0),
+                "size": kwargs.get("size", 100)
             }
-            
+
+            # Add optional filters if provided
+            if "status" in kwargs:
+                params["status"] = kwargs["status"]
+            if "barcode" in kwargs:
+                params["barcode"] = kwargs["barcode"]
+            if "sku" in kwargs:
+                params["sku"] = kwargs["sku"]
+            if "category_id" in kwargs:
+                params["categoryId"] = kwargs["category_id"]
+
+            # Make the API request to get products
+            # Updated URL format based on the new API structure
             response = await self._make_request(
-                endpoint=f"{self.endpoints['listings']}",
-                params=params
+                method="GET",
+                url=f"{self.base_url}/{self.api_version}/products/all-products-of-merchant/{self.merchant_id}",
+                params=params,
+                headers=self.headers,
             )
-            
-            if not response or 'listings' not in response:
-                logger.warning("Hepsiburada returned empty product list")
+
+            # Check response format
+            if not response:
+                logger.warning("Hepsiburada returned empty response")
                 return []
-                
+
+            # Handle different response formats
+            products_data = []
+            if "data" in response and isinstance(response["data"], list):
+                products_data = response["data"]
+            elif isinstance(response, list):
+                products_data = response
+            else:
+                logger.warning(
+                    f"Unexpected response format: {response.keys() if isinstance(response, dict) else type(response)}"
+                )
+                return []
+
+            logger.info(f"Retrieved {len(products_data)} products from Hepsiburada API")
+
+            # Format products
             products = []
-            for item in response['listings']:
-                product = self._format_product(item)
-                if product:
-                    products.append(product)
-                    
-            logger.info(f"Retrieved {len(products)} products from Hepsiburada")
+            for item in products_data:
+                try:
+                    product = self._format_product(item)
+                    if product:
+                        products.append(product)
+                except Exception as e:
+                    error_context = {
+                        "client": "Hepsiburada",
+                        "operation": "get_products",
+                        "product_id": str(item.get("merchantSku", "unknown")),
+                        "error_type": "FormatError",
+                    }
+                    error_handler.log_error(e, error_context)
+                    # Continue with other products
+
+            logger.info(f"Formatted {len(products)} products from Hepsiburada")
             return products
-            
-        except AuthenticationError as e:
-            logger.error(f"Authentication error while fetching Hepsiburada products: {str(e)}")
-            raise
-            
-        except NetworkError as e:
-            logger.error(f"Network error while fetching Hepsiburada products: {str(e)}")
-            raise
-            
-        except RateLimitError as e:
-            logger.error(f"Rate limit exceeded while fetching Hepsiburada products: {str(e)}")
-            raise
-            
-        except APIError as e:
-            logger.error(f"API error while fetching Hepsiburada products: {str(e)}")
-            raise
-            
+
         except Exception as e:
-            logger.error(f"Unexpected error while fetching Hepsiburada products: {str(e)}")
-            raise APIError(f"Failed to fetch Hepsiburada products: {str(e)}")
+            error_context = {
+                "client": "Hepsiburada",
+                "operation": "get_products",
+                "kwargs": str(kwargs),
+            }
+            error_handler.log_error(e, error_context)
+            raise
 
     def _format_product(self, item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Format product data"""
+        """Format product data from API response"""
         try:
             # Extract SKU
-            sku = item.get('merchantSku', '')
+            sku = item.get("merchantSku") or item.get("sku") or item.get("sellerSku")
             if not sku:
-                logger.warning("Product missing SKU (merchantSku)")
+                logger.warning(f"Product missing SKU: {item}")
                 return None
-                
-            return {
-                'sku': sku,
-                'data': {
-                    'id': item.get('id', ''),
-                    'title': item.get('productName', ''),
-                    'description': item.get('description', ''),
-                    'price': float(item.get('price', {}).get('amount', 0)),
-                    'sale_price': float(item.get('salePrice', {}).get('amount', 0) if item.get('salePrice') else 0),
-                    'quantity': int(item.get('availableStock', 0)),
-                    'category': item.get('categoryName', ''),
-                    'images': [img.get('url', '') for img in item.get('images', [])],
-                    'attributes': item.get('attributes', []),
-                    'status': item.get('status', ''),
-                    'barcode': item.get('barcode', ''),
-                    'lastUpdate': datetime.now().isoformat()
-                }
+
+            # Extract price - Hepsiburada might have empty price strings
+            price = 0.0
+            if "price" in item and item["price"] and item["price"] != "":
+                try:
+                    price = float(item["price"])
+                except (ValueError, TypeError):
+                    price = 0.0
+
+            # Extract quantity - Default to 0
+            quantity = 0
+            # Quantity is not directly provided in the API response
+            # We would need to make another API call to get inventory data
+            # For now, we'll set it to 0 and update it later if needed
+
+            # Extract status
+            status = "inactive"
+            if "status" in item:
+                status_value = item["status"]
+                if status_value == "MATCHED":
+                    status = "active"
+                elif status_value == "REJECTED":
+                    status = "inactive"
+                else:
+                    status = status_value.lower()
+
+            # Extract title
+            title = (
+                item.get("productName") or 
+                item.get("title") or 
+                item.get("name") or 
+                f"Product {sku}"
+            )
+
+            # Extract images
+            images = []
+            if "images" in item and isinstance(item["images"], list):
+                images = item["images"]
+
+            # Build product data
+            product = {
+                "sku": sku,
+                "data": {
+                    "title": title,
+                    "price": price,
+                    "quantity": quantity,
+                    "status": status,
+                    "platform_id": item.get("hbSku", ""),
+                    "barcode": item.get("barcode", ""),
+                    "category": item.get("categoryName", ""),
+                    "brand": item.get("brand", ""),
+                    "images": images,
+                    "description": item.get("description", ""),
+                    "last_updated": datetime.now().isoformat(),
+                },
             }
+
+            return product
+
         except Exception as e:
-            logger.error(f"Error formatting Hepsiburada product: {str(e)}")
+            logger.error(f"Error formatting product: {str(e)}")
             return None
 
-    async def update_product(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
+    @handle_exceptions
+    async def update_product(
+        self, product_data: Dict[str, Union[str, Dict[str, Any]]]
+    ) -> Dict[str, Any]:
         """
-        Update product on Hepsiburada
-        
+        Update product in Hepsiburada
+
         Args:
             product_data: Product data to update
-            
+                - sku: Product SKU (required)
+                - data: Product data to update
+                    - price: New price
+                    - quantity: New quantity
+                    - status: New status
+
         Returns:
-            Updated product data
+            Update result
         """
         try:
-            # Extract SKU and data
-            sku = product_data.get('sku', '')
+            sku = product_data.get("sku")
             if not sku:
-                raise APIError("Cannot update product: SKU is missing")
-                
-            data = product_data.get('data', {})
-            
-            update_data = {
-                'merchantSku': sku,
-                'price': {
-                    'amount': data.get('price', 0),
-                    'currency': 'TRY'
-                },
-                'availableStock': data.get('quantity', 0)
-            }
-            
-            # Add optional fields if present
-            if 'sale_price' in data and data['sale_price'] > 0:
-                update_data['salePrice'] = {
-                    'amount': data['sale_price'],
-                    'currency': 'TRY'
-                }
-            
-            logger.info(f"Updating Hepsiburada product with SKU: {sku}")
+                raise ValueError("SKU is required for product update")
+
+            data = cast(Dict[str, Any], product_data.get("data", {}))
+            if not data:
+                raise ValueError("No data provided for update")
+
+            logger.info(f"Updating product {sku} in Hepsiburada...")
+
+            # Prepare update data
+            update_data = {}
+
+            # Handle price update
+            if "price" in data:
+                update_data["price"] = float(data["price"])
+
+            # Handle quantity update
+            if "quantity" in data:
+                update_data["quantity"] = int(data["quantity"])
+
+            # Handle status update
+            if "status" in data:
+                update_data["status"] = data["status"]
+
+            if not update_data:
+                logger.warning(f"No valid update data for product {sku}")
+                # Return a default response instead of None
+                return {"sku": sku, "status": "skipped", "message": "No valid update data"}
+
+            # Make the API request to update the product
+            # Updated URL format based on the new API structure
             response = await self._make_request(
-                endpoint=f"{self.endpoints['listings']}/{sku}",
                 method="PUT",
-                data=update_data
+                url=f"{self.base_url}/{self.api_version}/products/{sku}/update",
+                headers=self.headers,
+                json=update_data,
             )
-            
-            logger.info(f"Successfully updated Hepsiburada product with SKU: {sku}")
-            return product_data
-            
-        except AuthenticationError as e:
-            logger.error(f"Authentication error while updating Hepsiburada product {sku}: {str(e)}")
-            raise
-            
-        except NetworkError as e:
-            logger.error(f"Network error while updating Hepsiburada product {sku}: {str(e)}")
-            raise
-            
-        except RateLimitError as e:
-            logger.error(f"Rate limit exceeded while updating Hepsiburada product {sku}: {str(e)}")
-            raise
-            
-        except APIError as e:
-            logger.error(f"API error while updating Hepsiburada product {sku}: {str(e)}")
-            raise
-            
+
+            logger.info(f"Product {sku} updated successfully in Hepsiburada")
+            return {
+                "sku": sku,
+                "status": "success",
+                "message": "Product updated successfully",
+                "response": response,
+            }
+
         except Exception as e:
-            logger.error(f"Unexpected error while updating Hepsiburada product {sku}: {str(e)}")
-            raise APIError(f"Failed to update Hepsiburada product: {str(e)}")
+            error_context = {
+                "client": "Hepsiburada",
+                "operation": "update_product",
+                "sku": product_data.get("sku", "unknown"),
+            }
+            error_handler.log_error(e, error_context)
+            # Return an error response instead of raising
+            return {
+                "sku": product_data.get("sku", "unknown"),
+                "status": "error",
+                "message": f"Update failed: {str(e)}",
+            }
 
-    async def _make_request(
-        self,
-        endpoint: str,
-        method: str = "GET",
-        data: Optional[Dict[str, Any]] = None,
-        params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """Make API request with retry mechanism"""
-        url = f"{self.base_url}{endpoint}"
-        
-        # Disable SSL verification for development
-        ssl_verify = os.getenv('DISABLE_SSL_VERIFY', 'false').lower() == 'true'
-        
-        # Log request details (without sensitive info)
-        logger.debug(f"Hepsiburada API request: {method} {url}")
-        if params:
-            logger.debug(f"Request params: {params}")
-        if data:
-            logger.debug(f"Request data: {data}")
-        
-        for attempt in range(self.max_retries):
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.request(
-                        method=method,
-                        url=url,
-                        headers=self.headers,
-                        json=data,
-                        params=params,
-                        timeout=aiohttp.ClientTimeout(total=self.request_timeout),
-                        ssl=False if ssl_verify else True
-                    ) as response:
-                        # Log response status
-                        logger.debug(f"Hepsiburada API response status: {response.status}")
-                        
-                        if response.status == 429:  # Rate limit
-                            wait_time = self.rate_limit_wait * (2 ** attempt)
-                            logger.warning(f"Hepsiburada rate limit hit, waiting {wait_time} seconds")
-                            await asyncio.sleep(wait_time)
-                            continue
-                            
-                        elif response.status == 401 or response.status == 403:
-                            response_text = await response.text()
-                            logger.error(f"Hepsiburada authentication error: {response_text}")
-                            raise AuthenticationError(f"Authentication failed: {response.status} - {response_text}")
-                        
-                        elif response.status >= 500:
-                            response_text = await response.text()
-                            logger.error(f"Hepsiburada server error: {response_text}")
-                            
-                            if attempt < self.max_retries - 1:
-                                wait_time = self.retry_delay * (2 ** attempt)
-                                logger.info(f"Hepsiburada server error, retrying in {wait_time} seconds")
-                                await asyncio.sleep(wait_time)
-                                continue
-                            else:
-                                raise APIError(f"Server error after {self.max_retries} attempts: {response.status} - {response_text}")
-                        
-                        elif response.status >= 400:
-                            response_text = await response.text()
-                            logger.error(f"Hepsiburada client error: {response_text}")
-                            raise APIError(f"Request failed: {response.status} - {response_text}")
-                        
-                        # Success case
-                        try:
-                            return await response.json()
-                        except aiohttp.ContentTypeError:
-                            response_text = await response.text()
-                            logger.warning(f"Hepsiburada response not JSON: {response_text[:100]}...")
-                            return {"text": response_text}
-                        
-            except aiohttp.ClientConnectorError as e:
-                logger.error(f"Hepsiburada connection error: {str(e)}")
-                if attempt < self.max_retries - 1:
-                    wait_time = self.retry_delay * (2 ** attempt)
-                    logger.info(f"Connection error, retrying in {wait_time} seconds")
-                    await asyncio.sleep(wait_time)
-                else:
-                    raise NetworkError(f"Connection error after {self.max_retries} attempts: {str(e)}")
-                    
-            except aiohttp.ClientResponseError as e:
-                logger.error(f"Hepsiburada response error: {str(e)}")
-                if e.status == 429:
-                    if attempt < self.max_retries - 1:
-                        wait_time = self.rate_limit_wait * (2 ** attempt)
-                        logger.warning(f"Rate limit hit, waiting {wait_time} seconds before retry")
-                        await asyncio.sleep(wait_time)
-                    else:
-                        raise RateLimitError(f"Rate limit exceeded after {self.max_retries} attempts")
-                elif e.status in (401, 403):
-                    raise AuthenticationError(f"Authentication failed: {str(e)}")
-                else:
-                    raise APIError(f"Request failed: {str(e)}")
-                    
-            except asyncio.TimeoutError:
-                logger.error("Hepsiburada request timed out")
-                if attempt < self.max_retries - 1:
-                    wait_time = self.retry_delay * (2 ** attempt)
-                    logger.info(f"Timeout, retrying in {wait_time} seconds")
-                    await asyncio.sleep(wait_time)
-                else:
-                    raise NetworkError(f"Request timed out after {self.max_retries} attempts")
-                    
-            except (AuthenticationError, RateLimitError, NetworkError):
-                # Re-raise these exceptions without wrapping
-                raise
-                
-            except Exception as e:
-                logger.error(f"Unexpected error during Hepsiburada API request: {str(e)}")
-                if attempt < self.max_retries - 1:
-                    wait_time = self.retry_delay * (2 ** attempt)
-                    logger.info(f"Unexpected error, retrying in {wait_time} seconds")
-                    await asyncio.sleep(wait_time)
-                else:
-                    raise APIError(f"Request failed after {self.max_retries} attempts: {str(e)}")
-
-        # This should never be reached due to the raise statements above
-        raise APIError(f"Request failed after {self.max_retries} attempts")
-
+    @handle_exceptions
     async def get_product_by_sku(self, sku: str) -> Optional[Dict[str, Any]]:
         """
-        Get a single product by SKU
-        
+        Get product by SKU
+
         Args:
             sku: Product SKU
-            
+
         Returns:
-            Product data if found, None otherwise
+            Product data or None if not found
         """
         try:
-            logger.info(f"Fetching Hepsiburada product with SKU: {sku}")
-            
+            logger.info(f"Fetching product {sku} from Hepsiburada...")
+
+            # Make the API request to get the product
+            # Updated URL format based on the new API structure
             response = await self._make_request(
-                endpoint=f"{self.endpoints['listings']}/{sku}"
+                method="GET",
+                url=f"{self.base_url}/{self.api_version}/products/{sku}",
+                headers=self.headers,
             )
-            
+
             if not response:
-                logger.warning(f"No product found with SKU: {sku}")
+                logger.warning(f"Product {sku} not found in Hepsiburada")
                 return None
-                
+
+            # Format the product
             product = self._format_product(response)
-            if product:
-                logger.info(f"Found Hepsiburada product with SKU: {sku}")
-            else:
-                logger.warning(f"Failed to format product with SKU: {sku}")
-                
-            return product
-            
-        except APIError as e:
-            if "404" in str(e):
-                logger.warning(f"Product with SKU {sku} not found")
+
+            if not product:
+                logger.warning(f"Failed to format product {sku}")
                 return None
-            raise
-            
+
+            logger.info(f"Retrieved product {sku} from Hepsiburada")
+            return product
+
         except Exception as e:
-            logger.error(f"Error fetching Hepsiburada product with SKU {sku}: {str(e)}")
-            raise APIError(f"Failed to fetch product with SKU {sku}: {str(e)}")
+            error_context = {"client": "Hepsiburada", "operation": "get_product_by_sku", "sku": sku}
+            error_handler.log_error(e, error_context)
+            # Return None instead of raising an exception for not found
+            if isinstance(e, APIError) and "not found" in str(e).lower():
+                return None
+            return None  # Return None for all errors to match the return type

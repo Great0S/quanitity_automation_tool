@@ -11,6 +11,7 @@ from datetime import datetime
 import aiohttp
 from core.exceptions import APIError, AuthenticationError, NetworkError, RateLimitError
 from core.logger import logger
+from core.error_handler import handle_exceptions, safe_execute, error_handler
 from .base_client import BaseAPIClient
 
 class PazaramaClient(BaseAPIClient):
@@ -25,38 +26,61 @@ class PazaramaClient(BaseAPIClient):
 
     def _setup_credentials(self) -> None:
         """Setup API credentials"""
-        self.api_key = os.getenv('PAZARAMA_API_KEY')
-        self.api_secret = os.getenv('PAZARAMA_API_SECRET')
-        self.seller_id = os.getenv('PAZARAMA_SELLER_ID')
-        
-        if not all([self.api_key, self.api_secret, self.seller_id]):
-            logger.error("Missing Pazarama API credentials")
-            raise AuthenticationError("Missing Pazarama API credentials")
+        try:
+            self.api_key = os.getenv('PAZARAMA_API_KEY')
+            self.api_secret = os.getenv('PAZARAMA_API_SECRET')
+            self.seller_id = os.getenv('PAZARAMA_SELLER_ID')
             
-        self.headers = {
-            key: str(value) for key, value in {
-                "Content-Type": "application/json",
-                "X-API-KEY": self.api_key,
-                "X-SELLER-ID": self.seller_id
-            }.items() if value is not None
-        }
-        # Filter out any None values explicitly
-        self.headers = {key: value for key, value in self.headers.items() if value is not None}
-        
-        # Log initialization (without sensitive data)
-        logger.debug(f"Pazarama client initialized for seller ID: {self.seller_id}")
+            if not self.api_key:
+                error_context = {'client': 'Pazarama', 'operation': '_setup_credentials', 'missing': 'PAZARAMA_API_KEY'}
+                error_handler.log_error(AuthenticationError("PAZARAMA_API_KEY environment variable is not set"), error_context)
+                self.logger.error("PAZARAMA_API_KEY environment variable is not set")
+                
+            if not self.api_secret:
+                error_context = {'client': 'Pazarama', 'operation': '_setup_credentials', 'missing': 'PAZARAMA_API_SECRET'}
+                error_handler.log_error(AuthenticationError("PAZARAMA_API_SECRET environment variable is not set"), error_context)
+                self.logger.error("PAZARAMA_API_SECRET environment variable is not set")
+                
+            if not self.seller_id:
+                error_context = {'client': 'Pazarama', 'operation': '_setup_credentials', 'missing': 'PAZARAMA_SELLER_ID'}
+                error_handler.log_error(AuthenticationError("PAZARAMA_SELLER_ID environment variable is not set"), error_context)
+                self.logger.error("PAZARAMA_SELLER_ID environment variable is not set")
+                
+            if not all([self.api_key, self.api_secret, self.seller_id]):
+                raise AuthenticationError("Missing Pazarama API credentials")
+                
+            self.headers = {
+                key: str(value) for key, value in {
+                    "Content-Type": "application/json",
+                    "X-API-KEY": self.api_key,
+                    "X-SELLER-ID": self.seller_id
+                }.items() if value is not None
+            }
+            
+            # Log initialization (without sensitive data)
+            logger.debug(f"Pazarama client initialized for seller ID: {self.seller_id}")
+        except Exception as e:
+            error_context = {'client': 'Pazarama', 'operation': '_setup_credentials'}
+            error_handler.log_error(e, error_context)
+            raise
 
     def _setup_endpoints(self) -> None:
         """Setup API endpoints"""
-        self.base_url = "https://api.pazarama.com"
-        self.endpoints = {
-            'products': '/products',
-            'orders': '/orders',
-            'categories': '/categories',
-            'inventory': '/inventory'
-        }
-        logger.debug(f"Pazarama endpoints configured: {list(self.endpoints.keys())}")
+        try:
+            self.base_url = "https://api.pazarama.com"
+            self.endpoints = {
+                'products': '/products',
+                'orders': '/orders',
+                'categories': '/categories',
+                'inventory': '/inventory'
+            }
+            logger.debug(f"Pazarama endpoints configured: {list(self.endpoints.keys())}")
+        except Exception as e:
+            error_context = {'client': 'Pazarama', 'operation': '_setup_endpoints'}
+            error_handler.log_error(e, error_context)
+            raise
 
+    @handle_exceptions
     async def authenticate(self) -> None:
         """Authenticate with Pazarama API using API key"""
         try:
@@ -75,40 +99,52 @@ class PazaramaClient(BaseAPIClient):
                 logger.info("Pazarama authentication successful")
                 
             except aiohttp.ClientConnectorError as e:
-                logger.error(f"Pazarama connection error: {str(e)}")
+                error_context = {'client': 'Pazarama', 'operation': 'authenticate', 'error_type': 'ConnectionError'}
+                error_handler.log_error(e, error_context)
                 raise NetworkError(f"Pazarama connection error: {str(e)}")
                 
             except aiohttp.ClientResponseError as e:
-                if e.status == 401 or e.status == 403:
-                    logger.error(f"Pazarama authentication failed: Invalid credentials")
+                error_context = {
+                    'client': 'Pazarama', 
+                    'operation': 'authenticate', 
+                    'error_type': 'ResponseError',
+                    'status_code': str(getattr(e, 'status', 'unknown'))
+                }
+                error_handler.log_error(e, error_context)
+                
+                if getattr(e, 'status', 0) == 401 or getattr(e, 'status', 0) == 403:
                     raise AuthenticationError("Pazarama authentication failed: Invalid credentials")
-                elif e.status == 429:
-                    logger.error(f"Pazarama rate limit exceeded")
+                elif getattr(e, 'status', 0) == 429:
                     raise RateLimitError("Pazarama rate limit exceeded")
                 else:
-                    logger.error(f"Pazarama API error: {str(e)}")
                     raise APIError(f"Pazarama API error: {str(e)}")
                     
             except asyncio.TimeoutError:
-                logger.error("Pazarama API request timed out")
+                error_context = {'client': 'Pazarama', 'operation': 'authenticate', 'error_type': 'Timeout'}
+                error_handler.log_error(TimeoutError("Pazarama API request timed out"), error_context)
                 raise NetworkError("Pazarama API request timed out")
                 
         except AuthenticationError as e:
-            logger.error(f"Pazarama authentication error: {str(e)}")
+            error_context = {'client': 'Pazarama', 'operation': 'authenticate', 'error_type': 'AuthenticationError'}
+            error_handler.log_error(e, error_context)
             raise
             
         except NetworkError as e:
-            logger.error(f"Pazarama network error: {str(e)}")
+            error_context = {'client': 'Pazarama', 'operation': 'authenticate', 'error_type': 'NetworkError'}
+            error_handler.log_error(e, error_context)
             raise
             
         except RateLimitError as e:
-            logger.error(f"Pazarama rate limit error: {str(e)}")
+            error_context = {'client': 'Pazarama', 'operation': 'authenticate', 'error_type': 'RateLimitError'}
+            error_handler.log_error(e, error_context)
             raise
             
         except Exception as e:
-            logger.error(f"Unexpected error during Pazarama authentication: {str(e)}")
+            error_context = {'client': 'Pazarama', 'operation': 'authenticate', 'error_type': 'UnexpectedError'}
+            error_handler.log_error(e, error_context)
             raise AuthenticationError(f"Pazarama authentication failed: {str(e)}")
 
+    @handle_exceptions
     async def get_products(self, **kwargs) -> List[Dict[str, Any]]:
         """
         Fetch products from Pazarama
@@ -142,31 +178,30 @@ class PazaramaClient(BaseAPIClient):
                 
             products = []
             for item in response.get('data', []):
-                product = self._format_product(item)
-                if product:
-                    products.append(product)
+                try:
+                    product = self._format_product(item)
+                    if product:
+                        products.append(product)
+                except Exception as e:
+                    error_context = {
+                        'client': 'Pazarama',
+                        'operation': 'get_products',
+                        'product_id': str(item.get('id', 'unknown')),
+                        'error_type': 'FormatError'
+                    }
+                    error_handler.log_error(e, error_context)
+                    # Continue with other products
                     
             logger.info(f"Retrieved {len(products)} products from Pazarama")
             return products
             
-        except AuthenticationError as e:
-            logger.error(f"Authentication error while fetching Pazarama products: {str(e)}")
-            raise
-            
-        except NetworkError as e:
-            logger.error(f"Network error while fetching Pazarama products: {str(e)}")
-            raise
-            
-        except RateLimitError as e:
-            logger.error(f"Rate limit exceeded while fetching Pazarama products: {str(e)}")
-            raise
-            
-        except APIError as e:
-            logger.error(f"API error while fetching Pazarama products: {str(e)}")
-            raise
-            
         except Exception as e:
-            logger.error(f"Unexpected error while fetching Pazarama products: {str(e)}")
+            error_context = {
+                'client': 'Pazarama',
+                'operation': 'get_products',
+                'kwargs': str(kwargs)
+            }
+            error_handler.log_error(e, error_context)
             raise APIError(f"Failed to fetch Pazarama products: {str(e)}")
 
     def _format_product(self, item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -195,9 +230,16 @@ class PazaramaClient(BaseAPIClient):
                 }
             }
         except Exception as e:
-            logger.error(f"Error formatting Pazarama product: {str(e)}")
+            error_context = {
+                'client': 'Pazarama',
+                'operation': '_format_product',
+                'product_id': str(item.get('id', 'unknown')),
+                'error_type': 'FormatError'
+            }
+            error_handler.log_error(e, error_context)
             return None
 
+    @handle_exceptions
     async def update_product(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Update product on Pazarama
@@ -212,7 +254,14 @@ class PazaramaClient(BaseAPIClient):
             # Extract SKU and data
             sku = product_data.get('sku', '')
             if not sku:
-                raise APIError("Cannot update product: SKU is missing")
+                error = APIError("Cannot update product: SKU is missing")
+                error_context = {
+                    'client': 'Pazarama',
+                    'operation': 'update_product',
+                    'error_type': 'ValidationError'
+                }
+                error_handler.log_error(error, error_context)
+                raise error
                 
             data = product_data.get('data', {})
             
@@ -236,24 +285,13 @@ class PazaramaClient(BaseAPIClient):
             logger.info(f"Successfully updated Pazarama product with SKU: {sku}")
             return product_data
             
-        except AuthenticationError as e:
-            logger.error(f"Authentication error while updating Pazarama product {sku}: {str(e)}")
-            raise
-            
-        except NetworkError as e:
-            logger.error(f"Network error while updating Pazarama product {sku}: {str(e)}")
-            raise
-            
-        except RateLimitError as e:
-            logger.error(f"Rate limit exceeded while updating Pazarama product {sku}: {str(e)}")
-            raise
-            
-        except APIError as e:
-            logger.error(f"API error while updating Pazarama product {sku}: {str(e)}")
-            raise
-            
         except Exception as e:
-            logger.error(f"Unexpected error while updating Pazarama product {sku}: {str(e)}")
+            error_context = {
+                'client': 'Pazarama',
+                'operation': 'update_product',
+                'sku': product_data.get('sku', 'unknown')
+            }
+            error_handler.log_error(e, error_context)
             raise APIError(f"Failed to update Pazarama product: {str(e)}")
 
     async def _make_request(
@@ -266,6 +304,12 @@ class PazaramaClient(BaseAPIClient):
     ) -> Any:
         """Make API request with retry mechanism"""
         url = f"{self.base_url}{endpoint}"
+        request_context = {
+            'client': 'Pazarama',
+            'operation': '_make_request',
+            'url': url,
+            'method': method
+        }
         
         # Disable SSL verification for development
         ssl_verify = os.getenv('DISABLE_SSL_VERIFY', 'false').lower() == 'true'
@@ -274,10 +318,13 @@ class PazaramaClient(BaseAPIClient):
         logger.debug(f"Pazarama API request: {method} {url}")
         if params:
             logger.debug(f"Request params: {params}")
+            request_context['params'] = str(params)
         if data:
             logger.debug(f"Request data: {data}")
+            request_context['data'] = str(data)
         
         for attempt in range(retry_count):
+            request_context['attempt'] = str(attempt + 1)
             try:
                 async with aiohttp.ClientSession() as session:
                     async with session.request(
@@ -291,34 +338,46 @@ class PazaramaClient(BaseAPIClient):
                     ) as response:
                         # Log response status
                         logger.debug(f"Pazarama API response status: {response.status}")
+                        request_context['status_code'] = str(response.status)
                         
                         if response.status == 429:  # Rate limit
                             wait_time = self.rate_limit_wait * (2 ** attempt)
                             logger.warning(f"Pazarama rate limit hit, waiting {wait_time} seconds")
+                            request_context['wait_time'] = str(wait_time)
                             await asyncio.sleep(wait_time)
                             continue
                             
                         elif response.status == 401 or response.status == 403:
                             response_text = await response.text()
                             logger.error(f"Pazarama authentication error: {response_text}")
-                            raise AuthenticationError(f"Authentication failed: {response.status} - {response_text}")
+                            request_context['response_text'] = response_text
+                            error = AuthenticationError(f"Authentication failed: {response.status} - {response_text}")
+                            error_handler.log_error(error, request_context)
+                            raise error
                         
                         elif response.status >= 500:
                             response_text = await response.text()
                             logger.error(f"Pazarama server error: {response_text}")
+                            request_context['response_text'] = response_text
                             
                             if attempt < retry_count - 1:
                                 wait_time = self.retry_delay * (2 ** attempt)
                                 logger.info(f"Pazarama server error, retrying in {wait_time} seconds")
+                                request_context['wait_time'] = str(wait_time)
                                 await asyncio.sleep(wait_time)
                                 continue
                             else:
-                                raise APIError(f"Server error after {retry_count} attempts: {response.status} - {response_text}")
+                                error = APIError(f"Server error after {retry_count} attempts: {response.status} - {response_text}")
+                                error_handler.log_error(error, request_context)
+                                raise error
                         
                         elif response.status >= 400:
                             response_text = await response.text()
                             logger.error(f"Pazarama client error: {response_text}")
-                            raise APIError(f"Request failed: {response.status} - {response_text}")
+                            request_context['response_text'] = response_text
+                            error = APIError(f"Request failed: {response.status} - {response_text}")
+                            error_handler.log_error(error, request_context)
+                            raise error
                         
                         # Success case
                         try:
@@ -330,52 +389,80 @@ class PazaramaClient(BaseAPIClient):
                         
             except aiohttp.ClientConnectorError as e:
                 logger.error(f"Pazarama connection error: {str(e)}")
+                request_context['error_type'] = 'ConnectionError'
+                
                 if attempt < retry_count - 1:
                     wait_time = self.retry_delay * (2 ** attempt)
                     logger.info(f"Connection error, retrying in {wait_time} seconds")
+                    request_context['wait_time'] = str(wait_time)
                     await asyncio.sleep(wait_time)
                 else:
-                    raise NetworkError(f"Connection error after {retry_count} attempts: {str(e)}")
+                    error = NetworkError(f"Connection error after {retry_count} attempts: {str(e)}")
+                    error_handler.log_error(error, request_context)
+                    raise error
                     
             except aiohttp.ClientResponseError as e:
                 logger.error(f"Pazarama response error: {str(e)}")
-                if e.status == 429:
+                request_context['error_type'] = 'ResponseError'
+                request_context['status_code'] = str(getattr(e, 'status', 'unknown'))
+                
+                if getattr(e, 'status', 0) == 429:
                     if attempt < retry_count - 1:
                         wait_time = self.rate_limit_wait * (2 ** attempt)
                         logger.warning(f"Rate limit hit, waiting {wait_time} seconds before retry")
+                        request_context['wait_time'] = str(wait_time)
                         await asyncio.sleep(wait_time)
                     else:
-                        raise RateLimitError(f"Rate limit exceeded after {retry_count} attempts")
-                elif e.status in (401, 403):
-                    raise AuthenticationError(f"Authentication failed: {str(e)}")
+                        error = RateLimitError(f"Rate limit exceeded after {retry_count} attempts")
+                        error_handler.log_error(error, request_context)
+                        raise error
+                elif getattr(e, 'status', 0) in (401, 403):
+                    error = AuthenticationError(f"Authentication failed: {str(e)}")
+                    error_handler.log_error(error, request_context)
+                    raise error
                 else:
-                    raise APIError(f"Request failed: {str(e)}")
+                    error = APIError(f"Request failed: {str(e)}")
+                    error_handler.log_error(error, request_context)
+                    raise error
                     
             except asyncio.TimeoutError:
                 logger.error("Pazarama request timed out")
+                request_context['error_type'] = 'Timeout'
+                
                 if attempt < retry_count - 1:
                     wait_time = self.retry_delay * (2 ** attempt)
                     logger.info(f"Timeout, retrying in {wait_time} seconds")
+                    request_context['wait_time'] = str(wait_time)
                     await asyncio.sleep(wait_time)
                 else:
-                    raise NetworkError(f"Request timed out after {retry_count} attempts")
+                    error = NetworkError(f"Request timed out after {retry_count} attempts")
+                    error_handler.log_error(error, request_context)
+                    raise error
                     
-            except (AuthenticationError, RateLimitError, NetworkError):
+            except (AuthenticationError, RateLimitError, NetworkError, APIError):
                 # Re-raise these exceptions without wrapping
                 raise
                 
             except Exception as e:
                 logger.error(f"Unexpected error during Pazarama API request: {str(e)}")
+                request_context['error_type'] = 'UnexpectedError'
+                
                 if attempt < retry_count - 1:
                     wait_time = self.retry_delay * (2 ** attempt)
                     logger.info(f"Unexpected error, retrying in {wait_time} seconds")
+                    request_context['wait_time'] = str(wait_time)
                     await asyncio.sleep(wait_time)
                 else:
-                    raise APIError(f"Request failed after {retry_count} attempts: {str(e)}")
+                    error = APIError(f"Request failed after {retry_count} attempts: {str(e)}")
+                    error_handler.log_error(error, request_context)
+                    raise error
 
         # This should never be reached due to the raise statements above
-        raise APIError(f"Request failed after {retry_count} attempts")
+        error = APIError(f"Request failed after {retry_count} attempts")
+        error_handler.log_error(error, request_context)
+        raise error
 
+    @handle_exceptions
     async def get_categories(self) -> List[Dict[str, Any]]:
         """
         Get Pazarama categories
@@ -399,9 +486,14 @@ class PazaramaClient(BaseAPIClient):
             return categories
             
         except Exception as e:
-            logger.error(f"Error fetching Pazarama categories: {str(e)}")
+            error_context = {
+                'client': 'Pazarama',
+                'operation': 'get_categories'
+            }
+            error_handler.log_error(e, error_context)
             raise APIError(f"Failed to fetch categories: {str(e)}")
 
+    @handle_exceptions
     async def get_product_by_sku(self, sku: str) -> Optional[Dict[str, Any]]:
         """
         Get a single product by SKU
@@ -438,5 +530,10 @@ class PazaramaClient(BaseAPIClient):
             raise
             
         except Exception as e:
-            logger.error(f"Error fetching Pazarama product with SKU {sku}: {str(e)}")
+            error_context = {
+                'client': 'Pazarama',
+                'operation': 'get_product_by_sku',
+                'sku': sku
+            }
+            error_handler.log_error(e, error_context)
             raise APIError(f"Failed to fetch product with SKU {sku}: {str(e)}")

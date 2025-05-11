@@ -12,12 +12,15 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+node_modules/
+eggs/
 downloads/
 eggs/
 .eggs/
 lib/
 lib64/
 parts/
+logs/
 sdist/
 var/
 wheels/
@@ -173,3 +176,4 @@ amazon_PRESSER_FOOT_attrs.json
 amazon_VEHICLE_MAT_attrs.json
 test.csv
 .env.EmanHali
+.env.backup

@@ -1,21 +1,38 @@
-# E-commerce Integration System
+# Enhanced Quantity Automation Tool
 
-This project is an e-commerce integration system that allows for seamless interaction with multiple e-commerce platforms.
+A comprehensive tool for managing product inventory across multiple e-commerce platforms.
 
 ## Features
 
-- Support for multiple e-commerce platforms (N11, Hepsiburada, Amazon, etc.)
-- Product synchronization across platforms
-- Inventory and price updates
-- Asynchronous operations for improved performance
-- Streamlit-based user interface
+- **Multi-Platform Support**: Manage products across N11, Trendyol, Hepsiburada, and more
+- **Real-time Synchronization**: Keep inventory quantities in sync across all platforms
+- **Database Persistence**: Store product data and sync history in a local database
+- **Background Processing**: Handle long-running operations without blocking the UI
+- **Caching**: Improve performance with intelligent caching
+- **Error Resilience**: Circuit breaker pattern to prevent cascading failures
+- **Enhanced Reporting**: Detailed reports and visualizations
+- **Bulk Operations**: Update multiple products at once
+- **Modern Architecture**: FastAPI backend with React frontend
+
+## Architecture
+
+The application follows a modern architecture:
+
+- **Backend**: FastAPI-based REST API
+- **Frontend**: React with TypeScript
+- **Database**: SQLite for data persistence
+- **API Layer**: Platform-specific API clients
+- **Service Layer**: Business logic and operations
+- **Data Layer**: Database access and repositories
 
 ## Installation
 
+### Backend
+
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/ecommerce-integration.git
-   cd ecommerce-integration
+   git clone https://github.com/yourusername/quantity_automation_tool.git
+   cd quantity_automation_tool
    ```
 
 2. Create and activate a virtual environment:
@@ -29,84 +46,127 @@ This project is an e-commerce integration system that allows for seamless intera
    pip install -r requirements.txt
    ```
 
-4. Set up environment variables:
-   Copy the `.env.example` file to `.env` and fill in your API keys:
+4. Create a `.env` file with your API credentials:
    ```
-   cp .env.example .env
-   # Edit .env with your actual API keys
+   # N11
+   N11_APP_KEY=your_app_key
+   N11_APP_SECRET=your_app_secret
+
+   # Trendyol
+   TRENDYOL_API_KEY=your_api_key
+   TRENDYOL_API_SECRET=your_api_secret
+
+   # Hepsiburada
+   HEPSIBURADA_USERNAME=your_username
+   HEPSIBURADA_PASSWORD=your_password
+
+   # JWT Secret (for authentication)
+   JWT_SECRET_KEY=your_jwt_secret
    ```
 
-## Configuration
+5. Start the backend server:
+   ```
+   uvicorn api_server:app --reload
+   ```
 
-The application uses environment variables for configuration. The following variables are required:
+### Frontend
 
-### Authentication
-- `JWT_SECRET_KEY`: Secret key for JWT token generation (for simple auth)
+1. Navigate to the frontend directory:
+   ```
+   cd frontend
+   ```
 
-### WordPress/WooCommerce
-- `WP_SITE_URL`: Your WordPress site URL
-- `WC_CONSUMER_KEY`: WooCommerce consumer key
-- `WC_CONSUMER_SECRET`: WooCommerce consumer secret
+2. Install dependencies:
+   ```
+   npm install
+   ```
 
-### Other Platforms
-- See the `.env` file for all required API keys for each platform
+3. Start the development server:
+   ```
+   npm run dev
+   ```
+
+4. Open your browser and navigate to `http://localhost:5173`
 
 ## Usage
 
-To run the application:
+1. Log in with the default credentials:
+   - Username: admin
+   - Password: admin
 
-```
-streamlit run app.py
-```
+2. Use the sidebar to navigate between different sections:
+   - **Dashboard**: Overview of all platforms and key metrics
+   - **Products**: View and edit products for each platform
+   - **Sync**: Synchronize products between platforms
+   - **Tasks**: Monitor background tasks
+   - **Settings**: Configure application settings
 
-The default login credentials are:
-- Username: admin
-- Password: admin
+## Key Components
+
+### Enhanced Product Service
+
+The `EnhancedProductService` extends the basic `ProductService` with:
+- Database persistence
+- Caching
+- Circuit breaker pattern
+- Enhanced error handling
+- Bulk operations
+
+### Background Task Manager
+
+The `BackgroundTaskManager` allows for:
+- Asynchronous processing of long-running tasks
+- Progress tracking
+- Task cancellation
+- Detailed task history
+
+### Database Integration
+
+The application uses SQLite for data persistence:
+- Product data
+- Platform configurations
+- Sync history
+- User settings
+
+### Caching System
+
+The caching system improves performance by:
+- Caching API responses
+- Persisting cache to disk
+- Intelligent cache invalidation
+- TTL-based expiration
+
+## API Documentation
+
+The API documentation is available at `http://localhost:8000/docs` when the backend server is running.
 
 ## Project Structure
 
 ```
-quanitity_automation_tool/
-├── api/                  # API clients for different platforms
-├── auth/                 # Authentication modules
-├── config/               # Configuration files
+quantity_automation_tool/
+├── api/                  # API clients for each platform
 ├── core/                 # Core functionality
-├── logs/                 # Log files
-├── pages/                # Streamlit pages
+├── data/                 # Data access layer
+│   ├── repositories/     # Data repositories
+│   └── database.py       # Database connection
+├── frontend/             # React frontend
+│   ├── public/           # Static assets
+│   └── src/              # React components and logic
 ├── services/             # Business logic services
-├── tests/                # Test files
-├── ui/                   # UI components
 ├── utils/                # Utility functions
-├── .env                  # Environment variables
-├── app.py                # Main application file
-├── main.py               # Entry point
-└── requirements.txt      # Dependencies
+├── tests/                # Tests
+├── api_server.py         # FastAPI server
+└── requirements.txt      # Python dependencies
 ```
-
-## Running Tests
-
-To run the test suite:
-```
-pytest
-```
-
-## Troubleshooting
-
-### Authentication Issues
-If you encounter authentication errors:
-1. Check that your API credentials are correctly set in the `.env` file
-2. For simple authentication, make sure `JWT_SECRET_KEY` is set
-3. For AWS Cognito authentication, uncomment and set the Cognito variables in `.env`
-
-### API Connection Issues
-1. Verify your internet connection
-2. Check that the API endpoints are accessible
-3. Verify that your API credentials have the necessary permissions
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Commit your changes: `git commit -m 'Add some feature'`
+4. Push to the branch: `git push origin feature-name`
+5. Submit a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+This project is licensed under the MIT License - see the LICENSE file for details.

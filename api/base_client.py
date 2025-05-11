@@ -13,17 +13,55 @@ class BaseAPIClient(ABC):
         self.session: Optional[aiohttp.ClientSession] = None
         self.authenticated: bool = False
         self.rate_limit_wait: int = 60
-        self.request_timeout: int = 30
+        self.request_timeout: int = 30  # Store as simple integer instead of ClientTimeout object
         self.max_retries: int = 3
         self.retry_delay: int = 2  # seconds
+        self._loop = None  # Store the event loop used to create the session
 
     async def __aenter__(self):
-        self.session = aiohttp.ClientSession()
+        await self._ensure_session()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.session:
-            await self.session.close()
+        await self._close_session()
+
+    async def _ensure_session(self) -> None:
+        """Ensure a valid session exists in the current event loop"""
+        try:
+            current_loop = asyncio.get_running_loop()
+            
+            # If session doesn't exist or was created in a different loop, create a new one
+            if (self.session is None or 
+                getattr(self.session, 'closed', True) or  # Use getattr to safely check closed attribute
+                self._loop is not current_loop):
+                
+                # Close existing session if it exists
+                await self._close_session()
+                
+                # Create new session in current loop
+                connector = aiohttp.TCPConnector(ssl=False)  # Disable SSL verification for development
+                self.session = aiohttp.ClientSession(connector=connector)
+                self._loop = current_loop
+                logger.debug("Created new aiohttp ClientSession")
+        except Exception as e:
+            logger.error(f"Error creating session: {str(e)}")
+            # Make sure we don't have a partially initialized session
+            self.session = None
+            self._loop = None
+            raise
+
+    async def _close_session(self) -> None:
+        """Close the session if it exists"""
+        if self.session is not None:
+            try:
+                if not getattr(self.session, 'closed', False):
+                    await self.session.close()
+                    logger.debug("Closed aiohttp ClientSession")
+            except Exception as e:
+                logger.warning(f"Error closing session: {str(e)}")
+            finally:
+                self.session = None
+                self._loop = None
 
     @abstractmethod
     async def authenticate(self) -> None:
@@ -44,11 +82,15 @@ class BaseAPIClient(ABC):
         self,
         method: str,
         url: str,
-        **kwargs
+        **kwargs: Any
     ) -> Any:
         """Make HTTP request with retry mechanism"""
-        if not self.session:
-            self.session = aiohttp.ClientSession()
+        # Ensure we have a valid session in the current event loop
+        await self._ensure_session()
+        
+        # Double-check that session is valid
+        if self.session is None:
+            raise NetworkError("Failed to create a valid HTTP session")
 
         # Print debug info
         logger.debug(f"API request: {method} {url}")
@@ -62,12 +104,22 @@ class BaseAPIClient(ABC):
                            if k.lower() not in ('authorization', 'appkey', 'appsecret')}
             logger.debug(f"Request headers: {safe_headers}")
 
+        # Set timeout as a simple integer
+        if 'timeout' not in kwargs:
+            kwargs['timeout'] = self.request_timeout
+
         for attempt in range(self.max_retries):
             try:
+                # Ensure session is still valid before each attempt
+                if self.session is None or getattr(self.session, 'closed', True):
+                    logger.warning("Session is None or closed, recreating...")
+                    await self._ensure_session()
+                    if self.session is None:
+                        raise NetworkError("Failed to create a valid HTTP session")
+                
                 async with self.session.request(
                     method=method,
                     url=url,
-                    timeout=aiohttp.ClientTimeout(total=self.request_timeout),
                     **kwargs
                 ) as response:
                     # Log response status
@@ -139,7 +191,7 @@ class BaseAPIClient(ABC):
                     await asyncio.sleep(wait_time)
                 else:
                     raise NetworkError(f"Request timed out after {self.max_retries} attempts")
-                    
+            
             except (AuthenticationError, RateLimitError, NetworkError):
                 # Re-raise these exceptions without wrapping
                 raise

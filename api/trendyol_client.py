@@ -1,12 +1,15 @@
 # api/trendyol_client.py
 import asyncio
 import os
+import json
 import base64
+import time
 from typing import Dict, List, Any, Optional
 import aiohttp
 from datetime import datetime
 from core.exceptions import APIError, AuthenticationError, NetworkError, RateLimitError
 from core.logger import logger
+from core.error_handler import handle_exceptions, safe_execute, error_handler
 from .base_client import BaseAPIClient
 
 class TrendyolClient(BaseAPIClient):
@@ -46,6 +49,7 @@ class TrendyolClient(BaseAPIClient):
         # Debug info
         logger.debug(f"Trendyol client initialized for store ID: {self.store_id}")
 
+    @handle_exceptions
     async def authenticate(self) -> None:
         """Authenticate with Trendyol API"""
         try:
@@ -67,40 +71,52 @@ class TrendyolClient(BaseAPIClient):
                 logger.info(f"Trendyol authentication successful. Found {test_response.get('totalElements', 0)} products.")
                 
             except aiohttp.ClientConnectorError as e:
-                logger.error(f"Trendyol connection error: {str(e)}")
+                error_context = {'client': 'Trendyol', 'operation': 'authenticate', 'error_type': 'ConnectionError'}
+                error_handler.log_error(e, error_context)
                 raise NetworkError(f"Trendyol connection error: {str(e)}")
                 
             except aiohttp.ClientResponseError as e:
+                error_context = {
+                    'client': 'Trendyol', 
+                    'operation': 'authenticate', 
+                    'error_type': 'ResponseError',
+                    'status_code': str(e.status)
+                }
+                error_handler.log_error(e, error_context)
+                
                 if e.status == 401 or e.status == 403:
-                    logger.error(f"Trendyol authentication failed: Invalid credentials")
                     raise AuthenticationError("Trendyol authentication failed: Invalid credentials")
                 elif e.status == 429:
-                    logger.error(f"Trendyol rate limit exceeded")
                     raise RateLimitError("Trendyol rate limit exceeded")
                 else:
-                    logger.error(f"Trendyol API error: {str(e)}")
                     raise APIError(f"Trendyol API error: {str(e)}")
                     
-            except asyncio.TimeoutError:
-                logger.error("Trendyol API request timed out")
+            except asyncio.TimeoutError as e:
+                error_context = {'client': 'Trendyol', 'operation': 'authenticate', 'error_type': 'Timeout'}
+                error_handler.log_error(e, error_context)
                 raise NetworkError("Trendyol API request timed out")
                 
         except AuthenticationError as e:
-            logger.error(f"Trendyol authentication error: {str(e)}")
+            error_context = {'client': 'Trendyol', 'operation': 'authenticate', 'error_type': 'AuthenticationError'}
+            error_handler.log_error(e, error_context)
             raise
             
         except NetworkError as e:
-            logger.error(f"Trendyol network error: {str(e)}")
+            error_context = {'client': 'Trendyol', 'operation': 'authenticate', 'error_type': 'NetworkError'}
+            error_handler.log_error(e, error_context)
             raise
             
         except RateLimitError as e:
-            logger.error(f"Trendyol rate limit error: {str(e)}")
+            error_context = {'client': 'Trendyol', 'operation': 'authenticate', 'error_type': 'RateLimitError'}
+            error_handler.log_error(e, error_context)
             raise
             
         except Exception as e:
-            logger.error(f"Unexpected error during Trendyol authentication: {str(e)}")
+            error_context = {'client': 'Trendyol', 'operation': 'authenticate', 'error_type': 'UnexpectedError'}
+            error_handler.log_error(e, error_context)
             raise AuthenticationError(f"Trendyol authentication failed: {str(e)}")
 
+    @handle_exceptions
     async def get_products(self, **kwargs) -> List[Dict[str, Any]]:
         """
         Fetch products from Trendyol
@@ -124,8 +140,8 @@ class TrendyolClient(BaseAPIClient):
             params = {
                 'page': kwargs.get('page', 0),
                 'size': kwargs.get('size', self.batch_size),
-                'approved': kwargs.get('approved', True)
-            }
+                'approved': str(kwargs.get('approved', True)).lower()  # Convert to string "true" or "false"
+}
             
             # Add optional filters
             if 'barcode' in kwargs:
@@ -151,27 +167,31 @@ class TrendyolClient(BaseAPIClient):
             logger.info(f"Retrieved {len(products)} products from Trendyol")
             
             # Format products
-            formatted_products = [self._format_product(product) for product in products]
-            return [p for p in formatted_products if p]  # Filter out None values
+            formatted_products = []
+            for product in products:
+                try:
+                    formatted = self._format_product(product)
+                    if formatted:
+                        formatted_products.append(formatted)
+                except Exception as e:
+                    error_context = {
+                        'client': 'Trendyol',
+                        'operation': 'get_products',
+                        'product_id': str(product.get('id', 'unknown')),
+                        'error_type': 'FormatError'
+                    }
+                    error_handler.log_error(e, error_context)
+                    # Continue with other products
             
-        except AuthenticationError as e:
-            logger.error(f"Authentication error while fetching Trendyol products: {str(e)}")
-            raise
-            
-        except NetworkError as e:
-            logger.error(f"Network error while fetching Trendyol products: {str(e)}")
-            raise
-            
-        except RateLimitError as e:
-            logger.error(f"Rate limit exceeded while fetching Trendyol products: {str(e)}")
-            raise
-            
-        except APIError as e:
-            logger.error(f"API error while fetching Trendyol products: {str(e)}")
-            raise
+            return formatted_products
             
         except Exception as e:
-            logger.error(f"Unexpected error while fetching Trendyol products: {str(e)}")
+            error_context = {
+                'client': 'Trendyol',
+                'operation': 'get_products',
+                'kwargs': str(kwargs)
+            }
+            error_handler.log_error(e, error_context)
             raise APIError(f"Failed to fetch Trendyol products: {str(e)}")
 
     def _format_product(self, product: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -214,9 +234,16 @@ class TrendyolClient(BaseAPIClient):
                 }
             }
         except Exception as e:
-            logger.error(f"Error formatting Trendyol product: {str(e)}")
+            error_context = {
+                'client': 'Trendyol',
+                'operation': '_format_product',
+                'product_id': str(product.get('id', 'unknown')),
+                'error_type': 'FormatError'
+            }
+            error_handler.log_error(e, error_context)
             return None
 
+    @handle_exceptions
     async def update_product(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Update product on Trendyol
@@ -231,7 +258,14 @@ class TrendyolClient(BaseAPIClient):
             # Extract SKU and data
             sku = product_data.get('sku')
             if not sku:
-                raise APIError("Cannot update product: SKU is missing")
+                error = APIError("Cannot update product: SKU is missing")
+                error_context = {
+                    'client': 'Trendyol',
+                    'operation': 'update_product',
+                    'error_type': 'ValidationError'
+                }
+                error_handler.log_error(error, error_context)
+                raise error
                 
             data = product_data.get('data', {})
             
@@ -253,7 +287,16 @@ class TrendyolClient(BaseAPIClient):
             
             # Check response
             if not response or 'batchRequestId' not in response:
-                raise APIError(f"Failed to update product: Invalid response")
+                error = APIError(f"Failed to update product: Invalid response")
+                error_context = {
+                    'client': 'Trendyol',
+                    'operation': 'update_product',
+                    'sku': sku,
+                    'error_type': 'InvalidResponse',
+                    'response': str(response)
+                }
+                error_handler.log_error(error, error_context)
+                raise error
                 
             # Get batch ID
             batch_id = response['batchRequestId']
@@ -265,29 +308,28 @@ class TrendyolClient(BaseAPIClient):
             # Check for errors
             if batch_result.get('status') != 'COMPLETED':
                 error_message = batch_result.get('errorMessage', 'Unknown error')
-                raise APIError(f"Failed to update product: {error_message}")
+                error = APIError(f"Failed to update product: {error_message}")
+                error_context = {
+                    'client': 'Trendyol',
+                    'operation': 'update_product',
+                    'sku': sku,
+                    'batch_id': batch_id,
+                    'error_type': 'BatchError',
+                    'batch_status': batch_result.get('status')
+                }
+                error_handler.log_error(error, error_context)
+                raise error
                 
             logger.info(f"Successfully updated Trendyol product with SKU: {sku}")
             return product_data
             
-        except AuthenticationError as e:
-            logger.error(f"Authentication error while updating Trendyol product: {str(e)}")
-            raise
-            
-        except NetworkError as e:
-            logger.error(f"Network error while updating Trendyol product: {str(e)}")
-            raise
-            
-        except RateLimitError as e:
-            logger.error(f"Rate limit exceeded while updating Trendyol product: {str(e)}")
-            raise
-            
-        except APIError as e:
-            logger.error(f"API error while updating Trendyol product: {str(e)}")
-            raise
-            
         except Exception as e:
-            logger.error(f"Unexpected error while updating Trendyol product: {str(e)}")
+            error_context = {
+                'client': 'Trendyol',
+                'operation': 'update_product',
+                'sku': product_data.get('sku', 'unknown')
+            }
+            error_handler.log_error(e, error_context)
             raise APIError(f"Failed to update product: {str(e)}")
 
     async def _make_request(
@@ -299,59 +341,81 @@ class TrendyolClient(BaseAPIClient):
     ) -> Dict[str, Any]:
         """Make API request with retry mechanism"""
         url = f"{self.base_url}/{self.store_id}{endpoint}"
+        request_context = {
+            'client': 'Trendyol',
+            'operation': '_make_request',
+            'url': url,
+            'method': method
+        }
         
-        # Disable SSL verification for development
-        ssl_verify = not (os.getenv('DISABLE_SSL_VERIFY', 'false').lower() == 'true')
+        # Always disable SSL verification to avoid certificate issues
+        ssl_verify = False
         
         # Log request details (without sensitive info)
         logger.debug(f"Trendyol API request: {method} {url}")
         if params:
             logger.debug(f"Request params: {params}")
+            request_context['params'] = str(params)
         if data:
             logger.debug(f"Request data: {data}")
+            request_context['data'] = str(data)
         
         for attempt in range(self.max_retries):
+            request_context['attempt'] = str(attempt + 1)
             try:
-                async with aiohttp.ClientSession() as session:
+                # Create a connector with SSL verification disabled
+                connector = aiohttp.TCPConnector(ssl=False)
+                async with aiohttp.ClientSession(connector=connector) as session:
                     async with session.request(
                         method=method,
                         url=url,
                         headers=self.headers,
                         json=data,
                         params=params,
-                        timeout=aiohttp.ClientTimeout(total=self.request_timeout),
-                        ssl=False if ssl_verify else True
+                        timeout=aiohttp.ClientTimeout(total=self.request_timeout)
                     ) as response:
                         # Log response status
                         logger.debug(f"Trendyol API response status: {response.status}")
+                        request_context['status_code'] = str(response.status)
                         
                         if response.status == 429:  # Rate limit
                             wait_time = self.rate_limit_wait * (2 ** attempt)
                             logger.warning(f"Trendyol rate limit hit, waiting {wait_time} seconds")
+                            request_context['wait_time'] = str(wait_time)
                             await asyncio.sleep(wait_time)
                             continue
                             
                         elif response.status == 401 or response.status == 403:
                             response_text = await response.text()
                             logger.error(f"Trendyol authentication error: {response_text}")
-                            raise AuthenticationError(f"Authentication failed: {response.status} - {response_text}")
+                            request_context['response_text'] = response_text
+                            error = AuthenticationError(f"Authentication failed: {response.status} - {response_text}")
+                            error_handler.log_error(error, request_context)
+                            raise error
                         
                         elif response.status >= 500:
                             response_text = await response.text()
                             logger.error(f"Trendyol server error: {response_text}")
+                            request_context['response_text'] = response_text
                             
                             if attempt < self.max_retries - 1:
                                 wait_time = self.retry_delay * (2 ** attempt)
                                 logger.info(f"Trendyol server error, retrying in {wait_time} seconds")
+                                request_context['wait_time'] = str(wait_time)
                                 await asyncio.sleep(wait_time)
                                 continue
                             else:
-                                raise APIError(f"Server error after {self.max_retries} attempts: {response.status} - {response_text}")
+                                error = APIError(f"Server error after {self.max_retries} attempts: {response.status} - {response_text}")
+                                error_handler.log_error(error, request_context)
+                                raise error
                         
                         elif response.status >= 400:
                             response_text = await response.text()
                             logger.error(f"Trendyol client error: {response_text}")
-                            raise APIError(f"Request failed: {response.status} - {response_text}")
+                            request_context['response_text'] = response_text
+                            error = APIError(f"Request failed: {response.status} - {response_text}")
+                            error_handler.log_error(error, request_context)
+                            raise error
                         
                         # Success case
                         try:
@@ -363,51 +427,78 @@ class TrendyolClient(BaseAPIClient):
                         
             except aiohttp.ClientConnectorError as e:
                 logger.error(f"Trendyol connection error: {str(e)}")
+                request_context['error_type'] = 'ConnectionError'
+                
                 if attempt < self.max_retries - 1:
                     wait_time = self.retry_delay * (2 ** attempt)
                     logger.info(f"Connection error, retrying in {wait_time} seconds")
+                    request_context['wait_time'] = str(wait_time)
                     await asyncio.sleep(wait_time)
                 else:
-                    raise NetworkError(f"Connection error after {self.max_retries} attempts: {str(e)}")
+                    error = NetworkError(f"Connection error after {self.max_retries} attempts: {str(e)}")
+                    error_handler.log_error(error, request_context)
+                    raise error
                     
             except aiohttp.ClientResponseError as e:
                 logger.error(f"Trendyol response error: {str(e)}")
-                if e.status == 429:
+                request_context['error_type'] = 'ResponseError'
+                request_context['status_code'] = str(getattr(e, 'status', 'unknown'))
+                
+                if getattr(e, 'status', 0) == 429:
                     if attempt < self.max_retries - 1:
                         wait_time = self.rate_limit_wait * (2 ** attempt)
                         logger.warning(f"Rate limit hit, waiting {wait_time} seconds before retry")
+                        request_context['wait_time'] = str(wait_time)
                         await asyncio.sleep(wait_time)
                     else:
-                        raise RateLimitError(f"Rate limit exceeded after {self.max_retries} attempts")
-                elif e.status in (401, 403):
-                    raise AuthenticationError(f"Authentication failed: {str(e)}")
+                        error = RateLimitError(f"Rate limit exceeded after {self.max_retries} attempts")
+                        error_handler.log_error(error, request_context)
+                        raise error
+                elif getattr(e, 'status', 0) in (401, 403):
+                    error = AuthenticationError(f"Authentication failed: {str(e)}")
+                    error_handler.log_error(error, request_context)
+                    raise error
                 else:
-                    raise APIError(f"Request failed: {str(e)}")
+                    error = APIError(f"Request failed: {str(e)}")
+                    error_handler.log_error(error, request_context)
+                    raise error
                     
             except asyncio.TimeoutError:
                 logger.error("Trendyol request timed out")
+                request_context['error_type'] = 'Timeout'
+                
                 if attempt < self.max_retries - 1:
                     wait_time = self.retry_delay * (2 ** attempt)
                     logger.info(f"Timeout, retrying in {wait_time} seconds")
+                    request_context['wait_time'] = str(wait_time)
                     await asyncio.sleep(wait_time)
                 else:
-                    raise NetworkError(f"Request timed out after {self.max_retries} attempts")
+                    error = NetworkError(f"Request timed out after {self.max_retries} attempts")
+                    error_handler.log_error(error, request_context)
+                    raise error
                     
-            except (AuthenticationError, RateLimitError, NetworkError):
+            except (AuthenticationError, RateLimitError, NetworkError, APIError):
                 # Re-raise these exceptions without wrapping
                 raise
                 
             except Exception as e:
                 logger.error(f"Unexpected error during Trendyol API request: {str(e)}")
+                request_context['error_type'] = 'UnexpectedError'
+                
                 if attempt < self.max_retries - 1:
                     wait_time = self.retry_delay * (2 ** attempt)
                     logger.info(f"Unexpected error, retrying in {wait_time} seconds")
+                    request_context['wait_time'] = str(wait_time)
                     await asyncio.sleep(wait_time)
                 else:
-                    raise APIError(f"Request failed after {self.max_retries} attempts: {str(e)}")
+                    error = APIError(f"Request failed after {self.max_retries} attempts: {str(e)}")
+                    error_handler.log_error(error, request_context)
+                    raise error
 
         # This should never be reached due to the raise statements above
-        raise APIError(f"Request failed after {self.max_retries} attempts")
+        error = APIError(f"Request failed after {self.max_retries} attempts")
+        error_handler.log_error(error, request_context)
+        raise error
 
     async def _wait_for_batch_completion(self, batch_id: str) -> Dict[str, Any]:
         """
@@ -436,7 +527,16 @@ class TrendyolClient(BaseAPIClient):
                     
                 if status == 'FAILED':
                     error_message = response.get('errorMessage', 'Unknown error')
-                    raise APIError(f"Batch operation failed: {error_message}")
+                    error = APIError(f"Batch operation failed: {error_message}")
+                    error_context = {
+                        'client': 'Trendyol',
+                        'operation': '_wait_for_batch_completion',
+                        'batch_id': batch_id,
+                        'status': status,
+                        'error_message': error_message
+                    }
+                    error_handler.log_error(error, error_context)
+                    raise error
                     
                 # Wait and retry
                 logger.info(f"Batch {batch_id} status: {status}, waiting {wait_time} seconds...")
@@ -455,8 +555,24 @@ class TrendyolClient(BaseAPIClient):
                 
             except Exception as e:
                 if attempt == max_attempts - 1:
-                    raise APIError(f"Failed to check batch status: {str(e)}")
+                    error = APIError(f"Failed to check batch status: {str(e)}")
+                    error_context = {
+                        'client': 'Trendyol',
+                        'operation': '_wait_for_batch_completion',
+                        'batch_id': batch_id,
+                        'attempt': str(attempt + 1)
+                    }
+                    error_handler.log_error(error, error_context)
+                    raise error
                 logger.warning(f"Unexpected error checking batch status: {str(e)}, retrying...")
                 await asyncio.sleep(wait_time)
                 
-        raise APIError(f"Batch operation timed out after {max_attempts} attempts")
+        error = APIError(f"Batch operation timed out after {max_attempts} attempts")
+        error_context = {
+            'client': 'Trendyol',
+            'operation': '_wait_for_batch_completion',
+            'batch_id': batch_id,
+            'attempts': str(max_attempts)
+        }
+        error_handler.log_error(error, error_context)
+        raise error
