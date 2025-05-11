@@ -12,5 +12,5 @@ from utils.helpers import (
     format_price,
     create_excel_report
 )
-from utils.cache import get_cache, cached, async_cached
+from utils.cache import get_cache
 from utils.background_tasks import get_task_manager, TaskStatus

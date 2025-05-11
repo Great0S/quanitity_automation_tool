@@ -1,58 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
 import Sync from './pages/Sync';
-import Tasks from './pages/Tasks';
+import SyncHistory from './pages/SyncHistory';
 import Settings from './pages/Settings';
-import NotFound from './pages/NotFound';
 import Layout from './components/Layout';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import './App.css';
 
 // Protected route component
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { isAuthenticated } = useAuth();
   
   if (!isAuthenticated) {
+    // Redirect to login if not authenticated
     return <Navigate to="/login" replace />;
   }
   
-  return <>{children}</>;
+  return (
+    <Layout>
+      {children}
+    </Layout>
+  );
 };
 
-function AppRoutes() {
-  const { isAuthenticated } = useAuth();
-  
-  return (
-    <Routes>
-      <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" replace />} />
-      
-      <Route path="/" element={
-        <ProtectedRoute>
-          <Layout />
-        </ProtectedRoute>
-      }>
-        <Route index element={<Dashboard />} />
-        <Route path="products/:platform" element={<Products />} />
-        <Route path="sync" element={<Sync />} />
-        <Route path="tasks" element={<Tasks />} />
-        <Route path="settings" element={<Settings />} />
-      </Route>
-      
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  );
-}
-
-function App() {
+const App: React.FC = () => {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        
+        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/products/:platform" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+        <Route path="/sync" element={<ProtectedRoute><Sync /></ProtectedRoute>} />
+        <Route path="/sync/history" element={<ProtectedRoute><SyncHistory /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        
+        {/* Redirect to dashboard for any other route */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </AuthProvider>
   );
-}
+};
 
 export default App;

@@ -1,340 +1,434 @@
 """
-Amazon Client for better workflow management and error handling
+Amazon API client
 """
 
-import asyncio
-import os
-from typing import Dict, List, Any, Optional, TypedDict, Union, Tuple
-from datetime import datetime, timezone
-from sp_api.base import Marketplaces, ReportType
-from sp_api.api import (
-    ProductTypeDefinitions,
-    ListingsItems,
-    ReportsV2,
-    CatalogItems,
-    DataKiosk
-)
-from sp_api.api.catalog_items.catalog_items import CatalogItemsVersion
-from core.exceptions import APIError
+import aiohttp
+import json
+import hmac
+import hashlib
+import base64
+import urllib.parse
+from datetime import datetime
+import xml.etree.ElementTree as ET
+from typing import Dict, List, Any, Optional
 from core.logger import logger
-from .base_client import BaseAPIClient
-
-class ProductFeatures(TypedDict):
-    """Type definition for product features"""
-    thickness: Union[int, str]
-    size_match: List[Union[int, float]]
-    feature: Optional[str]
-    shape: str
-
-class ProductAttribute(TypedDict):
-    """Type definition for product attributes"""
-    attributeName: str
-    attributeValue: Any
-
-class AmazonConfig:
-    """Configuration class for Amazon client"""
-    def __init__(self):
-        self.marketplace_id = os.getenv("AMAZONTURKEYMARKETID")
-        self.seller_id = os.getenv("AMAZONSELLERACCOUNTID")
-        self.client_id = os.getenv("LWA_APP_ID")
-        self.client_secret = os.getenv("LWA_CLIENT_SECRET")
-        self.refresh_token = os.getenv("SP_API_REFRESH_TOKEN")
-        self.aws_access_key = os.getenv("AWS_ACCESS_KEY")
-        self.aws_secret_key = os.getenv("AWS_SECRET_KEY")
-        self.region = os.getenv("AWS_REGION", "eu-west-1")
+from core.exceptions import APIError, AuthenticationError, NetworkError
+from api.base_client import BaseAPIClient
+from core.error_handler import handle_exceptions
 
 class AmazonClient(BaseAPIClient):
-    """Enhanced Amazon Selling Partner API client"""
+    """Client for Amazon Marketplace Web Service (MWS) API"""
     
     def __init__(self):
+        """Initialize the Amazon client"""
         super().__init__()
-        self.config = AmazonConfig()
-        self.marketplace = Marketplaces.TR
-        self.setup_credentials()
-        self.setup_api_clients()
+        self.access_key = None
+        self.secret_key = None
+        self.seller_id = None
+        self.marketplace_id = None
+        self.region = None
+        self.api_version = "2011-10-01"
+        self._setup_credentials()
         
-    def setup_credentials(self) -> None:
-        """Setup API credentials"""
-        self.credentials = {
-            "refresh_token": self.config.refresh_token,
-            "lwa_app_id": self.config.client_id,
-            "lwa_client_secret": self.config.client_secret,
-            "aws_access_key": self.config.aws_access_key,
-            "aws_secret_key": self.config.aws_secret_key,
-            "region": self.config.region
+    def _setup_credentials(self):
+        """Setup API credentials from environment variables"""
+        import os
+        self.access_key = os.getenv("AMAZON_ACCESS_KEY")
+        self.secret_key = os.getenv("AMAZON_SECRET_KEY")
+        self.seller_id = os.getenv("AMAZON_SELLER_ID")
+        self.marketplace_id = os.getenv("AMAZON_MARKETPLACE_ID")
+        self.region = os.getenv("AMAZON_REGION", "us-east-1")
+        
+        if not self.access_key:
+            logger.warning("AMAZON_ACCESS_KEY environment variable not set")
+        if not self.secret_key:
+            logger.warning("AMAZON_SECRET_KEY environment variable not set")
+        if not self.seller_id:
+            logger.warning("AMAZON_SELLER_ID environment variable not set")
+        if not self.marketplace_id:
+            logger.warning("AMAZON_MARKETPLACE_ID environment variable not set")
+            
+        # Set API endpoint based on region
+        region_endpoints = {
+            "us-east-1": "mws.amazonservices.com",
+            "eu-west-1": "mws-eu.amazonservices.com",
+            "ap-southeast-1": "mws-fe.amazonservices.com"
         }
-
-    def setup_api_clients(self) -> None:
-        """Initialize API clients"""
-        self.catalog_api = CatalogItems(credentials=self.credentials)
-        self.listings_api = ListingsItems(credentials=self.credentials)
-        self.reports_api = ReportsV2(credentials=self.credentials)
-        self.product_types_api = ProductTypeDefinitions(credentials=self.credentials)
-
-    async def get_products(self, **kwargs) -> List[Dict[str, Any]]:
+        
+        self.endpoint = region_endpoints.get(self.region, "mws.amazonservices.com")
+        self.base_url = f"https://{self.endpoint}"
+    
+    @handle_exceptions
+    async def authenticate(self) -> None:
+        """Authenticate with Amazon MWS API"""
+        if not self.access_key or not self.secret_key or not self.seller_id:
+            raise AuthenticationError("Amazon MWS credentials not set")
+            
+        try:
+            # Test authentication with a simple request
+            params = {
+                "Action": "GetServiceStatus",
+                "SellerId": self.seller_id,
+                "SignatureMethod": "HmacSHA256",
+                "SignatureVersion": "2",
+                "Timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "Version": self.api_version,
+                "AWSAccessKeyId": self.access_key
+            }
+            
+            # Make request
+            response = await self._make_mws_request(
+                method="GET",
+                path="/Products/2011-10-01",
+                params=params
+            )
+            
+            self.authenticated = True
+            logger.info("Amazon MWS authentication successful")
+            
+        except Exception as e:
+            logger.error(f"Amazon MWS authentication failed: {str(e)}")
+            raise AuthenticationError(f"Amazon MWS authentication failed: {str(e)}")
+    
+    async def _make_mws_request(self, method: str, path: str, params: Dict[str, str]) -> Any:
         """
-        Fetch products from Amazon
+        Make a request to Amazon MWS API with authentication
         
         Args:
-            **kwargs: Additional parameters for filtering
+            method: HTTP method
+            path: API path
+            params: Request parameters
             
         Returns:
-            List[Dict[str, Any]]: List of products
+            Response data
+        """
+        # Sort parameters
+        sorted_params = sorted(params.items())
+        
+        # Create canonical query string
+        canonical_query_string = "&".join([
+            f"{urllib.parse.quote(k)}={urllib.parse.quote(str(v))}"
+            for k, v in sorted_params
+        ])
+        
+        # Create string to sign
+        string_to_sign = f"{method}\n{self.endpoint}\n{path}\n{canonical_query_string}"
+        
+        # Calculate signature
+        signature = base64.b64encode(
+            hmac.new(
+                self.secret_key.encode("utf-8"),
+                string_to_sign.encode("utf-8"),
+                hashlib.sha256
+            ).digest()
+        ).decode("utf-8")
+        
+        # Add signature to parameters
+        params["Signature"] = signature
+        
+        # Make request
+        url = f"{self.base_url}{path}"
+        
+        if method == "GET":
+            response = await self._make_request(
+                method="GET",
+                url=url,
+                params=params
+            )
+        else:
+            response = await self._make_request(
+                method=method,
+                url=url,
+                data=urllib.parse.urlencode(params)
+            )
+            
+        return response
+    
+    @handle_exceptions
+    async def get_products(self, **kwargs) -> List[Dict[str, Any]]:
+        """
+        Get products from Amazon
+        
+        Args:
+            **kwargs: Optional filters
+                - sku: Filter by SKU
+                
+        Returns:
+            List of products
+        """
+        products = []
+        
+        # If SKU is provided, get specific product
+        if "sku" in kwargs:
+            sku = kwargs["sku"]
+            
+            params = {
+                "Action": "GetMatchingProductForId",
+                "SellerId": self.seller_id,
+                "MarketplaceId": self.marketplace_id,
+                "IdType": "SellerSKU",
+                "IdList.Id.1": sku,
+                "SignatureMethod": "HmacSHA256",
+                "SignatureVersion": "2",
+                "Timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "Version": self.api_version,
+                "AWSAccessKeyId": self.access_key
+            }
+            
+            # Get product data
+            product_response = await self._make_mws_request(
+                method="GET",
+                path="/Products/2011-10-01",
+                params=params
+            )
+            
+            # Get inventory data
+            inventory_params = {
+                "Action": "ListInventorySupply",
+                "SellerId": self.seller_id,
+                "MarketplaceId": self.marketplace_id,
+                "SellerSkus.member.1": sku,
+                "SignatureMethod": "HmacSHA256",
+                "SignatureVersion": "2",
+                "Timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "Version": self.api_version,
+                "AWSAccessKeyId": self.access_key
+            }
+            
+            inventory_response = await self._make_mws_request(
+                method="GET",
+                path="/FulfillmentInventory/2010-10-01",
+                params=inventory_params
+            )
+            
+            # Parse responses and add product
+            product = self._parse_product(product_response, inventory_response, sku)
+            if product:
+                products.append(product)
+                
+        else:
+            # Get list of SKUs
+            params = {
+                "Action": "ListInventorySupply",
+                "SellerId": self.seller_id,
+                "MarketplaceId": self.marketplace_id,
+                "SignatureMethod": "HmacSHA256",
+                "SignatureVersion": "2",
+                "Timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "Version": self.api_version,
+                "AWSAccessKeyId": self.access_key
+            }
+            
+            # Add pagination parameters
+            if "limit" in kwargs:
+                params["MaxResultsPerPage"] = str(kwargs["limit"])
+            
+            inventory_response = await self._make_mws_request(
+                method="GET",
+                path="/FulfillmentInventory/2010-10-01",
+                params=params
+            )
+            
+            # Extract SKUs from inventory response
+            skus = self._extract_skus_from_inventory(inventory_response)
+            
+            # Get product data for each SKU
+            for sku in skus:
+                product_params = {
+                    "Action": "GetMatchingProductForId",
+                    "SellerId": self.seller_id,
+                    "MarketplaceId": self.marketplace_id,
+                    "IdType": "SellerSKU",
+                    "IdList.Id.1": sku,
+                    "SignatureMethod": "HmacSHA256",
+                    "SignatureVersion": "2",
+                    "Timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "Version": self.api_version,
+                    "AWSAccessKeyId": self.access_key
+                }
+                
+                product_response = await self._make_mws_request(
+                    method="GET",
+                    path="/Products/2011-10-01",
+                    params=product_params
+                )
+                
+                # Parse response and add product
+                product = self._parse_product(product_response, inventory_response, sku)
+                if product:
+                    products.append(product)
+                    
+        return products
+    
+    def _extract_skus_from_inventory(self, inventory_response: str) -> List[str]:
+        """
+        Extract SKUs from inventory response
+        
+        Args:
+            inventory_response: Inventory response XML
+            
+        Returns:
+            List of SKUs
+        """
+        skus = []
+        
+        try:
+            # Parse XML response
+            root = ET.fromstring(inventory_response)
+            
+            # Extract SKUs
+            namespace = {"ns": "http://mws.amazonaws.com/FulfillmentInventory/2010-10-01"}
+            for item in root.findall(".//ns:SellerSKU", namespace):
+                skus.append(item.text)
+                
+        except Exception as e:
+            logger.error(f"Error extracting SKUs from inventory response: {str(e)}")
+            
+        return skus
+    
+    def _parse_product(self, product_response: str, inventory_response: str, sku: str) -> Optional[Dict[str, Any]]:
+        """
+        Parse product and inventory responses
+        
+        Args:
+            product_response: Product response XML
+            inventory_response: Inventory response XML
+            sku: Product SKU
+            
+        Returns:
+            Parsed product data
         """
         try:
-            # Get inventory report
-            report = await self.get_inventory_report()
+            # Parse product XML
+            product_root = ET.fromstring(product_response)
             
-            # Process report data
-            products = await self.process_report_data(report)
+            # Extract product data
+            product_namespace = {"ns": "http://mws.amazonaws.com/schema/Products/2011-10-01"}
+            product_result = product_root.find(".//ns:Product", product_namespace)
             
-            # Enrich with catalog data
-            if kwargs.get('include_catalog_data', True):
-                products = await self.enrich_with_catalog_data(products)
+            if product_result is None:
+                return None
+                
+            # Get product attributes
+            attributes = product_result.find(".//ns:AttributeSets", product_namespace)
+            title = attributes.find(".//ns:Title", product_namespace)
+            title_text = title.text if title is not None else ""
             
-            return products
+            # Parse inventory XML
+            inventory_root = ET.fromstring(inventory_response)
             
-        except Exception as e:
-            logger.error(f"Failed to fetch products: {str(e)}")
-            raise APIError(f"Failed to fetch products: {str(e)}")
-
-    async def get_inventory_report(self) -> Dict[str, Any]:
-        """Get inventory report from Amazon"""
-        try:
-            # Create report request
-            report_response = self.reports_api.create_report(
-                reportType=ReportType.GET_MERCHANT_LISTINGS_ALL_DATA,
-                marketplaceIds=[self.config.marketplace_id]
-            )
+            # Find inventory item for this SKU
+            inventory_namespace = {"ns": "http://mws.amazonaws.com/FulfillmentInventory/2010-10-01"}
+            inventory_item = None
             
-            report_id = report_response.payload['reportId']
-            
-            # Wait for report completion
-            while True:
-                status = self.reports_api.get_report(reportId=report_id)
-                if status.payload['processingStatus'] == 'DONE':
+            for item in inventory_root.findall(".//ns:InventorySupplyDetail", inventory_namespace):
+                item_sku = item.find(".//ns:SellerSKU", inventory_namespace)
+                if item_sku is not None and item_sku.text == sku:
+                    inventory_item = item
                     break
-                elif status.payload['processingStatus'] == 'CANCELLED':
-                    raise APIError("Report generation was cancelled")
-                await asyncio.sleep(5)
-            
-            # Get report document
-            document = self.reports_api.get_report_document(
-                reportDocumentId=status.payload['reportDocumentId'],
-                decrypt=True
-            )
-            
-            return document.payload
-            
-        except Exception as e:
-            logger.error(f"Failed to get inventory report: {str(e)}")
-            raise APIError(f"Failed to get inventory report: {str(e)}")
-
-    async def process_report_data(self, report: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Process inventory report data"""
-        try:
-            products = []
-            for item in report.get('data', []):
-                product = {
-                    'sku': item.get('seller-sku'),
-                    'data': {
-                        'title': item.get('item-name'),
-                        'price': float(item.get('price', 0)),
-                        'quantity': int(item.get('quantity', 0)),
-                        'asin': item.get('asin'),
-                        'status': item.get('status'),
-                        'fulfillment': item.get('fulfillment-channel')
-                    }
-                }
-                products.append(product)
-            return products
-            
-        except Exception as e:
-            logger.error(f"Failed to process report data: {str(e)}")
-            raise APIError(f"Failed to process report data: {str(e)}")
-
-    async def enrich_with_catalog_data(self, products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Enrich products with catalog data"""
-        try:
-            for product in products:
-                if asin := product['data'].get('asin'):
-                    catalog_data = self.catalog_api.get_catalog_item(
-                        asin=asin,
-                        marketplaceIds=[self.config.marketplace_id],
-                        includedData=['attributes', 'images', 'productTypes']
-                    )
                     
-                    if catalog_data.payload:
-                        product['data'].update({
-                            'brand': catalog_data.payload.get('brand'),
-                            'category': catalog_data.payload.get('productType'),
-                            'images': catalog_data.payload.get('images', []),
-                            'attributes': catalog_data.payload.get('attributes', {})
-                        })
-            
-            return products
+            # Get quantity
+            quantity = 0
+            if inventory_item is not None:
+                quantity_elem = inventory_item.find(".//ns:Quantity", inventory_namespace)
+                if quantity_elem is not None:
+                    quantity = int(quantity_elem.text)
+                    
+            # Get status
+            status = "inactive"
+            if inventory_item is not None:
+                status_elem = inventory_item.find(".//ns:InStockSupplyQuantity", inventory_namespace)
+                if status_elem is not None and int(status_elem.text) > 0:
+                    status = "active"
+                    
+            # Return formatted product
+            return {
+                "sku": sku,
+                "data": {
+                    "title": title_text,
+                    "price": 0.0,  # Price not available in this API call
+                    "quantity": quantity,
+                    "status": status,
+                    "platform_id": sku,
+                    "last_updated": datetime.now().isoformat()
+                }
+            }
             
         except Exception as e:
-            logger.error(f"Failed to enrich with catalog data: {str(e)}")
-            raise APIError(f"Failed to enrich with catalog data: {str(e)}")
-
+            logger.error(f"Error parsing product response: {str(e)}")
+            return None
+    
+    @handle_exceptions
     async def update_product(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Update product on Amazon
+        Update a product in Amazon
         
         Args:
             product_data: Product data to update
-            
+                - sku: Product SKU
+                - data: Product data to update
+                    - price: New price
+                    - quantity: New quantity
+                    
         Returns:
-            Dict[str, Any]: Updated product data
+            Update result
         """
-        try:
-            sku = product_data['sku']
+        sku = product_data.get("sku")
+        if not sku:
+            raise ValueError("SKU is required for product update")
             
-            # Prepare update payload
-            payload = self.prepare_update_payload(product_data)
+        data = product_data.get("data", {})
+        if not data:
+            raise ValueError("No data provided for update")
             
-            # Submit update
-            response = self.listings_api.put_listings_item(
-                sellerId=self.config.seller_id,
-                sku=sku,
-                marketplaceIds=[self.config.marketplace_id],
-                body=payload
-            )
+        # Update quantity if provided
+        if "quantity" in data:
+            quantity = data["quantity"]
             
-            if response.payload['status'] == 'ACCEPTED':
-                logger.info(f"Successfully updated product {sku}")
-                return product_data
-            else:
-                raise APIError(f"Failed to update product {sku}: {response.payload}")
-                
-        except Exception as e:
-            logger.error(f"Failed to update product: {str(e)}")
-            raise APIError(f"Failed to update product: {str(e)}")
-
-    def prepare_update_payload(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Prepare payload for product update"""
-        try:
-            data = product_data['data']
-            
-            payload = {
-                "productType": data.get('category', 'HOME'),
-                "patches": [
-                    {
-                        "op": "replace",
-                        "path": "/attributes/fulfillment_availability",
-                        "value": [{
-                            "fulfillment_channel_code": "DEFAULT",
-                            "quantity": data['quantity']
-                        }]
-                    },
-                    {
-                        "op": "replace",
-                        "path": "/attributes/purchasable_offer",
-                        "value": [{
-                            "our_price": [{
-                                "schedule": [{
-                                    "value_with_tax": data['price']
-                                }]
-                            }]
-                        }]
-                    }
-                ]
+            params = {
+                "Action": "UpdateInventoryAvailability",
+                "SellerId": self.seller_id,
+                "MarketplaceId": self.marketplace_id,
+                "SellerSKU": sku,
+                "Quantity": str(quantity),
+                "SignatureMethod": "HmacSHA256",
+                "SignatureVersion": "2",
+                "Timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "Version": self.api_version,
+                "AWSAccessKeyId": self.access_key
             }
             
-            # Add optional updates if provided
-            if 'title' in data:
-                payload['patches'].append({
-                    "op": "replace",
-                    "path": "/attributes/title",
-                    "value": [{"value": data['title']}]
-                })
-                
-            if 'brand' in data:
-                payload['patches'].append({
-                    "op": "replace",
-                    "path": "/attributes/brand",
-                    "value": [{"value": data['brand']}]
-                })
-                
-            return payload
+            await self._make_mws_request(
+                method="POST",
+                path="/FulfillmentInventory/2010-10-01",
+                params=params
+            )
             
-        except Exception as e:
-            logger.error(f"Failed to prepare update payload: {str(e)}")
-            raise APIError(f"Failed to prepare update payload: {str(e)}")
-
-    async def bulk_update_products(self, products: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Bulk update multiple products
-        
-        Args:
-            products: List of products to update
+        # Update price if provided
+        if "price" in data:
+            price = data["price"]
             
-        Returns:
-            Dict[str, Any]: Update results
-        """
-        results = {
-            'successful': [],
-            'failed': []
+            params = {
+                "Action": "UpdatePrice",
+                "SellerId": self.seller_id,
+                "MarketplaceId": self.marketplace_id,
+                "SKU": sku,
+                "Price": str(price),
+                "SignatureMethod": "HmacSHA256",
+                "SignatureVersion": "2",
+                "Timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "Version": self.api_version,
+                "AWSAccessKeyId": self.access_key
+            }
+            
+            await self._make_mws_request(
+                method="POST",
+                path="/Products/2011-10-01",
+                params=params
+            )
+            
+        return {
+            "sku": sku,
+            "status": "success",
+            "message": "Product updated successfully"
         }
-        
-        for product in products:
-            try:
-                await self.update_product(product)
-                results['successful'].append(product['sku'])
-            except Exception as e:
-                logger.error(f"Failed to update product {product['sku']}: {str(e)}")
-                results['failed'].append({
-                    'sku': product['sku'],
-                    'error': str(e)
-                })
-        
-        return results
-
-    async def get_product_types(self, category_name: str) -> List[Dict[str, Any]]:
-        """Get available product types for category"""
-        try:
-            response = self.product_types_api.search_definitions_product_types(
-                keywords=category_name,
-                marketplaceIds=[self.config.marketplace_id]
-            )
-            return response.payload['productTypes']
-            
-        except Exception as e:
-            logger.error(f"Failed to get product types: {str(e)}")
-            raise APIError(f"Failed to get product types: {str(e)}")
-
-    async def get_product_attributes(self, product_type: str) -> Dict[str, Any]:
-        """Get required attributes for product type"""
-        try:
-            response = self.product_types_api.get_definitions_product_type(
-                productType=product_type,
-                marketplaceIds=[self.config.marketplace_id],
-                sellerId=self.config.seller_id
-            )
-            return response.payload['schema']
-            
-        except Exception as e:
-            logger.error(f"Failed to get product attributes: {str(e)}")
-            raise APIError(f"Failed to get product attributes: {str(e)}")
-
-    def validate_product_data(self, product_data: Dict[str, Any], 
-                            product_type: str) -> List[str]:
-        """Validate product data against required attributes"""
-        errors = []
-        
-        try:
-            # Get required attributes
-            attributes = self.get_product_attributes(product_type)
-            required = attributes.get('required', [])
-            
-            # Check required fields
-            for field in required:
-                if field not in product_data['data']:
-                    errors.append(f"Missing required field: {field}")
-            
-            return errors
-            
-        except Exception as e:
-            logger.error(f"Validation failed: {str(e)}")
-            raise APIError(f"Validation failed: {str(e)}")

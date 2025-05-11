@@ -17,7 +17,7 @@ class RateLimiter:
     Implements token bucket algorithm for rate limiting
     """
     
-    def __init__(self, requests_per_second: float, burst_limit: int = None):
+    def __init__(self, requests_per_second: float, burst_limit: int = 0):
         """
         Initialize rate limiter
         

@@ -1,75 +1,40 @@
+"""
+Application constants
+"""
+
 from enum import Enum
 
-class Platform(Enum):
-    N11 = 'n11'
-    TRENDYOL = 'trendyol'
-    AMAZON = 'amazon'
-    HEPSIBURADA = 'hepsiburada'
-    PAZARAMA = 'pazarama'
-    PTTAVM = 'pttavm'
-    WORDPRESS = 'wordpress'
-
 class ExportFormat(Enum):
+    """Export format options"""
     CSV = 'csv'
-    EXCEL = 'excel'
+    EXCEL = 'xlsx'
     JSON = 'json'
     XML = 'xml'
 
-class ProductStatus(Enum):
-    ACTIVE = 'active'
-    INACTIVE = 'inactive'
-    OUT_OF_STOCK = 'out_of_stock'
-    PENDING = 'pending'
-    REJECTED = 'rejected'
-
-class SyncStatus(Enum):
-    PENDING = 'pending'
-    IN_PROGRESS = 'in_progress'
-    COMPLETED = 'completed'
-    FAILED = 'failed'
-    PARTIAL = 'partial'
-
-class ErrorCodes:
-    API_ERROR = 'API_ERROR'
-    VALIDATION_ERROR = 'VALIDATION_ERROR'
-    AUTH_ERROR = 'AUTH_ERROR'
-    SYNC_ERROR = 'SYNC_ERROR'
-    EXPORT_ERROR = 'EXPORT_ERROR'
-    DATABASE_ERROR = 'DATABASE_ERROR'
-
+# MIME types for export formats
 MIME_TYPES = {
-    'csv': 'text/csv',
-    'excel': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'json': 'application/json',
-    'xml': 'application/xml'
+    ExportFormat.CSV.value: 'text/csv',
+    ExportFormat.EXCEL.value: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ExportFormat.JSON.value: 'application/json',
+    ExportFormat.XML.value: 'application/xml'
 }
 
-DEFAULT_SETTINGS = {
-    'items_per_page': 50,
-    'max_export_rows': 10000,
-    'api_timeout': 30,
-    'max_retries': 3,
-    'batch_size': 100,
-    'auto_refresh_interval': 300
+# API rate limits (requests per minute)
+RATE_LIMITS = {
+    'default': 60,
+    'n11': 30,
+    'trendyol': 60,
+    'hepsiburada': 120,
+    'pazarama': 60,
+    'pttavm': 30
 }
 
-FIELD_MAPPINGS = {
-    'n11': {
-        'sku': 'stockCode',
-        'title': 'title',
-        'price': 'price',
-        'quantity': 'quantity'
-    },
-    'trendyol': {
-        'sku': 'barcode',
-        'title': 'title',
-        'price': 'salePrice',
-        'quantity': 'quantity'
-    },
-    'amazon': {
-        'sku': 'SellerSKU',
-        'title': 'Title',
-        'price': 'Price',
-        'quantity': 'Quantity'
-    }
+# Cache TTL (seconds)
+CACHE_TTL = {
+    'products': 3600,  # 1 hour
+    'categories': 86400,  # 24 hours
+    'auth_token': 3600  # 1 hour
 }
+
+# Task refresh interval (milliseconds)
+TASK_REFRESH_INTERVAL = 2000  # 2 seconds

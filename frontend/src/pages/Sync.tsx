@@ -1,33 +1,26 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { toast } from 'react-toastify';
 import api from '../services/authService';
 import { TASK_REFRESH_INTERVAL } from '../config';
 
 const SyncContainer = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-`;
-
-const Card = styled.div`
   background-color: white;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   padding: 20px;
 `;
 
-const FormCard = styled(Card)`
-  grid-column: 1;
-`;
-
-const HistoryCard = styled(Card)`
-  grid-column: 2;
-`;
-
-const Form = styled.form`
+const Header = styled.div`
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+`;
+
+const Title = styled.h2`
+  margin: 0;
 `;
 
 const FormGroup = styled.div`
@@ -36,9 +29,8 @@ const FormGroup = styled.div`
 
 const Label = styled.label`
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 5px;
   font-weight: 500;
-  color: #333;
 `;
 
 const Select = styled.select`
@@ -46,30 +38,48 @@ const Select = styled.select`
   padding: 10px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  font-size: 16px;
-  
-  &:focus {
-    outline: none;
-    border-color: #0f3460;
-    box-shadow: 0 0 0 2px rgba(15, 52, 96, 0.2);
-  }
+  margin-bottom: 10px;
 `;
 
 const CheckboxGroup = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 10px;
+  margin-bottom: 10px;
 `;
 
 const CheckboxLabel = styled.label`
   display: flex;
   align-items: center;
   cursor: pointer;
+  padding: 5px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
   
-  input {
-    margin-right: 5px;
+  &:hover {
+    background-color: #f5f5f5;
   }
+`;
+
+const Checkbox = styled.input`
+  margin-right: 5px;
+`;
+
+const Input = styled.input`
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 10px;
+`;
+
+const TextArea = styled.textarea`
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  min-height: 100px;
 `;
 
 const Button = styled.button`
@@ -77,9 +87,7 @@ const Button = styled.button`
   color: white;
   border: none;
   border-radius: 4px;
-  padding: 12px;
-  font-size: 16px;
-  font-weight: 500;
+  padding: 10px 20px;
   cursor: pointer;
   transition: background-color 0.3s;
   
@@ -93,318 +101,328 @@ const Button = styled.button`
   }
 `;
 
-const HistoryTable = styled.table`
-  width: 100%;
-  border-collapse: collapse;
+const TabContainer = styled.div`
+  margin-bottom: 20px;
+`;
+
+const TabButtons = styled.div`
+  display: flex;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 20px;
+`;
+
+const TabButton = styled.button<{ $active: boolean }>`
+  padding: 10px 20px;
+  background-color: ${props => props.$active ? '#0f3460' : 'transparent'};
+  color: ${props => props.$active ? 'white' : '#333'};
+  border: none;
+  border-bottom: ${props => props.$active ? '2px solid #0f3460' : 'none'};
+  cursor: pointer;
+  transition: all 0.3s;
   
-  th, td {
-    padding: 12px;
-    text-align: left;
-    border-bottom: 1px solid #eee;
-  }
-  
-  th {
-    background-color: #f9f9f9;
-    font-weight: 500;
-  }
-  
-  tr:hover {
-    background-color: #f5f5f5;
+  &:hover {
+    background-color: ${props => props.$active ? '#0f3460' : '#f5f5f5'};
   }
 `;
 
-const StatusBadge = styled.span<{ status: string }>`
-  display: inline-block;
-  padding: 4px 8px;
+const TabContent = styled.div`
+  padding: 10px 0;
+`;
+
+const ProgressContainer = styled.div`
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #ddd;
   border-radius: 4px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  
-  ${props => {
-    switch (props.status.toLowerCase()) {
-      case 'completed':
-        return 'background-color: #e8f5e9; color: #2e7d32;';
-      case 'failed':
-        return 'background-color: #ffebee; color: #c62828;';
-      case 'running':
-        return 'background-color: #e3f2fd; color: #1565c0;';
-      default:
-        return 'background-color: #f5f5f5; color: #616161;';
-    }
-  }}
 `;
 
 const ProgressBar = styled.div`
-  height: 8px;
-  background-color: #f5f5f5;
-  border-radius: 4px;
+  height: 10px;
+  background-color: #eee;
+  border-radius: 5px;
+  margin-bottom: 10px;
   overflow: hidden;
-  margin-top: 20px;
 `;
 
-const ProgressFill = styled.div<{ progress: number }>`
+const ProgressFill = styled.div<{ $progress: number }>`
   height: 100%;
-  width: ${props => props.progress}%;
+  width: ${props => props.$progress}%;
   background-color: #0f3460;
+  border-radius: 5px;
   transition: width 0.3s ease;
 `;
 
 const ProgressText = styled.div`
-  text-align: center;
-  font-size: 0.9rem;
   color: #666;
-  margin-top: 5px;
-`;
-
-const ViewButton = styled.button`
-  background-color: transparent;
-  color: #0f3460;
-  border: none;
-  padding: 0;
-  font-size: 0.9rem;
-  cursor: pointer;
-  text-decoration: underline;
-  
-  &:hover {
-    color: #16213e;
-  }
-`;
-
-const SyncDetailsModal = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 100;
-`;
-
-const ModalContent = styled.div`
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  padding: 20px;
-  width: 80%;
-  max-width: 800px;
-  max-height: 80vh;
-  overflow-y: auto;
-`;
-
-const ModalHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #eee;
-`;
-
-const ModalTitle = styled.h3`
-  margin: 0;
-`;
-
-const CloseButton = styled.button`
-  background-color: transparent;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: #666;
-  
-  &:hover {
-    color: #333;
-  }
-`;
-
-const TabsContainer = styled.div`
-  margin-bottom: 20px;
-`;
-
-const TabButton = styled.button<{ active: boolean }>`
-  background-color: ${props => props.active ? '#0f3460' : 'transparent'};
-  color: ${props => props.active ? 'white' : '#333'};
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 8px 16px;
-  margin-right: 10px;
-  cursor: pointer;
-  
-  &:hover {
-    background-color: ${props => props.active ? '#0f3460' : '#f5f5f5'};
-  }
 `;
 
 const Sync: React.FC = () => {
+  const navigate = useNavigate();
+  
+  // Platform state
   const [platforms, setPlatforms] = useState<string[]>([]);
   const [sourcePlatform, setSourcePlatform] = useState<string>('');
   const [targetPlatforms, setTargetPlatforms] = useState<string[]>([]);
-  const [syncFields, setSyncFields] = useState<string[]>(['price', 'quantity', 'status']);
-  const [syncHistory, setSyncHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [currentSyncTask, setCurrentSyncTask] = useState<string | null>(null);
-  const [syncProgress, setSyncProgress] = useState(0);
-  const [showModal, setShowModal] = useState(false);
-  const [syncDetails, setSyncDetails] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState('success');
   
-  // Fetch platforms and sync history
+  // Sync options
+  const [syncFields, setSyncFields] = useState<string[]>(['price', 'quantity', 'status']);
+  const [batchSize, setBatchSize] = useState<number>(50);
+  const [skuFilter, setSkuFilter] = useState<string>('');
+  
+  // Single product update
+  const [singleSku, setSingleSku] = useState<string>('');
+  const [singleProductData, setSingleProductData] = useState<string>('{\n  "price": 0,\n  "quantity": 0,\n  "status": "active"\n}');
+  
+  // Multi product update
+  const [multiProductData, setMultiProductData] = useState<string>('[\n  {\n    "sku": "SKU1",\n    "data": {\n      "price": 10.99,\n      "quantity": 100\n    }\n  },\n  {\n    "sku": "SKU2",\n    "data": {\n      "price": 19.99,\n      "quantity": 50\n    }\n  }\n]');
+  
+  // Task state
+  const [activeTab, setActiveTab] = useState<string>('platform-sync');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [taskProgress, setTaskProgress] = useState<number>(0);
+  const [taskMessage, setTaskMessage] = useState<string>('');
+  
+  // Load platforms on mount
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchPlatforms = async () => {
       try {
-        setLoading(true);
+        const response = await api.get('/platforms');
+        const platformsList = response.data.platforms;
         
-        // Fetch platforms
-        const platformsResponse = await api.get('/platforms');
-        const availablePlatforms = platformsResponse.data.platforms || [];
-        setPlatforms(availablePlatforms);
+        setPlatforms(platformsList);
         
-        if (availablePlatforms.length > 0) {
-          setSourcePlatform(availablePlatforms[0]);
+        if (platformsList.length > 0) {
+          setSourcePlatform(platformsList[0]);
+          setTargetPlatforms(platformsList.slice(1));
         }
-        
-        // Fetch sync history
-        const historyResponse = await api.get('/sync/history');
-        setSyncHistory(historyResponse.data);
-        
-        setLoading(false);
       } catch (err) {
-        console.error('Error fetching data:', err);
-        toast.error('Failed to load data');
-        setLoading(false);
+        console.error('Error fetching platforms:', err);
+        toast.error('Failed to load platforms');
       }
     };
     
-    fetchData();
+    fetchPlatforms();
   }, []);
   
-  // Check sync task status
+  // Poll task status
   useEffect(() => {
-    if (!currentSyncTask) return;
+    if (!taskId) return;
     
     const checkTaskStatus = async () => {
       try {
-        const response = await api.get(`/tasks/${currentSyncTask}`);
+        const response = await api.get(`/tasks/${taskId}`);
         const task = response.data;
         
+        setTaskProgress(task.progress || 0);
+        
         if (task.status === 'completed') {
-          toast.success('Sync completed successfully');
-          setCurrentSyncTask(null);
-          setSyncing(false);
-          setSyncProgress(100);
+          setLoading(false);
+          setTaskId(null);
+          toast.success('Task completed successfully');
           
-          // Refresh sync history
-          const historyResponse = await api.get('/sync/history');
-          setSyncHistory(historyResponse.data);
+          // Show result summary
+          if (task.result) {
+            const result = task.result;
+            toast.info(`Processed ${result.products} products: ${result.success} success, ${result.errors} errors`);
+          }
         } else if (task.status === 'failed') {
-          toast.error(`Sync failed: ${task.error}`);
-          setCurrentSyncTask(null);
-          setSyncing(false);
+          setLoading(false);
+          setTaskId(null);
+          toast.error(`Task failed: ${task.error}`);
         } else {
           // Still running
-          setSyncProgress(task.progress ? task.progress * 100 : 0);
+          setTaskMessage(task.metadata?.progress_message || 'Processing...');
         }
       } catch (err) {
         console.error('Error checking task status:', err);
       }
     };
     
+    // Check immediately
+    checkTaskStatus();
+    
+    // Set up polling
     const interval = setInterval(checkTaskStatus, TASK_REFRESH_INTERVAL);
-    return () => clearInterval(interval);
-  }, [currentSyncTask]);
-  
-  // Handle platform selection
-  const handleTargetPlatformChange = (platform: string) => {
-    if (targetPlatforms.includes(platform)) {
-      setTargetPlatforms(targetPlatforms.filter(p => p !== platform));
-    } else {
-      setTargetPlatforms([...targetPlatforms, platform]);
-    }
-  };
-  
-  // Handle field selection
-  const handleFieldChange = (field: string) => {
-    if (syncFields.includes(field)) {
-      setSyncFields(syncFields.filter(f => f !== field));
-    } else {
-      setSyncFields([...syncFields, field]);
-    }
-  };
-  
-  // Start sync
-  const handleStartSync = async (e: React.FormEvent) => {
-    e.preventDefault();
     
-    if (!sourcePlatform) {
-      toast.error('Please select a source platform');
-      return;
-    }
-    
-    if (targetPlatforms.length === 0) {
-      toast.error('Please select at least one target platform');
-      return;
-    }
-    
-    if (syncFields.length === 0) {
-      toast.error('Please select at least one field to sync');
+    return () => {
+      clearInterval(interval);
+    };
+  }, [taskId]);
+  
+  // Handle platform sync
+  const handlePlatformSync = async () => {
+    if (!sourcePlatform || targetPlatforms.length === 0) {
+      toast.error('Please select source and target platforms');
       return;
     }
     
     try {
-      setSyncing(true);
-      setSyncProgress(0);
+      setLoading(true);
+      
+      // Parse SKU filter
+      const filterSkus = skuFilter.trim() ? skuFilter.split(',').map(sku => sku.trim()) : undefined;
       
       const response = await api.post('/sync', {
         source_platform: sourcePlatform,
         target_platforms: targetPlatforms,
+        filter_skus: filterSkus,
+        batch_size: batchSize,
         fields: syncFields
       });
       
-      setCurrentSyncTask(response.data.task_id);
-      toast.info('Sync started');
+      setTaskId(response.data.task_id);
+      toast.info('Sync task started');
     } catch (err) {
       console.error('Error starting sync:', err);
       toast.error('Failed to start sync');
-      setSyncing(false);
+      setLoading(false);
     }
   };
   
-  // View sync details
-  const viewSyncDetails = async (syncId: number) => {
+  // Handle bulk update lowest stock
+  const handleBulkUpdateLowestStock = async () => {
     try {
-      const response = await api.get(`/sync/details/${syncId}`);
-      setSyncDetails(response.data);
-      setShowModal(true);
+      setLoading(true);
+      
+      // Parse SKU filter
+      const filterSkus = skuFilter.trim() ? skuFilter.split(',').map(sku => sku.trim()) : undefined;
+      
+      const response = await api.post('/sync/bulk-update-lowest-stock', {
+        filter_skus: filterSkus
+      });
+      
+      setTaskId(response.data.task_id);
+      toast.info('Bulk update task started');
     } catch (err) {
-      console.error('Error fetching sync details:', err);
-      toast.error('Failed to load sync details');
+      console.error('Error starting bulk update:', err);
+      toast.error('Failed to start bulk update');
+      setLoading(false);
+    }
+  };
+  
+  // Handle single product update
+  const handleSingleProductUpdate = async () => {
+    if (!singleSku) {
+      toast.error('Please enter a SKU');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      // Parse product data
+      let productData;
+      try {
+        productData = JSON.parse(singleProductData);
+      } catch (e) {
+        toast.error('Invalid JSON format for product data');
+        setLoading(false);
+        return;
+      }
+      
+      const response = await api.post('/sync/update-product', {
+        sku: singleSku,
+        data: productData,
+        target_platforms: targetPlatforms.length > 0 ? targetPlatforms : undefined
+      });
+      
+      setLoading(false);
+      
+      // Show result
+      if (response.data.status === 'success') {
+        toast.success('Product updated successfully');
+      } else if (response.data.status === 'partial') {
+        toast.warning('Product partially updated (some platforms failed)');
+      } else {
+        toast.error('Failed to update product');
+      }
+    } catch (err) {
+      console.error('Error updating product:', err);
+      toast.error('Failed to update product');
+      setLoading(false);
+    }
+  };
+  
+  // Handle multi product update
+  const handleMultiProductUpdate = async () => {
+    try {
+      setLoading(true);
+      
+      // Parse product data
+      let productsData;
+      try {
+        productsData = JSON.parse(multiProductData);
+      } catch (e) {
+        toast.error('Invalid JSON format for products data');
+        setLoading(false);
+        return;
+      }
+      
+      const response = await api.post('/sync/update-products', {
+        products: productsData,
+        target_platforms: targetPlatforms.length > 0 ? targetPlatforms : undefined
+      });
+      
+      setTaskId(response.data.task_id);
+      toast.info('Multi-product update task started');
+    } catch (err) {
+      console.error('Error starting multi-product update:', err);
+      toast.error('Failed to start multi-product update');
+      setLoading(false);
     }
   };
   
   return (
-    <div>
-      <h2>Sync Products</h2>
+    <SyncContainer>
+      <Header>
+        <Title>Product Synchronization</Title>
+      </Header>
       
-      <SyncContainer>
-        <FormCard>
-          <h3>Start New Sync</h3>
-          <Form onSubmit={handleStartSync}>
+      <TabContainer>
+        <TabButtons>
+          <TabButton 
+            $active={activeTab === 'platform-sync'} 
+            onClick={() => setActiveTab('platform-sync')}
+            disabled={loading}
+          >
+            Platform Sync
+          </TabButton>
+          <TabButton 
+            $active={activeTab === 'bulk-update'} 
+            onClick={() => setActiveTab('bulk-update')}
+            disabled={loading}
+          >
+            Bulk Update
+          </TabButton>
+          <TabButton 
+            $active={activeTab === 'single-product'} 
+            onClick={() => setActiveTab('single-product')}
+            disabled={loading}
+          >
+            Single Product
+          </TabButton>
+          <TabButton 
+            $active={activeTab === 'multi-product'} 
+            onClick={() => setActiveTab('multi-product')}
+            disabled={loading}
+          >
+            Multi Product
+          </TabButton>
+        </TabButtons>
+        
+        {activeTab === 'platform-sync' && (
+          <TabContent>
             <FormGroup>
-              <Label htmlFor="sourcePlatform">Source Platform</Label>
-              <Select
-                id="sourcePlatform"
-                value={sourcePlatform}
-                onChange={e => setSourcePlatform(e.target.value)}
-                disabled={syncing || loading}
+              <Label>Source Platform</Label>
+              <Select 
+                value={sourcePlatform} 
+                onChange={(e) => setSourcePlatform(e.target.value)}
+                disabled={loading}
               >
                 <option value="">Select Source Platform</option>
                 {platforms.map(platform => (
-                  <option key={platform} value={platform}>
-                    {platform}
-                  </option>
+                  <option key={platform} value={platform}>{platform}</option>
                 ))}
               </Select>
             </FormGroup>
@@ -416,15 +434,22 @@ const Sync: React.FC = () => {
                   .filter(platform => platform !== sourcePlatform)
                   .map(platform => (
                     <CheckboxLabel key={platform}>
-                      <input
-                        type="checkbox"
+                      <Checkbox 
+                        type="checkbox" 
                         checked={targetPlatforms.includes(platform)}
-                        onChange={() => handleTargetPlatformChange(platform)}
-                        disabled={syncing || loading}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setTargetPlatforms([...targetPlatforms, platform]);
+                          } else {
+                            setTargetPlatforms(targetPlatforms.filter(p => p !== platform));
+                          }
+                        }}
+                        disabled={loading}
                       />
                       {platform}
                     </CheckboxLabel>
-                  ))}
+                  ))
+                }
               </CheckboxGroup>
             </FormGroup>
             
@@ -432,187 +457,219 @@ const Sync: React.FC = () => {
               <Label>Fields to Sync</Label>
               <CheckboxGroup>
                 <CheckboxLabel>
-                  <input
-                    type="checkbox"
+                  <Checkbox 
+                    type="checkbox" 
                     checked={syncFields.includes('price')}
-                    onChange={() => handleFieldChange('price')}
-                    disabled={syncing || loading}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSyncFields([...syncFields, 'price']);
+                      } else {
+                        setSyncFields(syncFields.filter(f => f !== 'price'));
+                      }
+                    }}
+                    disabled={loading}
                   />
                   Price
                 </CheckboxLabel>
                 <CheckboxLabel>
-                  <input
-                    type="checkbox"
+                  <Checkbox 
+                    type="checkbox" 
                     checked={syncFields.includes('quantity')}
-                    onChange={() => handleFieldChange('quantity')}
-                    disabled={syncing || loading}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSyncFields([...syncFields, 'quantity']);
+                      } else {
+                        setSyncFields(syncFields.filter(f => f !== 'quantity'));
+                      }
+                    }}
+                    disabled={loading}
                   />
                   Quantity
                 </CheckboxLabel>
                 <CheckboxLabel>
-                  <input
-                    type="checkbox"
+                  <Checkbox 
+                    type="checkbox" 
                     checked={syncFields.includes('status')}
-                    onChange={() => handleFieldChange('status')}
-                    disabled={syncing || loading}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSyncFields([...syncFields, 'status']);
+                      } else {
+                        setSyncFields(syncFields.filter(f => f !== 'status'));
+                      }
+                    }}
+                    disabled={loading}
                   />
                   Status
                 </CheckboxLabel>
               </CheckboxGroup>
             </FormGroup>
             
-            <Button type="submit" disabled={syncing || loading}>
-              {syncing ? 'Syncing...' : 'Start Sync'}
+            <FormGroup>
+              <Label>Batch Size</Label>
+              <Input 
+                type="number" 
+                value={batchSize}
+                onChange={(e) => setBatchSize(parseInt(e.target.value))}
+                min="1"
+                max="1000"
+                disabled={loading}
+              />
+            </FormGroup>
+            
+            <FormGroup>
+              <Label>SKU Filter (comma separated, leave empty for all)</Label>
+              <Input 
+                type="text" 
+                value={skuFilter}
+                onChange={(e) => setSkuFilter(e.target.value)}
+                placeholder="SKU1, SKU2, SKU3"
+                disabled={loading}
+              />
+            </FormGroup>
+            
+            <Button 
+              onClick={handlePlatformSync}
+              disabled={loading || !sourcePlatform || targetPlatforms.length === 0 || syncFields.length === 0}
+            >
+              {loading ? 'Processing...' : 'Start Sync'}
             </Button>
-            
-            {syncing && (
-              <>
-                <ProgressBar>
-                  <ProgressFill progress={syncProgress} />
-                </ProgressBar>
-                <ProgressText>{syncProgress.toFixed(0)}% Complete</ProgressText>
-              </>
-            )}
-          </Form>
-        </FormCard>
+          </TabContent>
+        )}
         
-        <HistoryCard>
-          <h3>Sync History</h3>
-          {syncHistory.length > 0 ? (
-            <HistoryTable>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Source</th>
-                  <th>Products</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {syncHistory.map(sync => (
-                  <tr key={sync.id}>
-                    <td>{new Date(sync.started_at).toLocaleString()}</td>
-                    <td>{sync.source_platform_name || 'Unknown'}</td>
-                    <td>{sync.success_count} / {sync.products_count}</td>
-                    <td>
-                      <StatusBadge status={sync.status}>
-                        {sync.status}
-                      </StatusBadge>
-                    </td>
-                    <td>
-                      <ViewButton onClick={() => viewSyncDetails(sync.id)}>
-                        View Details
-                      </ViewButton>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </HistoryTable>
-          ) : (
-            <p>No sync history available</p>
-          )}
-        </HistoryCard>
-      </SyncContainer>
-      
-      {showModal && syncDetails && (
-        <SyncDetailsModal>
-          <ModalContent>
-            <ModalHeader>
-              <ModalTitle>Sync Details</ModalTitle>
-              <CloseButton onClick={() => setShowModal(false)}>&times;</CloseButton>
-            </ModalHeader>
+        {activeTab === 'bulk-update' && (
+          <TabContent>
+            <p>This will update all products with the lowest stock quantity found across all platforms.</p>
             
-            <div>
-              <p><strong>Source:</strong> {syncDetails.sync.source_platform_name || 'Unknown'}</p>
-              <p><strong>Target:</strong> {syncDetails.sync.target_platform_name || 'Multiple'}</p>
-              <p><strong>Started:</strong> {new Date(syncDetails.sync.started_at).toLocaleString()}</p>
-              <p><strong>Completed:</strong> {syncDetails.sync.completed_at ? new Date(syncDetails.sync.completed_at).toLocaleString() : 'Not completed'}</p>
-              <p><strong>Status:</strong> <StatusBadge status={syncDetails.sync.status}>{syncDetails.sync.status}</StatusBadge></p>
-              <p><strong>Products:</strong> {syncDetails.sync.success_count} successful / {syncDetails.sync.products_count} total</p>
-              
-              <TabsContainer>
-                <TabButton 
-                  active={activeTab === 'success'} 
-                  onClick={() => setActiveTab('success')}
-                >
-                  Success ({syncDetails.results.success.length})
-                </TabButton>
-                <TabButton 
-                  active={activeTab === 'error'} 
-                  onClick={() => setActiveTab('error')}
-                >
-                  Errors ({syncDetails.results.error.length})
-                </TabButton>
-                <TabButton 
-                  active={activeTab === 'skipped'} 
-                  onClick={() => setActiveTab('skipped')}
-                >
-                  Skipped ({syncDetails.results.skipped.length})
-                </TabButton>
-              </TabsContainer>
-              
-              {activeTab === 'success' && (
-                <HistoryTable>
-                  <thead>
-                    <tr>
-                      <th>SKU</th>
-                      <th>Message</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {syncDetails.results.success.map((item: any, index: number) => (
-                      <tr key={index}>
-                        <td>{item.sku}</td>
-                        <td>{item.message}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </HistoryTable>
-              )}
-              
-              {activeTab === 'error' && (
-                <HistoryTable>
-                  <thead>
-                    <tr>
-                      <th>SKU</th>
-                      <th>Error</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {syncDetails.results.error.map((item: any, index: number) => (
-                      <tr key={index}>
-                        <td>{item.sku}</td>
-                        <td>{item.message}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </HistoryTable>
-              )}
-              
-              {activeTab === 'skipped' && (
-                <HistoryTable>
-                  <thead>
-                    <tr>
-                      <th>SKU</th>
-                      <th>Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {syncDetails.results.skipped.map((item: any, index: number) => (
-                      <tr key={index}>
-                        <td>{item.sku}</td>
-                        <td>{item.message}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </HistoryTable>
-              )}
-            </div>
-          </ModalContent>
-        </SyncDetailsModal>
+            <FormGroup>
+              <Label>SKU Filter (comma separated, leave empty for all)</Label>
+              <Input 
+                type="text" 
+                value={skuFilter}
+                onChange={(e) => setSkuFilter(e.target.value)}
+                placeholder="SKU1, SKU2, SKU3"
+                disabled={loading}
+              />
+            </FormGroup>
+            
+            <Button 
+              onClick={handleBulkUpdateLowestStock}
+              disabled={loading || platforms.length < 2}
+            >
+              {loading ? 'Processing...' : 'Update Lowest Stock'}
+            </Button>
+          </TabContent>
+        )}
+        
+        {activeTab === 'single-product' && (
+          <TabContent>
+            <FormGroup>
+              <Label>Product SKU</Label>
+              <Input 
+                type="text" 
+                value={singleSku}
+                onChange={(e) => setSingleSku(e.target.value)}
+                placeholder="Enter product SKU"
+                disabled={loading}
+              />
+            </FormGroup>
+            
+            <FormGroup>
+              <Label>Product Data (JSON)</Label>
+              <TextArea 
+                value={singleProductData}
+                onChange={(e) => setSingleProductData(e.target.value)}
+                disabled={loading}
+              />
+            </FormGroup>
+            
+            <FormGroup>
+              <Label>Target Platforms</Label>
+              <CheckboxGroup>
+                {platforms.map(platform => (
+                  <CheckboxLabel key={platform}>
+                    <Checkbox 
+                      type="checkbox" 
+                      checked={targetPlatforms.includes(platform)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setTargetPlatforms([...targetPlatforms, platform]);
+                        } else {
+                          setTargetPlatforms(targetPlatforms.filter(p => p !== platform));
+                        }
+                      }}
+                      disabled={loading}
+                    />
+                    {platform}
+                  </CheckboxLabel>
+                ))}
+              </CheckboxGroup>
+            </FormGroup>
+            
+            <Button 
+              onClick={handleSingleProductUpdate}
+              disabled={loading || !singleSku || !singleProductData}
+            >
+              {loading ? 'Processing...' : 'Update Product'}
+            </Button>
+          </TabContent>
+        )}
+        
+        {activeTab === 'multi-product' && (
+          <TabContent>
+            <FormGroup>
+              <Label>Products Data (JSON Array)</Label>
+              <TextArea 
+                value={multiProductData}
+                onChange={(e) => setMultiProductData(e.target.value)}
+                style={{ height: '200px' }}
+                disabled={loading}
+              />
+            </FormGroup>
+            
+            <FormGroup>
+              <Label>Target Platforms</Label>
+              <CheckboxGroup>
+                {platforms.map(platform => (
+                  <CheckboxLabel key={platform}>
+                    <Checkbox 
+                      type="checkbox" 
+                      checked={targetPlatforms.includes(platform)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setTargetPlatforms([...targetPlatforms, platform]);
+                        } else {
+                          setTargetPlatforms(targetPlatforms.filter(p => p !== platform));
+                        }
+                      }}
+                      disabled={loading}
+                    />
+                    {platform}
+                  </CheckboxLabel>
+                ))}
+              </CheckboxGroup>
+            </FormGroup>
+            
+            <Button 
+              onClick={handleMultiProductUpdate}
+              disabled={loading || !multiProductData}
+            >
+              {loading ? 'Processing...' : 'Update Products'}
+            </Button>
+          </TabContent>
+        )}
+      </TabContainer>
+      
+      {loading && (
+        <ProgressContainer>
+          <ProgressBar>
+            <ProgressFill $progress={taskProgress} />
+          </ProgressBar>
+          <ProgressText>
+            {taskMessage || 'Processing...'}
+          </ProgressText>
+        </ProgressContainer>
       )}
-    </div>
+    </SyncContainer>
   );
 };
 

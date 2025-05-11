@@ -3,48 +3,33 @@ Custom exceptions for the application
 """
 
 class BaseError(Exception):
-    """Base exception class"""
-    pass
-
-class AuthenticationError(BaseError):
-    """Authentication error"""
+    """Base exception for all application errors"""
     pass
 
 class APIError(BaseError):
-    """API error"""
+    """Base exception for API errors"""
     pass
 
-class ValidationError(BaseError):
-    """Validation error"""
-    pass
-
-class ConfigurationError(BaseError):
-    """Configuration error"""
+class AuthenticationError(APIError):
+    """Exception raised when authentication fails"""
     pass
 
 class RateLimitError(APIError):
-    """Rate limit exceeded error"""
+    """Exception raised when rate limit is exceeded"""
     pass
 
 class NetworkError(APIError):
-    """Network connection error"""
+    """Exception raised when network connection fails"""
     pass
 
-class ResourceNotFoundError(APIError):
-    """Resource not found error"""
+class SyncError(BaseError):
+    """Exception raised when synchronization fails"""
     pass
 
-class DuplicateResourceError(APIError):
-    """Duplicate resource error"""
-    pass
-
-class InsufficientPermissionsError(AuthenticationError):
-    """Insufficient permissions error"""
-    pass
-
-class TokenExpiredError(AuthenticationError):
-    """Token expired error"""
-    pass
 class ExportError(BaseError):
-    """Export error"""
+    """Exception raised when data export fails"""
+    pass
+
+class ValidationError(BaseError):
+    """Exception raised when data validation fails"""
     pass

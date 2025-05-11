@@ -71,7 +71,7 @@ class ExportFormatter:
 class ResponseFormatter:
     @staticmethod
     def format_api_response(data: Any, status: str = 'success', 
-                          message: str = None) -> Dict[str, Any]:
+                          message: str = "") -> Dict[str, Any]:
         """Format API response"""
         response = {
             'status': status,
@@ -85,7 +85,7 @@ class ResponseFormatter:
         return response
 
     @staticmethod
-    def format_error_response(error: str, code: str = None) -> Dict[str, Any]:
+    def format_error_response(error: str, code: str = "") -> Dict[str, Any]:
         """Format error response"""
         response = {
             'status': 'error',

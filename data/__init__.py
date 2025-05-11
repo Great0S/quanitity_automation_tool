@@ -1,6 +1,3 @@
 """
-Data access package
+Data package for database access and repositories
 """
-
-from data.database import get_db, Database, Transaction
-from data.repositories import get_product_repository

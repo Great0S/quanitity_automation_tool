@@ -1,10 +1,13 @@
 import asyncio
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union, TypeVar
 from abc import ABC, abstractmethod
 import aiohttp
 from core.exceptions import APIError, AuthenticationError, RateLimitError, NetworkError
 from core.logger import logger
+
+# Type variable for generic return types
+T = TypeVar('T')
 
 class BaseAPIClient(ABC):
     """Base API client with common functionality for all API clients"""
@@ -69,7 +72,7 @@ class BaseAPIClient(ABC):
         pass
 
     @abstractmethod
-    async def get_products(self, **kwargs) -> List[Dict[str, Any]]:
+    async def get_products(self, **kwargs) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """Get products from the API"""
         pass
 
@@ -225,3 +228,48 @@ class BaseAPIClient(ABC):
                 
         elif isinstance(response, str) and response.strip() == '':
             raise APIError("Empty response received")
+    
+    async def get_product_by_sku(self, sku: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a product by SKU
+        
+        Args:
+            sku: Product SKU
+            
+        Returns:
+            Product data or None if not found
+        """
+        # Default implementation - override in subclasses for more efficient implementation
+        response = await self.get_products(sku=sku)
+        
+        # Handle both dictionary with metadata and direct list of products
+        if isinstance(response, dict) and "items" in response:
+            products = response["items"]
+        else:
+            products = response if isinstance(response, list) else []
+            
+        return products[0] if products else None
+    
+    async def get_categories(self) -> List[Dict[str, Any]]:
+        """
+        Get categories from the API
+        
+        Returns:
+            List of categories
+        """
+        # Default implementation - override in subclasses
+        raise NotImplementedError("get_categories method not implemented")
+    
+    async def health_check(self) -> bool:
+        """
+        Check if the API is healthy
+        
+        Returns:
+            True if the API is healthy, False otherwise
+        """
+        try:
+            await self.authenticate()
+            return True
+        except Exception as e:
+            logger.error(f"Health check failed: {str(e)}")
+            return False
