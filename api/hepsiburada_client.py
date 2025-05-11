@@ -63,9 +63,9 @@ class HepsiburadaClient(BaseAPIClient):
             # Test authentication with a simple request
             await self._make_request(
                 method="GET",
-                url=f"https://listing-external.hepsiburada.com/listings/merchantid/{self.merchant_id}",
+                url=f"https://mpop.hepsiburada.com/product/api/products/all-products-of-merchant/{self.merchant_id}",
                 headers=self.headers,
-                params={"offset": 0, "limit": 1000}
+                params={"page": 0, "size": 1000}
             )
             
             self.authenticated = True
@@ -82,14 +82,8 @@ class HepsiburadaClient(BaseAPIClient):
         
         Args:
             **kwargs: Optional filters
-                - offset: Offset for pagination (default: 0)
-                - limit: Page size (default: 10)
-                - hbSkuList: Filter by Hepsiburada SKU list
-                - merchantSkuList: Filter by merchant SKU list
-                - salable-listings: Filter salable listings (boolean)
-                - notsalable-listings: Filter not salable listings (boolean)
-                - updateStartDate: Filter by update start date
-                - updateEndDate: Filter by update end date
+                - page: Page number (default: 1)
+                - size: Page size (default: 10)
                 - force_refresh: Force refresh from API
                 
         Returns:
@@ -99,88 +93,83 @@ class HepsiburadaClient(BaseAPIClient):
         params = {}
         
         # Add required pagination parameters
-        params["offset"] = kwargs.get("offset", 0)
-        params["limit"] = kwargs.get("limit", 10)
+        params["page"] = kwargs.get("page", 1)
+        params["size"] = kwargs.get("size", 10)
         
-        # Add optional filters
-        optional_params = [
-            "hbSkuList", "merchantSkuList", "salable-listings", 
-            "notsalable-listings", "updateStartDate", "updateEndDate"
-        ]
-        
-        for param in optional_params:
-            if param in kwargs:
-                params[param] = kwargs[param]
-            
         # Make request
         response = await self._make_request(
             method="GET",
-            url=f"https://listing-external.hepsiburada.com/listings/merchantid/{self.merchant_id}",
+            url=f"https://mpop.hepsiburada.com/product/api/products/all-products-of-merchant/{self.merchant_id}",
             headers=self.headers,
             params=params
         )
         
         # Extract products
         products = []
-        total_count = 0
         
-        if isinstance(response, dict):
-            # Get total count if available
-            total_count = response.get("totalCount", 0)
-            
+        if isinstance(response, dict) and "data" in response:
             # Process product data
-            if "listings" in response and isinstance(response["listings"], list):
-                for item in response["listings"]:
-                    # Map Hepsiburada product data to our standard format
-                    product = {
-                        "sku": item.get("MerchantSku", ""),
-                        "data": {
-                            "title": item.get("ProductName", ""),
-                            "price": float(item.get("Price", 0)),
-                            "quantity": int(item.get("AvailableStock", 0)),
-                            "status": "active" if item.get("IsSalable", False) else "inactive",
-                            "platform_id": item.get("HepsiburadaSku"),
-                            "hepsiburada_sku": item.get("HepsiburadaSku"),
-                            "merchant_sku": item.get("MerchantSku"),
-                            "dispatch_time": item.get("DispatchTime"),
-                            "cargo_company1": item.get("CargoCompany1"),
-                            "cargo_company2": item.get("CargoCompany2"),
-                            "cargo_company3": item.get("CargoCompany3"),
-                            "shipping_address_label": item.get("ShippingAddressLabel"),
-                            "shipping_profile_name": item.get("shippingProfileName"),
-                            "claim_address_label": item.get("ClaimAddressLabel"),
-                            "final_price": item.get("Pricing", {}).get("FinalPrice"),
-                            "pricing_start_date": item.get("Pricing", {}).get("StartDate"),
-                            "pricing_end_date": item.get("Pricing", {}).get("EndDate"),
-                            "pricing_debtor": item.get("Pricing", {}).get("Debtor"),
-                            "pricing_amount": item.get("Pricing", {}).get("Amount"),
-                            "maximum_purchasable_quantity": item.get("MaximumPurchasableQuantity"),
-                            "is_salable": item.get("IsSalable", False),
-                            "customizable_properties": item.get("CustomizableProperties"),
-                            "is_suspended": item.get("IsSuspended", False),
-                            "is_locked": item.get("IsLocked", False),
-                            "lock_reasons": item.get("LockReasons"),
-                            "is_frozen": item.get("IsFrozen", False),
-                            "commission_rate": item.get("CommissionRate"),
-                            "price_increase_disabled": item.get("priceIncreaseDisabled", False),
-                            "price_decrease_disabled": item.get("priceDecreaseDisabled", False),
-                            "stock_decrease_disabled": item.get("stockDecreaseDisabled", False)
-                        }
+            for item in response["data"]:
+                # Map Hepsiburada product data to our standard format
+                product = {
+                    "sku": item.get("merchantSku", ""),
+                    "data": {
+                        "title": item.get("productName", ""),
+                        "price": float(item.get("price", 0)) if item.get("price") else 0,
+                        "quantity": int(item.get("stock", 0)) if item.get("stock") else 0,
+                        "status": "active" if item.get("status") == "MATCHED" else "inactive",
+                        "platform_id": item.get("hbSku"),
+                        "hepsiburada_sku": item.get("hbSku"),
+                        "merchant_sku": item.get("merchantSku"),
+                        "barcode": item.get("barcode"),
+                        "brand": item.get("brand"),
+                        "category_id": item.get("categoryId"),
+                        "category_name": item.get("categoryName"),
+                        "tax": item.get("tax"),
+                        "description": item.get("description"),
+                        "variant_group_id": item.get("variantGroupId"),
+                        "status_code": item.get("status")
                     }
+                }
+                
+                # Handle images properly
+                if item.get("images") and isinstance(item["images"], list):
+                    # Store the full images array
+                    product["data"]["images"] = item["images"]
                     
-                    products.append(product)
+                    # Extract the first image URL for convenience
+                    if len(item["images"]) > 0:
+                        product["data"]["image_url"] = item["images"][0]
+                
+                # Add base attributes
+                if "baseAttributes" in item and isinstance(item["baseAttributes"], list):
+                    base_attrs = {}
+                    for attr in item["baseAttributes"]:
+                        if "name" in attr and "value" in attr:
+                            base_attrs[attr["name"]] = attr["value"]
+                    product["data"]["base_attributes"] = base_attrs
+                
+                # Add product attributes
+                if "productAttributes" in item and isinstance(item["productAttributes"], list):
+                    prod_attrs = {}
+                    for attr in item["productAttributes"]:
+                        if "name" in attr and "value" in attr:
+                            prod_attrs[attr["name"]] = attr["value"]
+                    product["data"]["product_attributes"] = prod_attrs
+                
+                products.append(product)
         
-        # Calculate pagination info
-        page_size = params["limit"]
-        current_offset = params["offset"]
-        current_page = (current_offset // page_size) + 1
-        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+        # Extract pagination info
+        total_elements = response.get("totalElements", len(products))
+        total_pages = response.get("totalPages", 1)
+        page_number = response.get("number", params["page"])
+        page_size = response.get("numberOfElements", params["size"])
         
         # Return paginated result with metadata
         return {
             "items": products,
-            "total": total_count,
-            "page": current_page,
+            "total": total_elements,
+            "page": page_number,
             "size": page_size,
             "totalPages": total_pages
         }
@@ -195,8 +184,11 @@ class HepsiburadaClient(BaseAPIClient):
                 - sku: Product SKU (merchant SKU)
                 - data: Product data to update
                     - price: New price
-                    - quantity: New quantity (AvailableStock)
-                    - status: New status (IsSalable)
+                    - quantity: New quantity (stock)
+                    - title: New product name
+                    - description: New product description
+                    - images: New product images
+                    - attributes: New product attributes
                     
         Returns:
             Update result
@@ -208,31 +200,94 @@ class HepsiburadaClient(BaseAPIClient):
         data = product_data.get("data", {})
         if not data:
             raise ValueError("No data provided for update")
-            
-        # Prepare update data
-        update_data = {
-            "MerchantSku": sku
+        
+        # Get the hbSku from the data
+        hb_sku = data.get("hepsiburada_sku") or data.get("platform_id")
+        if not hb_sku:
+            raise ValueError("Hepsiburada SKU is required for product update")
+        
+        # Prepare update data for the new API endpoint
+        item_data = {
+            "hbSku": hb_sku
         }
         
-        if "price" in data:
-            update_data["Price"] = data["price"]
+        # Map fields to the new API format
+        if "title" in data:
+            item_data["productName"] = data["title"]
+            
+        if "description" in data:
+            item_data["productDescription"] = data["description"]
         
-        if "quantity" in data:
-            update_data["AvailableStock"] = data["quantity"]
+        # Handle images
+        if "images" in data and isinstance(data["images"], list):
+            for i, img_url in enumerate(data["images"][:10], 1):  # Max 10 images
+                item_data[f"image{i}"] = img_url
         
-        if "status" in data:
-            update_data["IsSalable"] = data["status"] == "active"
+        # Handle attributes
+        if "attributes" in data and isinstance(data["attributes"], dict):
+            item_data["attributes"] = data["attributes"]
         
-        # Make update request
-        response = await self._make_request(
-            method="PUT",
-            url=f"https://listing-external.hepsiburada.com/listings/merchantid/{self.merchant_id}/merchantsku/{sku}",
-            headers=self.headers,
-            json=update_data
-        )
+        # Create the full update payload
+        update_payload = {
+            "merchantId": self.merchant_id,
+            "items": [item_data]
+        }
+        
+        # For price and quantity updates, use the old endpoint
+        if "price" in data or "quantity" in data:
+            # Prepare update data for price/stock
+            stock_update_data = {
+                "merchantSku": sku
+            }
+            
+            if "price" in data:
+                stock_update_data["price"] = data["price"]
+            
+            if "quantity" in data:
+                stock_update_data["stock"] = data["quantity"]
+            
+            # Make price/stock update request
+            await self._make_request(
+                method="PUT",
+                url=f"https://mpop.hepsiburada.com/product/api/products/update/{self.merchant_id}/{sku}",
+                headers=self.headers,
+                json=stock_update_data
+            )
+        
+        # If we have other fields to update, use the new endpoint
+        if len(item_data) > 1:  # More than just hbSku
+            # Create a temporary JSON file
+            import tempfile
+            import os
+            
+            # Write JSON to a file with text mode
+            with open(tempfile.gettempdir() + '/product_update.json', 'w', encoding='utf-8') as temp_file:
+                json.dump(update_payload, temp_file)
+                temp_file_path = temp_file.name
+            
+            try:
+                # Prepare multipart form data
+                form_data = aiohttp.FormData()
+                form_data.add_field('file', 
+                                   open(temp_file_path, 'rb'),
+                                   filename='product_update.json',
+                                   content_type='application/json')
+                
+                # Make update request with multipart form data
+                await self._make_request(
+                    method="POST",
+                    url="https://mpop.hepsiburada.com/ticket-api/api/integrator/import",
+                    headers={**self.headers, "Content-Type": None},  # Remove Content-Type for multipart
+                    data=form_data,
+                    params={"version": 1}
+                )
+            finally:
+                # Clean up the temporary file
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
         
         return {
             "sku": sku,
             "status": "success",
-            "message": "Product updated successfully"
+            "message": "Product update request submitted successfully"
         }

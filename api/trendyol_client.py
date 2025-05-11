@@ -77,7 +77,7 @@ class TrendyolClient(BaseAPIClient):
         Args:
             **kwargs: Optional filters
                 - page: Page number (default: 0)
-                - size: Page size (default: 50)
+                - size: Page size (default: 2000)
                 - barcode: Filter by barcode
                 - stockCode: Filter by stock code
                 - approved: Filter by approval status (True/False)
@@ -101,7 +101,7 @@ class TrendyolClient(BaseAPIClient):
         
         # Add pagination parameters (Trendyol uses 0-based indexing)
         params["page"] = kwargs.get("page", 0)
-        params["size"] = kwargs.get("size", 50)
+        params["size"] = kwargs.get("size", 2000)  # Increased default size to get more products
         
         # Add optional filters
         optional_params = [
@@ -147,21 +147,36 @@ class TrendyolClient(BaseAPIClient):
                             "platform_id": item.get("id"),
                             "barcode": item.get("barcode"),
                             "brand": item.get("brand"),
-                            "category": item.get("categoryName"),
+                            "brand_id": item.get("brandId"),
+                            "category_name": item.get("categoryName"),
+                            "category_id": item.get("pimCategoryId"),
                             "description": item.get("description", ""),
                             "approved": item.get("approved", False),
-                            "images": item.get("images", []),
-                            "last_updated": item.get("lastUpdateDate"),
-                            "productMainId": item.get("productMainId"),
                             "rejected": item.get("rejected", False),
                             "blacklisted": item.get("blacklisted", False),
-                            "archived": item.get("archived", False)
+                            "archived": item.get("archived", False),
+                            "product_main_id": item.get("productMainId"),
+                            "last_updated": item.get("lastUpdateDate"),
+                            "product_url": item.get("productUrl"),
+                            "vat_rate": item.get("vatRate")
                         }
                     }
                     
-                    # Add image URL if available
-                    if item.get("images") and len(item["images"]) > 0:
-                        product["data"]["image_url"] = item["images"][0]
+                    # Handle images properly
+                    if item.get("images") and isinstance(item["images"], list):
+                        # Store the full images array
+                        product["data"]["images"] = item["images"]
+                        
+                        # Extract the first image URL for convenience
+                        if len(item["images"]) > 0:
+                            if isinstance(item["images"][0], dict) and "url" in item["images"][0]:
+                                product["data"]["image_url"] = item["images"][0]["url"]
+                            elif isinstance(item["images"][0], str):
+                                product["data"]["image_url"] = item["images"][0]
+                    
+                    # Handle attributes
+                    if item.get("attributes") and isinstance(item["attributes"], list):
+                        product["data"]["attributes"] = item["attributes"]
                     
                     products.append(product)
                 
@@ -195,6 +210,15 @@ class TrendyolClient(BaseAPIClient):
                     - price: New price
                     - quantity: New quantity
                     - status: New status
+                    - title: New product title
+                    - description: New product description
+                    - barcode: New barcode
+                    - brand: New brand name
+                    - brand_id: New brand ID
+                    - category_id: New category ID
+                    - product_main_id: New product main ID
+                    - vat_rate: New VAT rate
+                    - attributes: New attributes
                     
         Returns:
             Update result
@@ -206,43 +230,33 @@ class TrendyolClient(BaseAPIClient):
         data = product_data.get("data", {})
         if not data:
             raise ValueError("No data provided for update")
-            
-        # Prepare update data
-        update_data = {
-            "items": [
-                {
-                    "stockCode": sku
-                }
-            ]
-        }
         
-        # Determine which endpoint to use based on what's being updated
-        if "price" in data or "list_price" in data:
-            # Price update
-            price_data = update_data["items"][0]
+        # For price, quantity, and status updates, use the existing endpoints
+        if "price" in data or "list_price" in data or "quantity" in data:
+            # Price and inventory update
+            price_inventory_data = {
+                "items": [
+                    {
+                        "stockCode": sku
+                    }
+                ]
+            }
             
             if "price" in data:
-                price_data["salePrice"] = data["price"]
-            if "list_price" in data:
-                price_data["listPrice"] = data["list_price"]
-                
-            await self._make_request(
-                method="POST",
-                url=f"{self.api_url}/suppliers/{self.supplier_id}/products/price-and-inventory",
-                headers=self.headers,
-                json=update_data
-            )
-        
-        if "quantity" in data:
-            # Stock update
-            stock_data = update_data["items"][0]
-            stock_data["quantity"] = data["quantity"]
+                price_inventory_data["items"][0]["salePrice"] = data["price"]
             
+            if "list_price" in data:
+                price_inventory_data["items"][0]["listPrice"] = data["list_price"]
+                
+            if "quantity" in data:
+                price_inventory_data["items"][0]["quantity"] = data["quantity"]
+            
+            # Make price/inventory update request
             await self._make_request(
                 method="POST",
                 url=f"{self.api_url}/suppliers/{self.supplier_id}/products/price-and-inventory",
                 headers=self.headers,
-                json=update_data
+                json=price_inventory_data
             )
         
         if "status" in data:
@@ -261,6 +275,58 @@ class TrendyolClient(BaseAPIClient):
                 url=f"{self.api_url}/suppliers/{self.supplier_id}/products/batch-status",
                 headers=self.headers,
                 json=status_data
+            )
+        
+        # For other product information updates, use the v2/products endpoint
+        update_fields = ["title", "description", "barcode", "brand", "brand_id", 
+                        "category_id", "product_main_id", "vat_rate", "attributes"]
+        
+        if any(field in data for field in update_fields):
+            # Prepare product update data
+            product_update_data = {
+                "items": [
+                    {
+                        "stockCode": sku
+                    }
+                ]
+            }
+            
+            # Map fields to the Trendyol API format
+            item_data = product_update_data["items"][0]
+            
+            if "title" in data:
+                item_data["title"] = data["title"]
+                
+            if "description" in data:
+                item_data["description"] = data["description"]
+                
+            if "barcode" in data:
+                item_data["barcode"] = data["barcode"]
+                
+            if "brand" in data:
+                item_data["brand"] = data["brand"]
+                
+            if "brand_id" in data:
+                item_data["brandId"] = data["brand_id"]
+                
+            if "category_id" in data:
+                item_data["categoryId"] = data["category_id"]
+                
+            if "product_main_id" in data:
+                item_data["productMainId"] = data["product_main_id"]
+                
+            if "vat_rate" in data:
+                item_data["vatRate"] = data["vat_rate"]
+                
+            if "attributes" in data and isinstance(data["attributes"], list):
+                item_data["attributes"] = data["attributes"]
+            
+            # Make product update request
+            await self._make_request(
+                method="POST",
+                url=f"{self.api_url}/suppliers/{self.supplier_id}/v2/products",
+                headers=self.headers,
+                json=product_update_data
             )
         
         return {

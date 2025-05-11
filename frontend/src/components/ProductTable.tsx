@@ -161,23 +161,27 @@ const getImageUrl = (product: Product, platform: string): string | null => {
              product.data.pictureUrl || 
              null;
     case 'Trendyol':
-      return product.data.images?.[0] || 
+      return Array.isArray(product.data.images) && product.data.images.length > 0 ? 
+             (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) || 
              product.data.image || 
-             null;
+             null : null;
     case 'Hepsiburada':
-      return product.data.images?.[0]?.url || 
+      return Array.isArray(product.data.images) && product.data.images.length > 0 ? 
+             (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) || 
              product.data.imageUrl || 
-             null;
+             null : null;
     case 'N11':
-      return product.data.images?.[0] || 
+      return Array.isArray(product.data.images) && product.data.images.length > 0 ? 
+             (typeof product.data.images[0] === 'string' ? product.data.images[0] : null) || 
              product.data.imageUrl || 
-             null;
+             null : null;
     default:
       // Try common field names
       return product.data.image || 
              product.data.imageUrl || 
              product.data.img_url || 
-             product.data.images?.[0] || 
+             (Array.isArray(product.data.images) && product.data.images.length > 0 ? 
+              (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) : null) || 
              null;
   }
 };

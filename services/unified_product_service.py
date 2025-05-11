@@ -142,12 +142,13 @@ class UnifiedProductService:
         
         return None
     
-    async def update_products(self, products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def update_products(self, products: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
         """
         Update multiple products
         
         Args:
             products: List of products to update
+            **kwargs: Additional arguments (including task_id for background tasks)
             
         Returns:
             List of update results

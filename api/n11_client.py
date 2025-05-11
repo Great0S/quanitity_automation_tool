@@ -255,6 +255,11 @@ class N11Client(BaseAPIClient):
                     - price: New price
                     - quantity: New quantity
                     - status: New status
+                    - description: New description
+                    - preparing_day: New preparing day
+                    - shipment_template: New shipment template
+                    - product_main_id: New product main ID
+                    - max_purchase_quantity: New max purchase quantity
                     
         Returns:
             Update result
@@ -266,28 +271,83 @@ class N11Client(BaseAPIClient):
         data = product_data.get("data", {})
         if not data:
             raise ValueError("No data provided for update")
-            
-        # Prepare update data
-        update_data = {
-            "stockCode": sku
-        }
         
-        if "price" in data:
-            update_data["price"] = data["price"]
+        # For price and quantity updates, use the price-and-inventory endpoint
+        if "price" in data or "quantity" in data:
+            price_update_data = {
+                "items": [
+                    {
+                        "stockCode": sku
+                    }
+                ]
+            }
             
-        if "quantity" in data:
-            update_data["quantity"] = data["quantity"]
+            if "price" in data:
+                price_update_data["items"][0]["price"] = data["price"]
             
-        if "status" in data:
-            update_data["productStatus"] = self._reverse_map_status(data["status"])
+            if "quantity" in data:
+                price_update_data["items"][0]["quantity"] = data["quantity"]
             
-        # Make update request
-        response = await self._make_request(
-            method="PUT",
-            url="https://api.n11.com/ms/product-update",
-            headers=self.headers,
-            json=update_data
-        )
+            # Make price/stock update request
+            await self._make_request(
+                method="POST",
+                url="https://api.n11.com/ms/product-update/price-and-inventory",
+                headers=self.headers,
+                json=price_update_data
+            )
+        
+        # For other updates, use the product-update endpoint
+        update_fields = ["status", "description", "preparing_day", "shipment_template", 
+                        "product_main_id", "max_purchase_quantity"]
+        
+        if any(field in data for field in update_fields):
+            # Prepare update data for the product-update endpoint
+            sku_data = {
+                "stockCode": sku
+            }
+            
+            # Map fields to the N11 API format
+            if "status" in data:
+                sku_data["status"] = self._reverse_map_status(data["status"])
+                
+            if "description" in data:
+                sku_data["description"] = data["description"]
+                
+            if "preparing_day" in data:
+                sku_data["preparingDay"] = data["preparing_day"]
+                
+            if "shipment_template" in data:
+                sku_data["shipmentTemplate"] = data["shipment_template"]
+                
+            if "product_main_id" in data:
+                if data["product_main_id"]:
+                    sku_data["productMainId"] = data["product_main_id"]
+                    sku_data["deleteProductMainId"] = False
+                else:
+                    sku_data["deleteProductMainId"] = True
+                    
+            if "max_purchase_quantity" in data:
+                if data["max_purchase_quantity"]:
+                    sku_data["maxPurchaseQuantity"] = data["max_purchase_quantity"]
+                    sku_data["deleteMaxPurchaseQuantity"] = False
+                else:
+                    sku_data["deleteMaxPurchaseQuantity"] = True
+            
+            # Create the full update payload
+            update_payload = {
+                "payload": {
+                    "integrator": "Quantity Automation Tool",
+                    "skus": [sku_data]
+                }
+            }
+            
+            # Make update request
+            await self._make_request(
+                method="POST",
+                url="https://api.n11.com/ms/product/tasks/product-update",
+                headers=self.headers,
+                json=update_payload
+            )
         
         return {
             "sku": sku,

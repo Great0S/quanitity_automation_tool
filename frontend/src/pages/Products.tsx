@@ -86,10 +86,12 @@ const PlatformButtons = styled.div`
 
 const LoadingContainer = styled.div`
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   height: 200px;
   width: 100%;
+  gap: 16px;
 `;
 
 const LoadingSpinner = styled.div`
@@ -104,6 +106,12 @@ const LoadingSpinner = styled.div`
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
   }
+`;
+
+const LoadingText = styled.div`
+  font-size: 16px;
+  color: #333;
+  text-align: center;
 `;
 
 const EmptyState = styled.div`
@@ -138,6 +146,62 @@ const PageSizeSelect = styled.select`
   border: 1px solid #ddd;
 `;
 
+const ActionsContainer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+`;
+
+const FetchButton = styled.button`
+  background-color: #0f3460;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(15, 52, 96, 0.2);
+  
+  &:hover {
+    background-color: #16213e;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px rgba(15, 52, 96, 0.3);
+  }
+  
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(15, 52, 96, 0.2);
+  }
+  
+  &:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+  
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+`;
+
+const DataSourceInfo = styled.div`
+  font-size: 14px;
+  color: #666;
+  font-style: italic;
+  background-color: #f9f9f9;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border-left: 4px solid #0f3460;
+`;
+
 interface Product {
   sku: string;
   data: {
@@ -161,12 +225,14 @@ const Products: React.FC = () => {
   const [platforms, setPlatforms] = useState<string[]>([]);
   const [products, setProducts] = useState<Record<string, Product[]>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [fetchingFromApi, setFetchingFromApi] = useState<boolean>(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(20);
   const [totalItems, setTotalItems] = useState<number>(0);
+  const [dataSource, setDataSource] = useState<Record<string, 'api' | 'db'>>({});
   
   // Fetch available platforms
   useEffect(() => {
@@ -177,10 +243,13 @@ const Products: React.FC = () => {
         
         // Initialize loading state for each platform
         const loadingState: Record<string, boolean> = {};
+        const dataSourceState: Record<string, 'api' | 'db'> = {};
         response.data.platforms.forEach((p: string) => {
           loadingState[p] = false;
+          dataSourceState[p] = 'db'; // Default to database
         });
         setLoading(loadingState);
+        setDataSource(dataSourceState);
         
         // If no platform is selected, navigate to the first one
         if (!platform && response.data.platforms.length > 0) {
@@ -197,16 +266,22 @@ const Products: React.FC = () => {
   // Fetch products for the selected platform
   useEffect(() => {
     if (platform) {
-      fetchProducts(platform);
+      fetchProducts(platform, false);
     }
   }, [platform, currentPage, pageSize]);
   
-  const fetchProducts = async (platformName: string) => {
-    setLoading(prev => ({ ...prev, [platformName]: true }));
+  const fetchProducts = async (platformName: string, forceRefresh: boolean = false) => {
+    if (forceRefresh) {
+      setFetchingFromApi(true);
+    } else {
+      setLoading(prev => ({ ...prev, [platformName]: true }));
+    }
     
     try {
       // Build query parameters based on platform
-      const params: Record<string, any> = {};
+      const params: Record<string, any> = {
+        force_refresh: forceRefresh
+      };
       
       // Add platform-specific pagination parameters
       switch (platformName) {
@@ -248,6 +323,12 @@ const Products: React.FC = () => {
               }));
               
               setTotalItems(result.total || 0);
+              
+              // Update data source
+              setDataSource(prev => ({
+                ...prev,
+                [platformName]: forceRefresh ? 'api' : 'db'
+              }));
             } else {
               // Handle case where result is directly an array of products
               const productArray = Array.isArray(result) ? result : [];
@@ -257,12 +338,20 @@ const Products: React.FC = () => {
               }));
               
               setTotalItems(productArray.length);
+              
+              // Update data source
+              setDataSource(prev => ({
+                ...prev,
+                [platformName]: forceRefresh ? 'api' : 'db'
+              }));
             }
             
             setLoading(prev => ({ ...prev, [platformName]: false }));
+            setFetchingFromApi(false);
           } else if (taskResponse.data.status === 'failed') {
             console.error(`Failed to fetch products: ${taskResponse.data.error}`);
             setLoading(prev => ({ ...prev, [platformName]: false }));
+            setFetchingFromApi(false);
           } else {
             // Still running, check again in 2 seconds
             setTimeout(checkTask, 2000);
@@ -270,6 +359,7 @@ const Products: React.FC = () => {
         } catch (error) {
           console.error('Error checking task status:', error);
           setLoading(prev => ({ ...prev, [platformName]: false }));
+          setFetchingFromApi(false);
         }
       };
       
@@ -277,6 +367,7 @@ const Products: React.FC = () => {
     } catch (error) {
       console.error(`Error fetching ${platformName} products:`, error);
       setLoading(prev => ({ ...prev, [platformName]: false }));
+      setFetchingFromApi(false);
     }
   };
   
@@ -346,6 +437,24 @@ const Products: React.FC = () => {
     setCurrentPage(1); // Reset to first page when changing page size
   };
   
+  // Handle fetch from API button click
+  const handleFetchFromAPI = () => {
+    if (platform) {
+      fetchProducts(platform, true);
+    }
+  };
+  
+  // Get loading message based on platform and source
+  const getLoadingMessage = () => {
+    if (!platform) return "Loading...";
+    
+    if (fetchingFromApi) {
+      return `Fetching products from ${platform} API...`;
+    } else {
+      return `Loading products from database for ${platform}...`;
+    }
+  };
+  
   return (
     <ProductsContainer>
       <Header>
@@ -377,9 +486,34 @@ const Products: React.FC = () => {
         </PlatformSelector>
       </Header>
       
-      {platform && loading[platform] ? (
+      {platform && (
+        <ActionsContainer>
+          {products[platform]?.length > 0 && (
+            <DataSourceInfo>
+              Data source: {dataSource[platform] === 'api' ? 'API (live data)' : 'Database (cached data)'}
+            </DataSourceInfo>
+          )}
+          <FetchButton 
+            onClick={handleFetchFromAPI} 
+            disabled={fetchingFromApi}
+          >
+            {fetchingFromApi ? 'Fetching from API...' : 'Fetch from API'}
+            {fetchingFromApi && (
+              <LoadingSpinner style={{ width: '20px', height: '20px' }} />
+            )}
+            {!fetchingFromApi && (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 4V2.21c0-.45-.54-.67-.85-.35l-2.8 2.79c-.2.2-.2.51 0 .71l2.79 2.79c.32.31.86.09.86-.36V6c3.31 0 6 2.69 6 6 0 .79-.15 1.56-.44 2.25-.15.36-.04.77.23 1.04.51.51 1.37.33 1.64-.34.37-.91.57-1.91.57-2.95 0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-.79.15-1.56.44-2.25.15-.36.04-.77-.23-1.04-.51-.51-1.37-.33-1.64.34C4.2 9.96 4 10.96 4 12c0 4.42 3.58 8 8 8v1.79c0 .45.54.67.85.35l2.79-2.79c.2-.2.2-.51 0-.71l-2.79-2.79c-.31-.31-.85-.09-.85.36V18z"/>
+              </svg>
+            )}
+          </FetchButton>
+        </ActionsContainer>
+      )}
+      
+      {platform && (loading[platform] || fetchingFromApi) ? (
         <LoadingContainer>
           <LoadingSpinner />
+          <LoadingText>{getLoadingMessage()}</LoadingText>
         </LoadingContainer>
       ) : platform && products[platform]?.length > 0 ? (
         <>
@@ -414,6 +548,7 @@ const Products: React.FC = () => {
       ) : platform ? (
         <EmptyState>
           <p>No products found for {platform}</p>
+          <p>The database is empty. Click "Fetch from API" to initialize products.</p>
         </EmptyState>
       ) : null}
       
