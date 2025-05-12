@@ -25,65 +25,6 @@ const Title = styled.h1`
   color: #0f3460;
 `;
 
-const PlatformSelector = styled.div`
-  display: flex;
-  background-color: #f5f5f5;
-  border-radius: 8px;
-  padding: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-`;
-
-interface PlatformOptionProps {
-  $active: boolean;
-}
-
-const PlatformOption = styled.button<PlatformOptionProps>`
-  padding: 10px 16px;
-  border-radius: 6px;
-  border: none;
-  background-color: ${props => props.$active ? '#0f3460' : 'transparent'};
-  color: ${props => props.$active ? 'white' : '#333'};
-  font-weight: ${props => props.$active ? '600' : '400'};
-  cursor: pointer;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    background-color: ${props => props.$active ? '#0f3460' : '#e5e5e5'};
-  }
-  
-  &:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(15, 52, 96, 0.2);
-  }
-`;
-
-const PlatformDropdown = styled.select`
-  padding: 10px 16px;
-  border-radius: 6px;
-  border: 1px solid #ddd;
-  background-color: white;
-  font-size: 16px;
-  cursor: pointer;
-  
-  &:focus {
-    outline: none;
-    border-color: #0f3460;
-    box-shadow: 0 0 0 2px rgba(15, 52, 96, 0.2);
-  }
-  
-  @media (min-width: 768px) {
-    display: none;
-  }
-`;
-
-const PlatformButtons = styled.div`
-  display: none;
-  
-  @media (min-width: 768px) {
-    display: flex;
-  }
-`;
-
 const LoadingContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -202,6 +143,25 @@ const DataSourceInfo = styled.div`
   border-left: 4px solid #0f3460;
 `;
 
+const SearchContainer = styled.div`
+  margin-bottom: 20px;
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 16px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  
+  &:focus {
+    outline: none;
+    border-color: #0f3460;
+    box-shadow: 0 0 0 2px rgba(15, 52, 96, 0.1);
+  }
+`;
+
 interface Product {
   sku: string;
   data: {
@@ -212,19 +172,20 @@ interface Product {
     image_url?: string;
     [key: string]: any;
   };
+  platforms?: string[];
 }
 
 interface ProductUpdateData {
   sku: string;
   data?: Record<string, any>;
+  platforms?: string[];
 }
 
 const Products: React.FC = () => {
-  const { platform } = useParams<{ platform: string }>();
   const navigate = useNavigate();
-  const [platforms, setPlatforms] = useState<string[]>([]);
-  const [products, setProducts] = useState<Record<string, Product[]>>({});
-  const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
   const [fetchingFromApi, setFetchingFromApi] = useState<boolean>(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
@@ -232,78 +193,35 @@ const Products: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(20);
   const [totalItems, setTotalItems] = useState<number>(0);
-  const [dataSource, setDataSource] = useState<Record<string, 'api' | 'db'>>({});
+  const [dataSource, setDataSource] = useState<'api' | 'db'>('db');
+  const [searchTerm, setSearchTerm] = useState<string>('');
   
-  // Fetch available platforms
+  // Fetch products from all platforms
   useEffect(() => {
-    const fetchPlatforms = async () => {
-      try {
-        const response = await api.get('/platforms');
-        setPlatforms(response.data.platforms);
-        
-        // Initialize loading state for each platform
-        const loadingState: Record<string, boolean> = {};
-        const dataSourceState: Record<string, 'api' | 'db'> = {};
-        response.data.platforms.forEach((p: string) => {
-          loadingState[p] = false;
-          dataSourceState[p] = 'db'; // Default to database
-        });
-        setLoading(loadingState);
-        setDataSource(dataSourceState);
-        
-        // If no platform is selected, navigate to the first one
-        if (!platform && response.data.platforms.length > 0) {
-          navigate(`/products/${response.data.platforms[0]}`);
-        }
-      } catch (error) {
-        console.error('Error fetching platforms:', error);
-      }
-    };
-    
-    fetchPlatforms();
+    fetchAllProducts(false);
   }, []);
   
-  // Fetch products for the selected platform
+  // Update filtered products when products or search term changes
   useEffect(() => {
-    if (platform) {
-      fetchProducts(platform, false);
-    }
-  }, [platform, currentPage, pageSize]);
+    filterProducts();
+  }, [products, searchTerm]);
   
-  const fetchProducts = async (platformName: string, forceRefresh: boolean = false) => {
+  // Update displayed products when page or pageSize changes
+  useEffect(() => {
+    updateDisplayedProducts();
+  }, [filteredProducts, currentPage, pageSize]);
+  
+  const fetchAllProducts = async (forceRefresh: boolean = false) => {
+    setLoading(true);
     if (forceRefresh) {
       setFetchingFromApi(true);
-    } else {
-      setLoading(prev => ({ ...prev, [platformName]: true }));
     }
     
     try {
-      // Build query parameters based on platform
-      const params: Record<string, any> = {
-        force_refresh: forceRefresh
-      };
-      
-      // Add platform-specific pagination parameters
-      switch (platformName) {
-        case 'N11':
-          params.page = currentPage;
-          params.size = pageSize;
-          break;
-        case 'Trendyol':
-          params.page = currentPage - 1; // Trendyol uses 0-based indexing
-          params.size = pageSize;
-          break;
-        case 'Hepsiburada':
-          params.page = currentPage;
-          params.size = pageSize;
-          break;
-        default:
-          params.page = currentPage;
-          params.size = pageSize;
-      }
-      
       // Make the API request
-      const response = await api.get(`/products/${platformName}`, { params });
+      const response = await api.get('/products/all', { 
+        params: { force_refresh: forceRefresh } 
+      });
       const taskId = response.data.task_id;
       
       // Poll for task completion
@@ -315,42 +233,24 @@ const Products: React.FC = () => {
             // Get the products from the task result
             const result = taskResponse.data.result || {};
             
-            // Update state with the products and pagination info
+            // Update state with the products
             if (result.items && Array.isArray(result.items)) {
-              setProducts(prev => ({
-                ...prev,
-                [platformName]: result.items
-              }));
-              
-              setTotalItems(result.total || 0);
-              
-              // Update data source
-              setDataSource(prev => ({
-                ...prev,
-                [platformName]: forceRefresh ? 'api' : 'db'
-              }));
+              setProducts(result.items);
+              setTotalItems(result.total || result.items.length);
+              setDataSource(forceRefresh ? 'api' : 'db');
             } else {
               // Handle case where result is directly an array of products
               const productArray = Array.isArray(result) ? result : [];
-              setProducts(prev => ({
-                ...prev,
-                [platformName]: productArray
-              }));
-              
+              setProducts(productArray);
               setTotalItems(productArray.length);
-              
-              // Update data source
-              setDataSource(prev => ({
-                ...prev,
-                [platformName]: forceRefresh ? 'api' : 'db'
-              }));
+              setDataSource(forceRefresh ? 'api' : 'db');
             }
             
-            setLoading(prev => ({ ...prev, [platformName]: false }));
+            setLoading(false);
             setFetchingFromApi(false);
           } else if (taskResponse.data.status === 'failed') {
             console.error(`Failed to fetch products: ${taskResponse.data.error}`);
-            setLoading(prev => ({ ...prev, [platformName]: false }));
+            setLoading(false);
             setFetchingFromApi(false);
           } else {
             // Still running, check again in 2 seconds
@@ -358,23 +258,43 @@ const Products: React.FC = () => {
           }
         } catch (error) {
           console.error('Error checking task status:', error);
-          setLoading(prev => ({ ...prev, [platformName]: false }));
+          setLoading(false);
           setFetchingFromApi(false);
         }
       };
       
       checkTask();
     } catch (error) {
-      console.error(`Error fetching ${platformName} products:`, error);
-      setLoading(prev => ({ ...prev, [platformName]: false }));
+      console.error('Error fetching products:', error);
+      setLoading(false);
       setFetchingFromApi(false);
     }
   };
   
-  // Handle platform selection
-  const handlePlatformChange = (platformName: string) => {
-    setCurrentPage(1); // Reset to first page when changing platforms
-    navigate(`/products/${platformName}`);
+  const filterProducts = () => {
+    if (!searchTerm) {
+      setFilteredProducts(products);
+      return;
+    }
+    
+    const term = searchTerm.toLowerCase();
+    const filtered = products.filter(product => {
+      const sku = product.sku?.toLowerCase() || '';
+      const title = product.data?.title?.toLowerCase() || '';
+      const barcode = product.data?.barcode?.toLowerCase() || '';
+      
+      return sku.includes(term) || 
+             title.includes(term) || 
+             barcode.includes(term);
+    });
+    
+    setFilteredProducts(filtered);
+    setCurrentPage(1); // Reset to first page when filtering
+  };
+  
+  const updateDisplayedProducts = () => {
+    // Update total items count
+    setTotalItems(filteredProducts.length);
   };
   
   // Handle edit button click
@@ -390,14 +310,18 @@ const Products: React.FC = () => {
   
   // Handle product update
   const handleProductUpdate = async (updatedProduct: ProductUpdateData) => {
-    if (!platform) return;
+    if (!updatedProduct.platforms || updatedProduct.platforms.length === 0) {
+      console.error('No platforms specified for update');
+      return;
+    }
     
     try {
-      await api.post(`/products/${platform}`, [updatedProduct]);
+      // Update product across all platforms
+      await api.post('/products/update/across-platforms', updatedProduct);
       
       // Update local state
       setProducts(prev => {
-        const updatedProducts = [...(prev[platform] || [])];
+        const updatedProducts = [...prev];
         const index = updatedProducts.findIndex(p => p.sku === updatedProduct.sku);
         if (index !== -1) {
           // Create a new product object with updated data
@@ -412,10 +336,7 @@ const Products: React.FC = () => {
           
           updatedProducts[index] = newProduct;
         }
-        return {
-          ...prev,
-          [platform]: updatedProducts
-        };
+        return updatedProducts;
       });
       
       setIsEditModalOpen(false);
@@ -439,89 +360,79 @@ const Products: React.FC = () => {
   
   // Handle fetch from API button click
   const handleFetchFromAPI = () => {
-    if (platform) {
-      fetchProducts(platform, true);
+    fetchAllProducts(true);
+  };
+  
+  // Handle search input change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+  
+  // Get loading message
+  const getLoadingMessage = () => {
+    if (fetchingFromApi) {
+      return "Fetching products from all platforms...";
+    } else {
+      return "Loading products from database...";
     }
   };
   
-  // Get loading message based on platform and source
-  const getLoadingMessage = () => {
-    if (!platform) return "Loading...";
-    
-    if (fetchingFromApi) {
-      return `Fetching products from ${platform} API...`;
-    } else {
-      return `Loading products from database for ${platform}...`;
-    }
+  // Get paginated products
+  const getPaginatedProducts = () => {
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    return filteredProducts.slice(start, end);
   };
   
   return (
     <ProductsContainer>
       <Header>
-        <Title>Products</Title>
-        
-        <PlatformSelector>
-          {/* Mobile dropdown selector */}
-          <PlatformDropdown 
-            value={platform || ''} 
-            onChange={(e) => handlePlatformChange(e.target.value)}
-          >
-            {platforms.map(p => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </PlatformDropdown>
-          
-          {/* Desktop button selector */}
-          <PlatformButtons>
-            {platforms.map(p => (
-              <PlatformOption 
-                key={p} 
-                $active={p === platform}
-                onClick={() => handlePlatformChange(p)}
-              >
-                {p}
-              </PlatformOption>
-            ))}
-          </PlatformButtons>
-        </PlatformSelector>
+        <Title>Unified Products</Title>
       </Header>
       
-      {platform && (
-        <ActionsContainer>
-          {products[platform]?.length > 0 && (
-            <DataSourceInfo>
-              Data source: {dataSource[platform] === 'api' ? 'API (live data)' : 'Database (cached data)'}
-            </DataSourceInfo>
+      <ActionsContainer>
+        {products.length > 0 && (
+          <DataSourceInfo>
+            Data source: {dataSource === 'api' ? 'API (live data)' : 'Database (cached data)'}
+          </DataSourceInfo>
+        )}
+        <FetchButton 
+          onClick={handleFetchFromAPI} 
+          disabled={fetchingFromApi}
+        >
+          {fetchingFromApi ? 'Fetching from API...' : 'Fetch from API'}
+          {fetchingFromApi && (
+            <LoadingSpinner style={{ width: '20px', height: '20px' }} />
           )}
-          <FetchButton 
-            onClick={handleFetchFromAPI} 
-            disabled={fetchingFromApi}
-          >
-            {fetchingFromApi ? 'Fetching from API...' : 'Fetch from API'}
-            {fetchingFromApi && (
-              <LoadingSpinner style={{ width: '20px', height: '20px' }} />
-            )}
-            {!fetchingFromApi && (
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 4V2.21c0-.45-.54-.67-.85-.35l-2.8 2.79c-.2.2-.2.51 0 .71l2.79 2.79c.32.31.86.09.86-.36V6c3.31 0 6 2.69 6 6 0 .79-.15 1.56-.44 2.25-.15.36-.04.77.23 1.04.51.51 1.37.33 1.64-.34.37-.91.57-1.91.57-2.95 0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-.79.15-1.56.44-2.25.15-.36.04-.77-.23-1.04-.51-.51-1.37-.33-1.64.34C4.2 9.96 4 10.96 4 12c0 4.42 3.58 8 8 8v1.79c0 .45.54.67.85.35l2.79-2.79c.2-.2.2-.51 0-.71l-2.79-2.79c-.31-.31-.85-.09-.85.36V18z"/>
-              </svg>
-            )}
-          </FetchButton>
-        </ActionsContainer>
-      )}
+          {!fetchingFromApi && (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 4V2.21c0-.45-.54-.67-.85-.35l-2.8 2.79c-.2.2-.2.51 0 .71l2.79 2.79c.32.31.86.09.86-.36V6c3.31 0 6 2.69 6 6 0 .79-.15 1.56-.44 2.25-.15.36-.04.77.23 1.04.51.51 1.37.33 1.64-.34.37-.91.57-1.91.57-2.95 0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-.79.15-1.56.44-2.25.15-.36.04-.77-.23-1.04-.51-.51-1.37-.33-1.64.34C4.2 9.96 4 10.96 4 12c0 4.42 3.58 8 8 8v1.79c0 .45.54.67.85.35l2.79-2.79c.2-.2.2-.51 0-.71l-2.79-2.79c-.31-.31-.85-.09-.85.36V18z"/>
+            </svg>
+          )}
+        </FetchButton>
+      </ActionsContainer>
       
-      {platform && (loading[platform] || fetchingFromApi) ? (
+      <SearchContainer>
+        <SearchInput
+          type="text"
+          placeholder="Search by SKU, title, or barcode..."
+          value={searchTerm}
+          onChange={handleSearchChange}
+        />
+      </SearchContainer>
+      
+      {loading ? (
         <LoadingContainer>
           <LoadingSpinner />
           <LoadingText>{getLoadingMessage()}</LoadingText>
         </LoadingContainer>
-      ) : platform && products[platform]?.length > 0 ? (
+      ) : filteredProducts.length > 0 ? (
         <>
           <ProductTable 
-            products={products[platform] || []} 
+            products={getPaginatedProducts()} 
             onEditClick={handleEditClick}
             onImageClick={handleImageClick}
-            platform={platform}
+            showPlatforms={true}
           />
           
           <PaginationContainer>
@@ -545,19 +456,19 @@ const Products: React.FC = () => {
             />
           </PaginationContainer>
         </>
-      ) : platform ? (
+      ) : (
         <EmptyState>
-          <p>No products found for {platform}</p>
-          <p>The database is empty. Click "Fetch from API" to initialize products.</p>
+          <p>No products found</p>
+          <p>Click "Fetch from API" to load products from all platforms.</p>
         </EmptyState>
-      ) : null}
+      )}
       
-      {isEditModalOpen && selectedProduct && platform && (
+      {isEditModalOpen && selectedProduct && (
         <ProductEditModal
           product={selectedProduct}
           onClose={() => setIsEditModalOpen(false)}
           onSave={handleProductUpdate}
-          platform={platform}
+          platforms={selectedProduct.platforms || []}
         />
       )}
       

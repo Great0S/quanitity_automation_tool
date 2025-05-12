@@ -5,6 +5,7 @@ Hepsiburada API client
 import aiohttp
 import json
 import base64
+import asyncio
 from typing import Dict, List, Any, Optional
 from core.logger import logger
 from core.exceptions import APIError, AuthenticationError, NetworkError
@@ -39,7 +40,7 @@ class HepsiburadaClient(BaseAPIClient):
             logger.warning("HEPSIBURADA_MERCHANT_ID environment variable not set")
             
         # Setup headers with Basic Auth
-        if self.username and self.password:
+        if self.merchant_id and self.password:
             auth_string = f"{self.merchant_id}:{self.password}"
             encoded_auth = base64.b64encode(auth_string.encode()).decode()
             self.headers = {
@@ -56,8 +57,8 @@ class HepsiburadaClient(BaseAPIClient):
     @handle_exceptions
     async def authenticate(self) -> None:
         """Authenticate with Hepsiburada API"""
-        if not self.username or not self.password or not self.merchant_id:
-            raise AuthenticationError("Hepsiburada credentials not set")
+        if not self.merchant_id or not self.password:
+            raise AuthenticationError("Hepsiburada merchant_id or password not set")
             
         try:
             # Test authentication with a simple request
@@ -65,7 +66,7 @@ class HepsiburadaClient(BaseAPIClient):
                 method="GET",
                 url=f"https://mpop.hepsiburada.com/product/api/products/all-products-of-merchant/{self.merchant_id}",
                 headers=self.headers,
-                params={"page": 0, "size": 1000}
+                params={"page": 0, "size": 100}
             )
             
             self.authenticated = True
@@ -82,8 +83,8 @@ class HepsiburadaClient(BaseAPIClient):
         
         Args:
             **kwargs: Optional filters
-                - page: Page number (default: 1)
-                - size: Page size (default: 10)
+                - page: Page number (default: 0)
+                - size: Page size (default: 100)
                 - force_refresh: Force refresh from API
                 
         Returns:
@@ -93,8 +94,10 @@ class HepsiburadaClient(BaseAPIClient):
         params = {}
         
         # Add required pagination parameters
-        params["page"] = kwargs.get("page", 1)
-        params["size"] = kwargs.get("size", 10)
+        params["page"] = kwargs.get("page", 0)  # Hepsiburada uses 0-based indexing
+        params["size"] = kwargs.get("size", 100)  # Hepsiburada returns 100 items per page
+        
+        logger.info(f"Fetching Hepsiburada products with params: {params}")
         
         # Make request
         response = await self._make_request(
@@ -108,6 +111,8 @@ class HepsiburadaClient(BaseAPIClient):
         products = []
         
         if isinstance(response, dict) and "data" in response:
+            logger.info(f"Received {len(response['data'])} products from Hepsiburada API")
+            
             # Process product data
             for item in response["data"]:
                 # Map Hepsiburada product data to our standard format
@@ -159,11 +164,13 @@ class HepsiburadaClient(BaseAPIClient):
                 
                 products.append(product)
         
-        # Extract pagination info
+        # Extract pagination info based on the actual response structure
         total_elements = response.get("totalElements", len(products))
         total_pages = response.get("totalPages", 1)
         page_number = response.get("number", params["page"])
         page_size = response.get("numberOfElements", params["size"])
+        
+        logger.info(f"Processed {len(products)} products from Hepsiburada, total: {total_elements}, page: {page_number}/{total_pages}")
         
         # Return paginated result with metadata
         return {
@@ -291,3 +298,61 @@ class HepsiburadaClient(BaseAPIClient):
             "status": "success",
             "message": "Product update request submitted successfully"
         }
+        
+    @handle_exceptions
+    async def get_all_products(self) -> List[Dict[str, Any]]:
+        """
+        Get all products from Hepsiburada by paginating through all pages
+        
+        Returns:
+            List of all products
+        """
+        all_products = []
+        current_page = 0  # Hepsiburada API uses 0-based indexing
+        page_size = 100  # Hepsiburada returns 100 items per page
+        
+        logger.info("Fetching all products from Hepsiburada (this may take a while)...")
+        
+        # Make initial request to get total pages
+        initial_response = await self.get_products(page=current_page, size=page_size)
+        total_pages = initial_response.get("totalPages", 1)
+        total_elements = initial_response.get("total", 0)
+        
+        logger.info(f"Hepsiburada has {total_elements} products across {total_pages} pages")
+        
+        # Add products from first page
+        if "items" in initial_response and isinstance(initial_response["items"], list):
+            all_products.extend(initial_response["items"])
+            logger.info(f"Fetched {len(initial_response['items'])} products from page {current_page+1}/{total_pages}")
+        
+        # Fetch remaining pages
+        current_page += 1
+        while current_page < total_pages:
+            try:
+                logger.info(f"Fetching Hepsiburada products page {current_page+1}/{total_pages}")
+                
+                # Get products for current page
+                result = await self.get_products(page=current_page, size=page_size)
+                
+                # Add products to the list
+                if "items" in result and isinstance(result["items"], list):
+                    all_products.extend(result["items"])
+                    logger.info(f"Fetched {len(result['items'])} products from page {current_page+1}/{total_pages}")
+                else:
+                    logger.warning(f"No items found in response for page {current_page+1}, but continuing pagination")
+                
+                # Move to next page
+                current_page += 1
+                
+                # Add a small delay to avoid rate limiting
+                await asyncio.sleep(0.5)
+                
+            except Exception as e:
+                logger.error(f"Error fetching page {current_page+1}: {str(e)}")
+                # Continue with next page despite errors
+                current_page += 1
+                await asyncio.sleep(1)  # Longer delay after error
+        
+        logger.info(f"Fetched a total of {len(all_products)} products from Hepsiburada")
+        
+        return all_products

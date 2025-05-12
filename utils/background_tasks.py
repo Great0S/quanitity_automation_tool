@@ -148,14 +148,22 @@ class TaskManager:
         # Update timestamp
         self.tasks[task_id]["updated_at"] = datetime.now().isoformat()
     
-    def update_progress(self, task_id: str, progress: float, message: Optional[str] = None) -> None:
+    def update_progress(self, task_id: str, progress: float, message: Optional[str] = None, 
+                        step: Optional[str] = None, total_steps: Optional[int] = None,
+                        current_step: Optional[int] = None, eta_seconds: Optional[int] = None,
+                        details: Optional[Dict[str, Any]] = None) -> None:
         """
-        Update task progress
+        Update task progress with enhanced information
         
         Args:
             task_id: Task ID
             progress: Progress value (0-100)
             message: Optional progress message
+            step: Current step description (e.g., "Fetching products", "Updating inventory")
+            total_steps: Total number of steps in the process
+            current_step: Current step number
+            eta_seconds: Estimated time remaining in seconds
+            details: Additional details about the current operation
         """
         if task_id not in self.tasks:
             logger.warning(f"Task {task_id} not found")
@@ -164,15 +172,50 @@ class TaskManager:
         # Update progress
         self.tasks[task_id]["progress"] = progress
         
-        # Update metadata
+        # Ensure metadata exists
+        if "metadata" not in self.tasks[task_id]:
+            self.tasks[task_id]["metadata"] = {}
+        
+        # Update metadata with enhanced information
+        metadata = self.tasks[task_id]["metadata"]
+        
         if message:
-            if "metadata" not in self.tasks[task_id]:
-                self.tasks[task_id]["metadata"] = {}
+            metadata["progress_message"] = message
+        
+        if step:
+            metadata["current_step"] = step
             
-            self.tasks[task_id]["metadata"]["progress_message"] = message
+        if total_steps is not None:
+            metadata["total_steps"] = total_steps
+            
+        if current_step is not None:
+            metadata["step_number"] = current_step
+            
+        if eta_seconds is not None:
+            metadata["eta_seconds"] = eta_seconds
+            metadata["eta_formatted"] = self._format_time(eta_seconds)
+            
+        if details:
+            # Merge details with existing metadata
+            for key, value in details.items():
+                metadata[key] = value
         
         # Update timestamp
         self.tasks[task_id]["updated_at"] = datetime.now().isoformat()
+        
+    def _format_time(self, seconds: int) -> str:
+        """Format seconds into a human-readable time string"""
+        if seconds < 60:
+            return f"{seconds} seconds"
+        elif seconds < 3600:
+            minutes = seconds // 60
+            return f"{minutes} minute{'s' if minutes != 1 else ''}"
+        else:
+            hours = seconds // 3600
+            minutes = (seconds % 3600) // 60
+            if minutes == 0:
+                return f"{hours} hour{'s' if hours != 1 else ''}"
+            return f"{hours} hour{'s' if hours != 1 else ''} {minutes} minute{'s' if minutes != 1 else ''}"
     
     def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
         """

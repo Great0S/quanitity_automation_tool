@@ -253,6 +253,81 @@ async def get_platforms(current_user: User = Depends(get_current_active_user)):
         "errors": initialization_errors
     }
 
+@app.get("/products/all", response_model=TaskResponse)
+async def get_all_products(
+    force_refresh: bool = Query(False, description="Force refresh from API"),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get products from all platforms (async)"""
+    
+    # Create a background task to fetch products from all platforms
+    task_id = task_manager.create_task(
+        name="Get All Products",
+        description="Fetching products from all platforms"
+    )
+    
+    # Define an async function to fetch products from all platforms
+    async def fetch_all_products(task_id: str):
+        all_products = []
+        total_count = 0
+        
+        # Fetch products from each platform
+        for platform_name, client in clients.items():
+            try:
+                # Update progress for each platform
+                task_manager.update_progress(
+                    task_id=task_id,
+                    progress=(list(clients.keys()).index(platform_name) / len(clients)) * 100,
+                    message=f"Fetching products from {platform_name}"
+                )
+                
+                platform_products = await client.get_products(force_refresh=force_refresh)
+                if platform_products and isinstance(platform_products, dict):
+                    if "items" in platform_products:
+                        products = platform_products["items"]
+                        # Add platform information to each product
+                        for product in products:
+                            if "platforms" not in product:
+                                product["platforms"] = []
+                            if platform_name not in product["platforms"]:
+                                product["platforms"].append(platform_name)
+                        all_products.extend(products)
+                        total_count += len(products)
+            except Exception as e:
+                logger.error(f"Error fetching products from {platform_name}: {str(e)}")
+        
+        # Match products across platforms by SKU
+        sku_map = {}
+        unified_products = []
+        
+        for product in all_products:
+            sku = product.get("sku")
+            if not sku:
+                unified_products.append(product)
+                continue
+                
+            if sku in sku_map:
+                # Product with this SKU already exists, merge platforms
+                existing_product = sku_map[sku]
+                if "platforms" in product:
+                    for platform in product["platforms"]:
+                        if platform not in existing_product["platforms"]:
+                            existing_product["platforms"].append(platform)
+            else:
+                # New product
+                sku_map[sku] = product
+                unified_products.append(product)
+        
+        return {"items": unified_products, "total": len(unified_products)}
+    
+    # Submit the task
+    task_manager.submit_async_task(
+        fetch_all_products,
+        task_id=task_id
+    )
+    
+    return {"task_id": task_id, "status": "running", "progress": 0}
+
 @app.get("/products/{platform}", response_model=TaskResponse)
 async def get_products(
     platform: str = Path(..., description="Platform name"),
@@ -366,12 +441,12 @@ class SingleProductUpdateRequest(BaseModel):
     data: Dict[str, Any]
     target_platforms: Optional[List[str]] = None
 
-@app.post("/sync/update-product", response_model=Dict[str, Any])
-async def update_single_product(
+@app.post("/products/update/across-platforms", response_model=Dict[str, Any])
+async def update_product_across_platforms(
     request: SingleProductUpdateRequest,
     current_user: User = Depends(get_current_active_user)
 ):
-    """Update a single product across platforms"""
+    """Update a single product across all platforms where it exists"""
     # Validate target platforms
     if request.target_platforms:
         for platform in request.target_platforms:
@@ -394,6 +469,15 @@ async def update_single_product(
     )
     
     return result
+
+@app.post("/sync/update-product", response_model=Dict[str, Any])
+async def update_single_product(
+    request: SingleProductUpdateRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Update a single product across platforms (legacy endpoint)"""
+    # Redirect to the new endpoint
+    return await update_product_across_platforms(request, current_user)
 
 class MultiProductUpdateRequest(BaseModel):
     products: List[Dict[str, Any]]

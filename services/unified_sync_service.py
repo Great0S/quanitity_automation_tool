@@ -5,7 +5,7 @@ Unified Sync Service for synchronizing products between platforms
 import asyncio
 import time
 from typing import Dict, List, Any, Optional, Set, Union, cast
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 from core.logger import logger
@@ -87,11 +87,19 @@ class UnifiedSyncService:
                 filter_skus=filter_skus
             )
             
-            # Update task metadata
+            # Update task metadata with enhanced information
             self.task_manager.update_progress(
                 task_id=task_id,
                 progress=5,
-                message=f"Starting sync {sync_id}"
+                message=f"Starting sync {sync_id}",
+                step="Initialization",
+                total_steps=5,  # 1. Init, 2. Fetch products, 3. Process batches, 4. Save results, 5. Complete
+                current_step=1,
+                details={
+                    "source_platform": self.source_service.platform_name,
+                    "target_platforms": [s.platform_name for s in self.target_services],
+                    "sync_id": sync_id
+                }
             )
             
             # Get products from source platform
@@ -100,7 +108,7 @@ class UnifiedSyncService:
             
             # Filter products if needed
             if filter_skus:
-                source_products = [p for p in source_products if p["sku"] in filter_skus]
+                source_products = [p for p in source_products if isinstance(p, dict) and p.get("sku") in filter_skus]
             
             total_products = len(source_products)
             logger.info(f"Found {total_products} products to sync")
@@ -115,15 +123,36 @@ class UnifiedSyncService:
                 )
                 return {"sync_id": sync_id, "status": "completed", "products": 0, "success": 0, "errors": 0}
             
-            # Update task progress
+            # Update task progress with enhanced information
+            start_time = datetime.now()
+            estimated_time_per_product = 0.5  # Estimated seconds per product
+            eta_seconds = int(total_products * estimated_time_per_product)
+            
             self.task_manager.update_progress(
                 task_id=task_id,
                 progress=10,
-                message=f"Found {total_products} products to sync"
+                message=f"Found {total_products} products to sync",
+                step="Fetching Products",
+                total_steps=5,
+                current_step=2,
+                eta_seconds=eta_seconds,
+                details={
+                    "total_products": total_products,
+                    "start_time": start_time.isoformat(),
+                    "estimated_completion": (start_time + timedelta(seconds=eta_seconds)).isoformat()
+                }
             )
             
             # Process products in batches
-            batches = [source_products[i:i+batch_size] for i in range(0, len(source_products), batch_size)]
+            # Create batches with proper type handling
+            batches = []
+            for i in range(0, len(source_products), batch_size):
+                # Use list comprehension instead of slicing to avoid type errors
+                end_idx = min(i + batch_size, len(source_products))
+                batch = list(source_products)[i:end_idx]
+                # Ensure each batch contains only dictionaries
+                typed_batch: List[Dict[str, Any]] = [p for p in batch if isinstance(p, dict)]
+                batches.append(typed_batch)
             total_batches = len(batches)
             
             success_count = 0
@@ -132,14 +161,46 @@ class UnifiedSyncService:
             
             for batch_index, batch in enumerate(batches):
                 batch_progress = 10 + (batch_index / total_batches) * 80
+                products_processed = batch_index * batch_size
+                products_remaining = total_products - products_processed
+                
+                # Calculate ETA based on time elapsed and progress
+                elapsed_seconds = (datetime.now() - start_time).total_seconds()
+                if products_processed > 0 and elapsed_seconds > 0:
+                    seconds_per_product = elapsed_seconds / products_processed
+                    eta_seconds = int(products_remaining * seconds_per_product)
+                else:
+                    eta_seconds = int(products_remaining * estimated_time_per_product)
+                
+                # Get the first few SKUs in this batch for detailed progress
+                batch_skus = [p.get("sku", "unknown") for p in batch[:3] if isinstance(p, dict)]
+                sku_preview = ", ".join(batch_skus)
+                if len(batch) > 3:
+                    sku_preview += f" and {len(batch) - 3} more"
+                
                 self.task_manager.update_progress(
                     task_id=task_id,
                     progress=int(batch_progress),
-                    message=f"Processing batch {batch_index+1}/{total_batches}"
+                    message=f"Processing batch {batch_index+1}/{total_batches}",
+                    step="Processing Products",
+                    total_steps=5,
+                    current_step=3,
+                    eta_seconds=eta_seconds,
+                    details={
+                        "batch_index": batch_index + 1,
+                        "total_batches": total_batches,
+                        "products_processed": products_processed,
+                        "products_remaining": products_remaining,
+                        "current_products": sku_preview,
+                        "success_count": success_count,
+                        "error_count": error_count
+                    }
                 )
                 
                 # Process each product in the batch
-                batch_results = await self._process_batch(batch, fields)
+                # Cast the batch to ensure type safety
+                typed_batch: List[Dict[str, Any]] = [p for p in batch if isinstance(p, dict)]
+                batch_results = await self._process_batch(typed_batch, fields)
                 results.extend(batch_results)
                 
                 # Update counts
@@ -169,11 +230,27 @@ class UnifiedSyncService:
             # Save detailed results
             await self.sync_repo.save_sync_results(sync_id, results)
             
-            # Update task progress
+            # Calculate total elapsed time
+            total_elapsed = (datetime.now() - start_time).total_seconds()
+            elapsed_formatted = self.task_manager._format_time(int(total_elapsed))
+            
+            # Update task progress with completion details
             self.task_manager.update_progress(
                 task_id=task_id,
                 progress=100,
-                message=f"Sync completed: {success_count} success, {error_count} errors"
+                message=f"Sync completed: {success_count} success, {error_count} errors",
+                step="Completed",
+                total_steps=5,
+                current_step=5,
+                eta_seconds=0,
+                details={
+                    "total_products": total_products,
+                    "success_count": success_count,
+                    "error_count": error_count,
+                    "elapsed_seconds": int(total_elapsed),
+                    "elapsed_formatted": elapsed_formatted,
+                    "completion_time": datetime.now().isoformat()
+                }
             )
             
             return {
@@ -213,8 +290,8 @@ class UnifiedSyncService:
         results = []
         
         for product in products:
-            sku = product["sku"]
-            product_data = product["data"]
+            sku = product.get("sku", "")
+            product_data = product.get("data", {})
             
             # Extract fields to sync
             sync_data = {field: product_data.get(field) for field in fields if field in product_data}
@@ -228,28 +305,99 @@ class UnifiedSyncService:
                 })
                 continue
             
-            # Process each target platform
-            platform_results = []
+            # First, check which platforms actually have this product
+            available_platforms = []
             for target_service in self.target_services:
                 try:
-                    # Update product on target platform
-                    update_result = await target_service.update_product({
-                        "sku": sku,
-                        "data": sync_data
-                    })
+                    # Try to get the product to see if it exists
+                    product_info = await target_service.get_product(sku)
+                    if product_info:
+                        # Product exists on this platform
+                        available_platforms.append({
+                            "service": target_service,
+                            "platform_id": product_info.get("platform_id"),
+                            "platform_sku": product_info.get(f"{target_service.platform_name.lower()}_sku")
+                        })
+                        logger.info(f"Product {sku} found on {target_service.platform_name}")
+                except Exception as e:
+                    logger.warning(f"Could not check if product {sku} exists on {target_service.platform_name}: {str(e)}")
+            
+            if not available_platforms:
+                results.append({
+                    "sku": sku,
+                    "status": "skipped",
+                    "message": "Product not found on any platform"
+                })
+                continue
+            
+            # Process each target platform where the product exists
+            platform_results = []
+            for platform_info in available_platforms:
+                target_service = platform_info["service"]
+                try:
+                    # Get platform-specific data if available
+                    platform_sync_data = sync_data.copy()
                     
-                    platform_results.append({
-                        "platform": target_service.platform_name,
-                        "status": "success",
-                        "message": "Product updated successfully"
-                    })
+                    # Add platform-specific identifiers if available
+                    if target_service.platform_name == "Hepsiburada":
+                        if platform_info["platform_id"]:
+                            platform_sync_data["platform_id"] = platform_info["platform_id"]
+                        elif platform_info["platform_sku"]:
+                            platform_sync_data["hepsiburada_sku"] = platform_info["platform_sku"]
+                        else:
+                            # Skip this platform if we don't have the required identifiers
+                            platform_results.append({
+                                "platform": target_service.platform_name,
+                                "status": "skipped",
+                                "message": "Missing required platform-specific identifiers"
+                            })
+                            continue
+                    
+                    # Attempt to update the product with retry logic for 503 errors
+                    max_retries = 3
+                    retry_count = 0
+                    
+                    while retry_count < max_retries:
+                        try:
+                            # Update product on target platform
+                            update_result = await target_service.update_product({
+                                "sku": sku,
+                                "data": platform_sync_data
+                            })
+                            
+                            platform_results.append({
+                                "platform": target_service.platform_name,
+                                "status": "success",
+                                "message": "Product updated successfully"
+                            })
+                            break  # Success, exit retry loop
+                            
+                        except Exception as e:
+                            error_message = str(e)
+                            if "503" in error_message and retry_count < max_retries - 1:
+                                # Retry for 503 errors
+                                retry_count += 1
+                                wait_time = 2 ** retry_count  # Exponential backoff
+                                logger.info(f"503 error for {sku} on {target_service.platform_name}, retrying in {wait_time}s (attempt {retry_count}/{max_retries})")
+                                await asyncio.sleep(wait_time)
+                            else:
+                                # Final attempt failed or different error
+                                raise
                     
                 except Exception as e:
-                    logger.error(f"Error updating product {sku} on {target_service.platform_name}: {str(e)}")
+                    error_message = str(e)
+                    logger.error(f"Error updating product {sku} on {target_service.platform_name}: {error_message}")
+                    
+                    # Check for specific error types and provide more helpful messages
+                    if "503" in error_message:
+                        error_message = f"Platform API is temporarily unavailable (503 error). Please try again later."
+                    elif "Hepsiburada SKU is required" in error_message:
+                        error_message = f"Missing Hepsiburada product ID. This product may not exist on Hepsiburada or needs to be synced first."
+                    
                     platform_results.append({
                         "platform": target_service.platform_name,
                         "status": "error",
-                        "message": str(e)
+                        "message": error_message
                     })
             
             # Determine overall status
@@ -359,8 +507,8 @@ class UnifiedSyncService:
                 logger.info(f"Fetching products from {platform_name}")
                 
                 products = await platform_service.get_products(force_refresh=True)
-                platform_products[platform_name] = {p["sku"]: p for p in products}
-                all_skus.update(p["sku"] for p in products)
+                platform_products[platform_name] = {p.get("sku", ""): p for p in products if isinstance(p, dict)}
+                all_skus.update(p.get("sku", "") for p in products if isinstance(p, dict))
             
             # Filter SKUs if needed
             if filter_skus:
@@ -396,7 +544,7 @@ class UnifiedSyncService:
                 quantities = []
                 for platform_name, products in platform_products.items():
                     if sku in products:
-                        product = products[sku]
+                        product = products.get(sku, {})
                         quantity = product.get("data", {}).get("quantity")
                         if quantity is not None:
                             quantities.append((platform_name, quantity))
@@ -418,11 +566,13 @@ class UnifiedSyncService:
                     platform_name = platform_service.platform_name
                     
                     # Skip if product doesn't exist on this platform
-                    if sku not in platform_products.get(platform_name, {}):
+                    platform_dict = platform_products.get(platform_name, {})
+                    if sku not in platform_dict:
                         continue
                     
                     # Skip if quantity is already the lowest
-                    current_quantity = platform_products[platform_name][sku].get("data", {}).get("quantity")
+                    product_dict = platform_dict.get(sku, {})
+                    current_quantity = product_dict.get("data", {}).get("quantity")
                     if current_quantity == lowest_quantity:
                         platform_results.append({
                             "platform": platform_name,
@@ -511,12 +661,58 @@ class UnifiedSyncService:
         else:
             platforms = self.target_services
         
-        # Update product on each platform
+        # First, check which platforms actually have this product
+        available_platforms = []
         for platform_service in platforms:
             try:
+                # Try to get the product to see if it exists
+                product_info = await platform_service.get_product(sku)
+                if product_info:
+                    # Product exists on this platform
+                    available_platforms.append({
+                        "service": platform_service,
+                        "platform_id": product_info.get("platform_id"),
+                        "platform_sku": product_info.get(f"{platform_service.platform_name.lower()}_sku")
+                    })
+                    logger.info(f"Product {sku} found on {platform_service.platform_name}")
+            except Exception as e:
+                logger.warning(f"Could not check if product {sku} exists on {platform_service.platform_name}: {str(e)}")
+        
+        if not available_platforms:
+            logger.warning(f"Product {sku} not found on any platform")
+            return {
+                "sku": sku,
+                "status": "error",
+                "message": "Product not found on any platform",
+                "platforms": []
+            }
+        
+        # Update product only on platforms where it exists
+        for platform_info in available_platforms:
+            platform_service = platform_info["service"]
+            try:
+                # Get platform-specific data if available
+                platform_data = data.copy()
+                
+                # Add platform-specific identifiers if available
+                if platform_service.platform_name == "Hepsiburada":
+                    if platform_info["platform_id"]:
+                        platform_data["platform_id"] = platform_info["platform_id"]
+                    elif platform_info["platform_sku"]:
+                        platform_data["hepsiburada_sku"] = platform_info["platform_sku"]
+                    else:
+                        # Skip this platform if we don't have the required identifiers
+                        results.append({
+                            "platform": platform_service.platform_name,
+                            "status": "skipped",
+                            "message": "Missing required platform-specific identifiers"
+                        })
+                        continue
+                
+                # Attempt to update the product
                 update_result = await platform_service.update_product({
                     "sku": sku,
-                    "data": data
+                    "data": platform_data
                 })
                 
                 results.append({
@@ -526,11 +722,19 @@ class UnifiedSyncService:
                 })
                 
             except Exception as e:
-                logger.error(f"Error updating product {sku} on {platform_service.platform_name}: {str(e)}")
+                error_message = str(e)
+                logger.error(f"Error updating product {sku} on {platform_service.platform_name}: {error_message}")
+                
+                # Check for specific error types and provide more helpful messages
+                if "503" in error_message:
+                    error_message = f"Platform API is temporarily unavailable (503 error). Please try again later."
+                elif "Hepsiburada SKU is required" in error_message:
+                    error_message = f"Missing Hepsiburada product ID. This product may not exist on Hepsiburada or needs to be synced first."
+                
                 results.append({
                     "platform": platform_service.platform_name,
                     "status": "error",
-                    "message": str(e)
+                    "message": error_message
                 })
         
         # Determine overall status
@@ -633,23 +837,65 @@ class UnifiedSyncService:
                 platform_results = []
                 for platform_service in platforms:
                     try:
-                        update_result = await platform_service.update_product({
-                            "sku": sku,
-                            "data": data
-                        })
+                        # Get platform-specific data if available
+                        platform_data = data.copy()
                         
-                        platform_results.append({
-                            "platform": platform_service.platform_name,
-                            "status": "success",
-                            "message": "Product updated successfully"
-                        })
+                        # Check if we need to add platform-specific identifiers
+                        if platform_service.platform_name == "Hepsiburada":
+                            # Try to get the product first to extract the platform_id
+                            try:
+                                product_info = await platform_service.get_product(sku)
+                                if product_info and "platform_id" in product_info:
+                                    platform_data["platform_id"] = product_info["platform_id"]
+                                elif product_info and "hepsiburada_sku" in product_info:
+                                    platform_data["hepsiburada_sku"] = product_info["hepsiburada_sku"]
+                            except Exception as e:
+                                logger.warning(f"Could not fetch Hepsiburada product info for SKU {sku}: {str(e)}")
+                        
+                        # Attempt to update the product with retry logic for 503 errors
+                        max_retries = 3
+                        retry_count = 0
+                        
+                        while retry_count < max_retries:
+                            try:
+                                update_result = await platform_service.update_product({
+                                    "sku": sku,
+                                    "data": platform_data
+                                })
+                                
+                                platform_results.append({
+                                    "platform": platform_service.platform_name,
+                                    "status": "success",
+                                    "message": "Product updated successfully"
+                                })
+                                break  # Success, exit retry loop
+                                
+                            except Exception as e:
+                                error_message = str(e)
+                                if "503" in error_message and retry_count < max_retries - 1:
+                                    # Retry for 503 errors
+                                    retry_count += 1
+                                    wait_time = 2 ** retry_count  # Exponential backoff
+                                    logger.info(f"503 error for {sku} on {platform_service.platform_name}, retrying in {wait_time}s (attempt {retry_count}/{max_retries})")
+                                    await asyncio.sleep(wait_time)
+                                else:
+                                    # Final attempt failed or different error
+                                    raise
                         
                     except Exception as e:
-                        logger.error(f"Error updating product {sku} on {platform_service.platform_name}: {str(e)}")
+                        error_message = str(e)
+                        logger.error(f"Error updating product {sku} on {platform_service.platform_name}: {error_message}")
+                        
+                        # Check for specific error types and provide more helpful messages
+                        if "503" in error_message:
+                            error_message = f"Platform API is temporarily unavailable (503 error). Please try again later."
+                        elif "Hepsiburada SKU is required" in error_message:
+                            error_message = f"Missing Hepsiburada product ID. This product may not exist on Hepsiburada or needs to be synced first."
+                        
                         platform_results.append({
                             "platform": platform_service.platform_name,
                             "status": "error",
-                            "message": str(e)
+                            "message": error_message
                         })
                 
                 # Determine overall status

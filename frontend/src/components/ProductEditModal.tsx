@@ -222,61 +222,47 @@ const TabContent = styled.div`
   padding: 10px 0;
 `;
 
+const PlatformContainer = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+`;
+
+interface PlatformBadgeProps {
+  $active: boolean;
+}
+
+const PlatformBadge = styled.div<PlatformBadgeProps>`
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 500;
+  background-color: ${props => props.$active ? '#0f3460' : '#f0f0f0'};
+  color: ${props => props.$active ? 'white' : '#333'};
+  cursor: pointer;
+  transition: all 0.2s;
+  
+  &:hover {
+    background-color: ${props => props.$active ? '#16213e' : '#e0e0e0'};
+  }
+`;
+
 // Helper function to get image URL based on platform
-const getImageUrl = (product: Product, platform: string): string | null => {
+const getImageUrl = (product: Product): string | null => {
   // Different platforms store image URLs in different fields
   if (product.data.image_url) {
     return product.data.image_url;
   }
   
-  // Platform-specific mappings
-  switch (platform) {
-    case 'Magento':
-      return product.data.images?.[0]?.url || 
-             product.data.image || 
-             product.data.thumbnail || 
-             null;
-    case 'WooCommerce':
-    case 'WordPress':
-      return product.data.images?.[0]?.src || 
-             product.data.image?.src || 
-             null;
-    case 'Shopify':
-      return product.data.image?.src || 
-             product.data.images?.[0]?.src || 
-             null;
-    case 'Amazon':
-      return product.data.ImageUrl || 
-             product.data.LargeImage?.URL || 
-             null;
-    case 'eBay':
-      return product.data.PictureDetails?.PictureURL?.[0] || 
-             product.data.pictureUrl || 
-             null;
-    case 'Trendyol':
-      return Array.isArray(product.data.images) && product.data.images.length > 0 ? 
-             (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) || 
-             product.data.image || 
-             null : null;
-    case 'Hepsiburada':
-      return Array.isArray(product.data.images) && product.data.images.length > 0 ? 
-             (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) || 
-             product.data.imageUrl || 
-             null : null;
-    case 'N11':
-      return Array.isArray(product.data.images) && product.data.images.length > 0 ? 
-             (typeof product.data.images[0] === 'string' ? product.data.images[0] : null) || 
-             product.data.imageUrl || 
-             null : null;
-    default:
-      // Try common field names
-      return product.data.image || 
-             product.data.imageUrl || 
-             product.data.img_url || 
-             (Array.isArray(product.data.images) && product.data.images.length > 0 ? 
-              (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) : null) || 
-             null;
-  }
+  // Try common field names
+  return product.data.image || 
+         product.data.imageUrl || 
+         product.data.img_url || 
+         (Array.isArray(product.data.images) && product.data.images.length > 0 ? 
+          (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) : null) || 
+         null;
 };
 
 interface Product {
@@ -292,18 +278,20 @@ interface Product {
     attributes?: Record<string, any>;
     [key: string]: any;
   };
+  platforms?: string[];
 }
 
 interface ProductUpdateData {
   sku: string;
   data?: Record<string, any>;
+  platforms?: string[];
 }
 
 interface ProductEditModalProps {
   product: Product;
   onClose: () => void;
   onSave: (updatedProduct: ProductUpdateData) => void;
-  platform: string;
+  platforms: string[];
 }
 
 // List of fields that should not be editable
@@ -316,7 +304,9 @@ const nonEditableFields = [
   'last_updated', 
   'created_at', 
   'updated_at',
-  'id'
+  'id',
+  'base_attributes',
+  'product_attributes'
 ];
 
 // Fields that should be rendered as textareas
@@ -340,10 +330,16 @@ const fieldGroups = {
   'advanced': [] // Will be populated with remaining fields
 };
 
-const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, onSave, platform }) => {
+const ProductEditModal: React.FC<ProductEditModalProps> = ({ 
+  product, 
+  onClose, 
+  onSave, 
+  platforms 
+}) => {
   // Initialize form data with all editable fields from product
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [activeTab, setActiveTab] = useState<string>('basic');
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(platforms);
   
   // Add all editable fields from product.data
   useEffect(() => {
@@ -383,16 +379,28 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
     // Prepare the update data in the format expected by the API
     const updateData: ProductUpdateData = {
       sku: product.sku,
-      data: formData
+      data: formData,
+      platforms: selectedPlatforms
     };
     
     onSave(updateData);
+  };
+  
+  const togglePlatform = (platform: string) => {
+    setSelectedPlatforms(prev => {
+      if (prev.includes(platform)) {
+        return prev.filter(p => p !== platform);
+      } else {
+        return [...prev, platform];
+      }
+    });
   };
   
   // Render fields for the current tab
   const renderTabFields = (tabName: string) => {
     const fields = [];
     const fieldsToRender = fieldGroups[tabName as keyof typeof fieldGroups] || [];
+    let fieldIndex = 0;
     
     // Add fields from formData that belong to this tab
     for (const key of fieldsToRender) {
@@ -410,7 +418,7 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
         if (textareaFields.includes(key)) {
           // Render as textarea
           fields.push(
-            <FormGroup key={key}>
+            <FormGroup key={`field-${key}-${tabName}-${fieldIndex++}`}>
               <Label htmlFor={key}>{fieldLabel}</Label>
               <TextArea
                 id={key}
@@ -424,7 +432,7 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
         } else if (key in selectFields) {
           // Render as select
           fields.push(
-            <FormGroup key={key}>
+            <FormGroup key={`field-${key}-${tabName}-${fieldIndex++}`}>
               <Label htmlFor={key}>{fieldLabel}</Label>
               <Select
                 id={key}
@@ -432,8 +440,8 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
                 value={value || ''}
                 onChange={handleChange}
               >
-                {selectFields[key as keyof typeof selectFields].map(option => (
-                  <option key={option} value={option}>
+                {selectFields[key as keyof typeof selectFields].map((option, optIndex) => (
+                  <option key={`${option}-${optIndex}`} value={option}>
                     {option.charAt(0).toUpperCase() + option.slice(1)}
                   </option>
                 ))}
@@ -455,7 +463,7 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
           
           // Default field rendering
           fields.push(
-            <FormGroup key={key}>
+            <FormGroup key={`field-${key}-${tabName}-${fieldIndex++}`}>
               <Label htmlFor={key}>{fieldLabel}</Label>
               <Input
                 id={key}
@@ -474,7 +482,7 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
     
     // If this is the advanced tab, render all remaining fields
     if (tabName === 'advanced') {
-      Object.entries(formData).forEach(([key, value]) => {
+      Object.entries(formData).forEach(([key, value], advancedIndex) => {
         // Skip fields that are in other tabs or non-editable
         if ([...fieldGroups.basic, ...fieldGroups.details, ...fieldGroups.shipping].includes(key) || 
             nonEditableFields.includes(key)) {
@@ -492,7 +500,7 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
         if (textareaFields.includes(key)) {
           // Render as textarea
           fields.push(
-            <FormGroup key={key}>
+            <FormGroup key={`field-${key}-advanced-${advancedIndex}`}>
               <Label htmlFor={key}>{fieldLabel}</Label>
               <TextArea
                 id={key}
@@ -506,7 +514,7 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
         } else if (key in selectFields) {
           // Render as select
           fields.push(
-            <FormGroup key={key}>
+            <FormGroup key={`field-${key}-advanced-${advancedIndex}`}>
               <Label htmlFor={key}>{fieldLabel}</Label>
               <Select
                 id={key}
@@ -514,8 +522,8 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
                 value={value || ''}
                 onChange={handleChange}
               >
-                {selectFields[key as keyof typeof selectFields].map(option => (
-                  <option key={option} value={option}>
+                {selectFields[key as keyof typeof selectFields].map((option, optIndex) => (
+                  <option key={`${option}-${optIndex}`} value={option}>
                     {option.charAt(0).toUpperCase() + option.slice(1)}
                   </option>
                 ))}
@@ -537,7 +545,7 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
           
           // Default field rendering
           fields.push(
-            <FormGroup key={key}>
+            <FormGroup key={`field-${key}-advanced-${advancedIndex}`}>
               <Label htmlFor={key}>{fieldLabel}</Label>
               <Input
                 id={key}
@@ -557,7 +565,23 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
     return fields;
   };
   
-  const imageUrl = getImageUrl(product, platform);
+  const imageUrl = getImageUrl(product);
+  
+  // Check if the image URL is a relative path and convert to absolute URL if needed
+  const getAbsoluteImageUrl = (url: string | null): string | null => {
+    if (!url) return null;
+    
+    // If the URL is already absolute, return it
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    
+    // Otherwise, assume it's relative to the API server
+    const apiBaseUrl = 'http://localhost:8000'; // Adjust this based on your API server URL
+    return `${apiBaseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+  
+  const absoluteImageUrl = getAbsoluteImageUrl(imageUrl);
   
   return (
     <ModalOverlay onClick={onClose}>
@@ -567,8 +591,8 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
           <CloseButton onClick={onClose}>&times;</CloseButton>
         </ModalHeader>
         
-        {imageUrl ? (
-          <ProductImage src={imageUrl} alt={product.data.title || product.sku} />
+        {absoluteImageUrl ? (
+          <ProductImage src={absoluteImageUrl} alt={product.data.title || product.sku} />
         ) : (
           <NoImagePlaceholder>No Image</NoImagePlaceholder>
         )}
@@ -583,6 +607,21 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
               value={product.sku} 
               disabled 
             />
+          </FormGroup>
+          
+          <FormGroup>
+            <Label>Update on Platforms</Label>
+            <PlatformContainer>
+              {platforms.map(platform => (
+                <PlatformBadge 
+                  key={platform} 
+                  $active={selectedPlatforms.includes(platform)}
+                  onClick={() => togglePlatform(platform)}
+                >
+                  {platform}
+                </PlatformBadge>
+              ))}
+            </PlatformContainer>
           </FormGroup>
           
           <TabContainer>
@@ -626,7 +665,7 @@ const ProductEditModal: React.FC<ProductEditModalProps> = ({ product, onClose, o
             <CancelButton type="button" onClick={onClose}>
               Cancel
             </CancelButton>
-            <SaveButton type="submit">
+            <SaveButton type="submit" disabled={selectedPlatforms.length === 0}>
               Save Changes
             </SaveButton>
           </ButtonGroup>

@@ -7,10 +7,13 @@ from typing import Dict, List, Any, Optional, Union, cast
 from datetime import datetime
 import json
 import os
+import re
 from core.logger import logger
 from core.exceptions import APIError
 from utils.cache import get_cache
 from data.repositories import get_product_repository
+from api.platform_factory import get_platform_client
+from difflib import SequenceMatcher
 
 class UnifiedProductService:
     """Service for managing products across platforms"""
@@ -254,3 +257,115 @@ class UnifiedProductService:
         except Exception as e:
             logger.error(f"Health check failed for {self.platform_name}: {str(e)}")
             return False
+
+
+def normalize_text(text: str) -> str:
+    """
+    Normalize text for comparison
+    
+    Args:
+        text: Text to normalize
+        
+    Returns:
+        Normalized text
+    """
+    if not text:
+        return ""
+    
+    # Convert to lowercase
+    text = text.lower()
+    
+    # Remove special characters and extra spaces
+    text = re.sub(r'[^\w\s]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    return text
+
+
+def calculate_similarity(text1: str, text2: str) -> float:
+    """
+    Calculate similarity between two texts
+    
+    Args:
+        text1: First text
+        text2: Second text
+        
+    Returns:
+        Similarity score (0-1)
+    """
+    if not text1 or not text2:
+        return 0.0
+    
+    # Normalize texts
+    text1 = normalize_text(text1)
+    text2 = normalize_text(text2)
+    
+    # Calculate similarity
+    return SequenceMatcher(None, text1, text2).ratio()
+
+
+def is_same_product(product1: Dict[str, Any], product2: Dict[str, Any]) -> bool:
+    """
+    Check if two products are the same
+    
+    Args:
+        product1: First product
+        product2: Second product
+        
+    Returns:
+        True if products are the same, False otherwise
+    """
+    # Check SKU
+    sku1 = product1.get("sku", "").strip().lower()
+    sku2 = product2.get("sku", "").strip().lower()
+    if sku1 and sku2 and sku1 == sku2:
+        return True
+    
+    # Check barcode
+    barcode1 = product1.get("data", {}).get("barcode", "").strip().lower()
+    barcode2 = product2.get("data", {}).get("barcode", "").strip().lower()
+    if barcode1 and barcode2 and barcode1 == barcode2:
+        return True
+    
+    # Check title similarity
+    title1 = product1.get("data", {}).get("title", "")
+    title2 = product2.get("data", {}).get("title", "")
+    if title1 and title2 and calculate_similarity(title1, title2) > 0.8:
+        return True
+    
+    return False
+
+
+def merge_products(products: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Merge multiple products into one
+    
+    Args:
+        products: List of products to merge
+        
+    Returns:
+        Merged product
+    """
+    if not products:
+        return {}
+    
+    # Start with the first product
+    merged_product = products[0].copy()
+    merged_product["platforms"] = [products[0].get("platform", "unknown")]
+    
+    # Merge with other products
+    for product in products[1:]:
+        platform = product.get("platform", "unknown")
+        merged_product["platforms"].append(platform)
+        
+        # Merge data
+        for key, value in product.get("data", {}).items():
+            # Skip empty values
+            if value is None or value == "" or value == 0:
+                continue
+                
+            # Use the value from the current product if it's not in the merged product
+            if key not in merged_product["data"] or not merged_product["data"][key]:
+                merged_product["data"][key] = value
+    
+    return merged_product

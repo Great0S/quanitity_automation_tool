@@ -4,19 +4,15 @@ import styled from 'styled-components';
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  margin-top: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   border-radius: 8px;
   overflow: hidden;
 `;
 
-const TableHeader = styled.th`
-  background-color: #f5f5f5;
-  padding: 12px 16px;
-  text-align: left;
-  border-bottom: 2px solid #ddd;
-  font-weight: 600;
-  color: #333;
+const TableHead = styled.thead`
+  background-color: #0f3460;
+  color: white;
 `;
 
 const TableRow = styled.tr`
@@ -25,39 +21,57 @@ const TableRow = styled.tr`
   }
   
   &:hover {
-    background-color: #f1f1f1;
+    background-color: #f0f0f0;
   }
+`;
+
+const TableHeader = styled.th`
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 14px;
 `;
 
 const TableCell = styled.td`
   padding: 12px 16px;
-  border-bottom: 1px solid #eee;
+  border-top: 1px solid #eee;
+  font-size: 14px;
   vertical-align: middle;
 `;
 
 const ProductImage = styled.img`
-  width: 60px;
-  height: 60px;
+  width: 50px;
+  height: 50px;
   object-fit: cover;
   border-radius: 4px;
   cursor: pointer;
   transition: transform 0.2s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   
   &:hover {
     transform: scale(1.1);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
   }
 `;
 
-const EditButton = styled.button`
+const NoImagePlaceholder = styled.div`
+  width: 50px;
+  height: 50px;
+  background-color: #eee;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: #999;
+  font-size: 10px;
+`;
+
+const ActionButton = styled.button`
   background-color: #0f3460;
   color: white;
   border: none;
   border-radius: 4px;
-  padding: 8px 12px;
+  padding: 6px 12px;
+  font-size: 14px;
   cursor: pointer;
-  font-weight: 500;
   transition: background-color 0.2s;
   
   &:hover {
@@ -70,42 +84,58 @@ const EditButton = styled.button`
   }
 `;
 
-const NoImagePlaceholder = styled.div`
-  width: 60px;
-  height: 60px;
-  background-color: #eee;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  color: #999;
-  font-size: 10px;
-  text-align: center;
-`;
-
-interface StatusBadgeProps {
-  $status: string;
-}
-
-const StatusBadge = styled.span<StatusBadgeProps>`
+const StatusBadge = styled.span<{ $status: string }>`
   display: inline-block;
   padding: 4px 8px;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
-  
-  ${props => {
+  background-color: ${props => {
     switch (props.$status) {
       case 'active':
-        return 'background-color: #e8f5e9; color: #2e7d32;';
+        return '#e1f5e1';
       case 'inactive':
-        return 'background-color: #ffebee; color: #c62828;';
+        return '#f5e1e1';
+      case 'pending':
+        return '#f5f5e1';
       case 'draft':
-        return 'background-color: #e3f2fd; color: #1565c0;';
+        return '#e1e1f5';
       default:
-        return 'background-color: #f5f5f5; color: #616161;';
+        return '#f0f0f0';
     }
-  }}
+  }};
+  color: ${props => {
+    switch (props.$status) {
+      case 'active':
+        return '#2e7d32';
+      case 'inactive':
+        return '#c62828';
+      case 'pending':
+        return '#f9a825';
+      case 'draft':
+        return '#1565c0';
+      default:
+        return '#757575';
+    }
+  }};
+`;
+
+const PlatformBadge = styled.span`
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background-color: #e1e1f5;
+  color: #1565c0;
+  margin-right: 4px;
+  margin-bottom: 4px;
+`;
+
+const PlatformContainer = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 `;
 
 interface Product {
@@ -116,176 +146,80 @@ interface Product {
     quantity?: number;
     status?: string;
     image_url?: string;
-    images?: Array<any>;
-    image?: any;
     [key: string]: any;
   };
+  platforms?: string[];
 }
 
 interface ProductTableProps {
   products: Product[];
   onEditClick: (product: Product) => void;
   onImageClick: (imageUrl: string) => void;
-  platform: string;
+  showPlatforms?: boolean;
 }
 
-// Helper function to get image URL based on platform
-const getImageUrl = (product: Product, platform: string): string | null => {
-  // Different platforms store image URLs in different fields
-  if (product.data.image_url) {
-    return product.data.image_url;
-  }
-  
-  // Platform-specific mappings
-  switch (platform) {
-    case 'Magento':
-      return product.data.images?.[0]?.url || 
-             product.data.image || 
-             product.data.thumbnail || 
-             null;
-    case 'WooCommerce':
-    case 'WordPress':
-      return product.data.images?.[0]?.src || 
-             product.data.image?.src || 
-             null;
-    case 'Shopify':
-      return product.data.image?.src || 
-             product.data.images?.[0]?.src || 
-             null;
-    case 'Amazon':
-      return product.data.ImageUrl || 
-             product.data.LargeImage?.URL || 
-             null;
-    case 'eBay':
-      return product.data.PictureDetails?.PictureURL?.[0] || 
-             product.data.pictureUrl || 
-             null;
-    case 'Trendyol':
-      return Array.isArray(product.data.images) && product.data.images.length > 0 ? 
-             (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) || 
-             product.data.image || 
-             null : null;
-    case 'Hepsiburada':
-      return Array.isArray(product.data.images) && product.data.images.length > 0 ? 
-             (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) || 
-             product.data.imageUrl || 
-             null : null;
-    case 'N11':
-      return Array.isArray(product.data.images) && product.data.images.length > 0 ? 
-             (typeof product.data.images[0] === 'string' ? product.data.images[0] : null) || 
-             product.data.imageUrl || 
-             null : null;
-    default:
-      // Try common field names
-      return product.data.image || 
-             product.data.imageUrl || 
-             product.data.img_url || 
-             (Array.isArray(product.data.images) && product.data.images.length > 0 ? 
-              (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) : null) || 
-             null;
-  }
-};
-
-// Helper function to format price based on platform
-const formatPrice = (product: Product, platform: string): string => {
-  let price: number | undefined;
-  
-  // Different platforms store prices in different fields
-  if (product.data.price !== undefined) {
-    price = product.data.price;
-  } else {
-    // Platform-specific mappings
-    switch (platform) {
-      case 'Magento':
-        price = product.data.price_info?.final_price || 
-                product.data.price_info?.regular_price || 
-                undefined;
-        break;
-      case 'WooCommerce':
-      case 'WordPress':
-        price = product.data.regular_price || 
-                product.data.price || 
-                product.data.sale_price || 
-                undefined;
-        break;
-      case 'Shopify':
-        price = product.data.variants?.[0]?.price || 
-                product.data.price || 
-                undefined;
-        break;
-      case 'Amazon':
-        price = product.data.Price?.Amount || 
-                product.data.ListPrice?.Amount || 
-                undefined;
-        break;
-      case 'eBay':
-        price = product.data.StartPrice?.value || 
-                product.data.price || 
-                undefined;
-        break;
-      case 'Trendyol':
-        price = product.data.salePrice || 
-                product.data.price || 
-                undefined;
-        break;
-      case 'Hepsiburada':
-        price = product.data.price || 
-                product.data.listPrice || 
-                undefined;
-        break;
-      case 'N11':
-        price = product.data.price || 
-                product.data.displayPrice || 
-                undefined;
-        break;
-      default:
-        // Try common field names
-        price = product.data.price || 
-                product.data.salePrice || 
-                product.data.listPrice || 
-                undefined;
+const ProductTable: React.FC<ProductTableProps> = ({ 
+  products, 
+  onEditClick, 
+  onImageClick,
+  showPlatforms = false
+}) => {
+  // Helper function to get image URL
+  const getImageUrl = (product: Product): string | null => {
+    if (product.data.image_url) {
+      return product.data.image_url;
     }
-  }
+    
+    // Try common field names
+    return product.data.image || 
+           product.data.imageUrl || 
+           product.data.img_url || 
+           (Array.isArray(product.data.images) && product.data.images.length > 0 ? 
+            (typeof product.data.images[0] === 'string' ? product.data.images[0] : product.data.images[0]?.url) : null) || 
+           null;
+  };
   
-  if (price === undefined) {
-    return 'N/A';
-  }
+  // Check if the image URL is a relative path and convert to absolute URL if needed
+  const getAbsoluteImageUrl = (url: string | null): string | null => {
+    if (!url) return null;
+    
+    // If the URL is already absolute, return it
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    
+    // Otherwise, assume it's relative to the API server
+    const apiBaseUrl = 'http://localhost:8000'; // Adjust this based on your API server URL
+    return `${apiBaseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
   
-  // Format price with currency symbol
-  return `$${price.toFixed(2)}`;
-};
-
-const ProductTable: React.FC<ProductTableProps> = ({ products, onEditClick, onImageClick, platform }) => {
   return (
     <Table>
-      <thead>
-        <tr>
+      <TableHead>
+        <TableRow>
           <TableHeader>Image</TableHeader>
           <TableHeader>SKU</TableHeader>
           <TableHeader>Title</TableHeader>
           <TableHeader>Price</TableHeader>
           <TableHeader>Quantity</TableHeader>
           <TableHeader>Status</TableHeader>
+          {showPlatforms && <TableHeader>Platforms</TableHeader>}
           <TableHeader>Actions</TableHeader>
-        </tr>
-      </thead>
+        </TableRow>
+      </TableHead>
       <tbody>
-        {products.map((product, index) => {
-          const imageUrl = getImageUrl(product, platform);
+        {products.map(product => {
+          const imageUrl = getImageUrl(product);
+          const absoluteImageUrl = getAbsoluteImageUrl(imageUrl);
           
           return (
-            <TableRow key={`${product.sku}-${index}`}>
+            <TableRow key={product.sku}>
               <TableCell>
-                {imageUrl ? (
+                {absoluteImageUrl ? (
                   <ProductImage 
-                    src={imageUrl} 
+                    src={absoluteImageUrl} 
                     alt={product.data.title || product.sku}
-                    onClick={() => onImageClick(imageUrl)}
-                    onError={(e) => {
-                      // Handle image load error
-                      (e.target as HTMLImageElement).style.display = 'none';
-                      (e.target as HTMLImageElement).parentElement!.innerHTML = 'Image Error';
-                    }}
+                    onClick={() => onImageClick(absoluteImageUrl)}
                   />
                 ) : (
                   <NoImagePlaceholder>No Image</NoImagePlaceholder>
@@ -293,7 +227,11 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, onEditClick, onIm
               </TableCell>
               <TableCell>{product.sku}</TableCell>
               <TableCell>{product.data.title || 'No Title'}</TableCell>
-              <TableCell>{formatPrice(product, platform)}</TableCell>
+              <TableCell>
+                {product.data.price !== undefined ? 
+                  `$${product.data.price.toFixed(2)}` : 
+                  'N/A'}
+              </TableCell>
               <TableCell>{product.data.quantity !== undefined ? product.data.quantity : 'N/A'}</TableCell>
               <TableCell>
                 {product.data.status ? (
@@ -304,10 +242,19 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, onEditClick, onIm
                   'N/A'
                 )}
               </TableCell>
+              {showPlatforms && (
+                <TableCell>
+                  <PlatformContainer>
+                    {product.platforms && product.platforms.map(platform => (
+                      <PlatformBadge key={platform}>{platform}</PlatformBadge>
+                    ))}
+                  </PlatformContainer>
+                </TableCell>
+              )}
               <TableCell>
-                <EditButton onClick={() => onEditClick(product)}>
+                <ActionButton onClick={() => onEditClick(product)}>
                   Edit
-                </EditButton>
+                </ActionButton>
               </TableCell>
             </TableRow>
           );

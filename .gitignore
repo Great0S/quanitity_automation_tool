@@ -125,16 +125,7 @@ celerybeat-schedule
 
 # Jupyter Notebooks
 .ipynb_checkpoints/
-api/hhh.py
-api/jj.py
-duvardanduvara.com_non_found.csv
-.vscode/settings.json
-.vscode/settings.json
-zeminbank.com_non_found.csv
-zeminbank.com_non_foundbk.csv
-zeminbank.com_non_foundbkp.csv
-zeminbank.com_non_foundbkpc.csv
-output.csv
+output.cs
 viewstate_decoder.py
 api/kak.py
 orders_data_list.csv
@@ -143,12 +134,6 @@ amazon-all-inventory-50460019772.csv
 amazon-all-inventory-50460019772.GZIP
 api/kkk.py
 pttavm_products_data_list.csv
-kapionupaspasi.com_non_found.csv
-camihalisi.csv
-halifleks.com_non_found.csv
-run.bat
-jhj.py
-comissons.csv
 calculated_comissions.json
 integrator.json
 amazon-all-inventory-50567019863.csv
@@ -161,20 +146,5 @@ amazon-all-inventory-50586019931.GZIP
 integrator-ticket-upload.json
 test.py
 textual-test.py
-test.tcss
-amazon_rug_attrs.json
-amazon_rug_attrs2.json
-UTILITY_KNIFE.json
-EXERCISE_MAT.json
-integrator-ticket-upload copy.json
-amazon_EXERCISE_MAT_attrs.json
-amazon_LITTER_BOX_attrs.json
-amazon_UTILITY_KNIFE_attrs.json
-amazon_ADHESIVE_TAPES_attrs.json
-amazon_DECORATIVE_PILLOW_COVER_attrs.json
-amazon_PRESSER_FOOT_attrs.json
-amazon_VEHICLE_MAT_attrs.json
-test.csv
-.env.EmanHali
 .env.backup
 data/products.db
