@@ -309,7 +309,7 @@ const nonEditableFields = [
   'product_attributes'
 ];
 
-// Fields that should be rendered as textareas
+// Fields that should be rendered as text areas
 const textareaFields = [
   'description',
   'long_description',
@@ -327,7 +327,7 @@ const fieldGroups = {
   'basic': ['title', 'price', 'list_price', 'quantity', 'status', 'description'],
   'details': ['barcode', 'brand', 'brand_id', 'category_id', 'category_name', 'product_main_id', 'vat_rate'],
   'shipping': ['preparing_day', 'shipment_template', 'max_purchase_quantity'],
-  'advanced': [] // Will be populated with remaining fields
+  'advanced': [] as string[] // Will be populated with remaining fields
 };
 
 const ProductEditModal: React.FC<ProductEditModalProps> = ({ 

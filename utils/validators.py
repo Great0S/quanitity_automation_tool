@@ -76,20 +76,25 @@ class SyncValidator:
     def validate_sync_config(config: Dict[str, Any]) -> List[str]:
         """Validate sync configuration"""
         errors = []
-        
+
         required_fields = {
             'source_platform': 'Source platform is required',
             'target_platform': 'Target platform is required',
             'sync_fields': 'Sync fields are required'
         }
-        
+
         for field, message in required_fields.items():
             if field not in config:
                 errors.append(message)
-        
+
         if 'sync_fields' in config and not isinstance(config['sync_fields'], list):
             errors.append('Sync fields must be a list')
-        
+        elif 'sync_fields' in config:
+            allowed_fields = {'field1', 'field2', 'field3'}  # Define allowed field names
+            for sync_field in config['sync_fields']:
+                if sync_field not in allowed_fields:
+                    errors.append(f"Invalid sync field: {sync_field}")
+
         return errors
 
 class InputValidator:

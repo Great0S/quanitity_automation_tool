@@ -175,10 +175,16 @@ class CustomLogger:
     def error(self, message: str, exc_info: bool = True, **kwargs: Any) -> None:
         """Log error message"""
         self._log(logging.ERROR, message, exc_info=exc_info, **kwargs)
-        
-        # Also log to error logger
-        if kwargs:
-            self.error_logger.error(f"{message} - Context: {kwargs}", exc_info=exc_info)
+
+        # Define sensitive keys to exclude from logging
+        sensitive_keys = {'password', 'api_key', 'secret'}
+
+        # Filter out sensitive keys from kwargs
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in sensitive_keys}
+
+        # Also log to error logger with filtered context
+        if filtered_kwargs:
+            self.error_logger.error(f"{message} - Context: {filtered_kwargs}", exc_info=exc_info)
         else:
             self.error_logger.error(message, exc_info=exc_info)
 

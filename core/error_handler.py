@@ -2,6 +2,7 @@
 
 import traceback
 from typing import Any, Awaitable, Callable, Dict, Optional, Type, TypeVar, cast
+import logging
 
 from functools import wraps
 import asyncio
@@ -17,6 +18,7 @@ from core.exceptions import (
 )
 
 T = TypeVar("T", bound=Callable[..., Any])
+
 
 # Define ServiceError directly in this module
 class ServiceError(BaseError):
@@ -187,8 +189,8 @@ class ErrorHandler:
             error: Exception to report
             context: Additional context information
         """
-        # Log the error
-        self.log_error(error, context)
+        # Log the error with context if provided, otherwise with an empty dictionary
+        self.log_error(error, context if context is not None else {})
 
         # Here you could add integration with error reporting services
         # like Sentry, Rollbar, etc.
@@ -212,13 +214,15 @@ def handle_exceptions(func: T) -> T:
     Returns:
         Wrapped function that handles exceptions
     """
+
     @wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            error_handler.log_error(e, {'function': func.__name__})
+            error_handler.log_error(e, {"function": func.__name__})
             raise
+
     return cast(T, wrapper)  # Explicitly cast the wrapper to type T
 
 
@@ -285,16 +289,22 @@ def setup_global_exception_handler() -> None:
     Setup global exception handler for asyncio
     """
     loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
-
+    
     def handle_exception(loop: asyncio.AbstractEventLoop, context: Dict[str, Any]) -> None:
         exception: Optional[BaseException] = context.get("exception")
-        if exception:
-            if isinstance(exception, Exception):
-                error_handler.log_error(exception, context)
-            else:
-                error_handler.logger.error(f"Unhandled BaseException: {exception}", extra=context)
-        else:
-            msg: str = context.get("message", "")
-            error_handler.logger.error(f"Asyncio error: {msg}", extra=context)
 
-    loop.set_exception_handler(handle_exception)
+        # Check if exception is None
+        if exception is None:
+            logging.error("No exception found in context")
+            return
+
+        # Use the loop to handle the exception (example: schedule a callback)
+        loop.call_soon_threadsafe(handle_exception_callback, exception)
+
+        # Log the exception
+        logging.error("Exception occurred", exc_info=exception)
+
+    def handle_exception_callback(exception: BaseException) -> None:
+        # Define what to do with the exception
+        # For example, you could report it to an external monitoring service
+        print(f"Handling exception: {exception}")

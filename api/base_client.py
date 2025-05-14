@@ -86,63 +86,55 @@ class BaseAPIClient(ABC):
         method: str,
         url: str,
         **kwargs: Any
-    ) -> Any:
+) ->     Any:
         """Make HTTP request with retry mechanism"""
-        # Ensure we have a valid session in the current event loop
         await self._ensure_session()
-        
-        # Double-check that session is valid
+
         if self.session is None:
             raise NetworkError("Failed to create a valid HTTP session")
 
-        # Print debug info
         logger.debug(f"API request: {method} {url}")
         if 'params' in kwargs:
             logger.debug(f"Request params: {kwargs['params']}")
         if 'json' in kwargs:
             logger.debug(f"Request data: {kwargs['json']}")
         if 'headers' in kwargs:
-            # Don't log sensitive headers like Authorization
-            safe_headers = {k: v for k, v in kwargs['headers'].items() 
-                           if k.lower() not in ('authorization', 'appkey', 'appsecret')}
+            safe_headers = {k: v for k, v in kwargs['headers'].items()
+                            if k.lower() not in ('authorization', 'appkey', 'appsecret')}
             logger.debug(f"Request headers: {safe_headers}")
 
-        # Set timeout as a simple integer
         if 'timeout' not in kwargs:
             kwargs['timeout'] = self.request_timeout
 
         for attempt in range(self.max_retries):
             try:
-                # Ensure session is still valid before each attempt
                 if self.session is None or getattr(self.session, 'closed', True):
                     logger.warning("Session is None or closed, recreating...")
                     await self._ensure_session()
                     if self.session is None:
                         raise NetworkError("Failed to create a valid HTTP session")
-                
+
                 async with self.session.request(
                     method=method,
                     url=url,
                     **kwargs
                 ) as response:
-                    # Log response status
                     logger.debug(f"Response status: {response.status}")
-                    
-                    if response.status == 429:  # Rate limit
+
+                    if response.status == 429:
                         wait_time = self.rate_limit_wait * (2 ** attempt)
                         logger.warning(f"Rate limit hit, waiting {wait_time} seconds before retry")
                         await asyncio.sleep(wait_time)
                         continue
-                    
+
                     elif response.status == 401 or response.status == 403:
                         response_text = await response.text()
                         logger.error(f"Authentication error: {response_text}")
                         raise AuthenticationError(f"Authentication failed: {response.status} - {response_text}")
-                    
+
                     elif response.status >= 500:
                         response_text = await response.text()
                         logger.error(f"Server error: {response_text}")
-                        
                         if attempt < self.max_retries - 1:
                             wait_time = self.retry_delay * (2 ** attempt)
                             logger.info(f"Server error, retrying in {wait_time} seconds")
@@ -150,19 +142,17 @@ class BaseAPIClient(ABC):
                             continue
                         else:
                             raise APIError(f"Server error after {self.max_retries} attempts: {response.status} - {response_text}")
-                    
+
                     elif response.status >= 400:
                         response_text = await response.text()
                         logger.error(f"Client error: {response_text}")
                         raise APIError(f"Request failed: {response.status} - {response_text}")
-                    
-                    # Success case
+
                     try:
                         return await response.json()
                     except aiohttp.ContentTypeError:
-                        # If not JSON, return text
                         return await response.text()
-                    
+
             except aiohttp.ClientConnectorError as e:
                 logger.error(f"Connection error: {str(e)}")
                 if attempt < self.max_retries - 1:
@@ -171,21 +161,7 @@ class BaseAPIClient(ABC):
                     await asyncio.sleep(wait_time)
                 else:
                     raise NetworkError(f"Connection error after {self.max_retries} attempts: {str(e)}")
-                    
-            except aiohttp.ClientResponseError as e:
-                logger.error(f"Response error: {str(e)}")
-                if e.status == 429:
-                    if attempt < self.max_retries - 1:
-                        wait_time = self.rate_limit_wait * (2 ** attempt)
-                        logger.warning(f"Rate limit hit, waiting {wait_time} seconds before retry")
-                        await asyncio.sleep(wait_time)
-                    else:
-                        raise RateLimitError(f"Rate limit exceeded after {self.max_retries} attempts")
-                elif e.status in (401, 403):
-                    raise AuthenticationError(f"Authentication failed: {str(e)}")
-                else:
-                    raise APIError(f"Request failed: {str(e)}")
-                    
+
             except asyncio.TimeoutError:
                 logger.error("Request timed out")
                 if attempt < self.max_retries - 1:
@@ -194,11 +170,7 @@ class BaseAPIClient(ABC):
                     await asyncio.sleep(wait_time)
                 else:
                     raise NetworkError(f"Request timed out after {self.max_retries} attempts")
-            
-            except (AuthenticationError, RateLimitError, NetworkError):
-                # Re-raise these exceptions without wrapping
-                raise
-                
+
             except Exception as e:
                 logger.error(f"Unexpected error: {str(e)}")
                 if attempt < self.max_retries - 1:
@@ -208,9 +180,8 @@ class BaseAPIClient(ABC):
                 else:
                     raise APIError(f"Request failed after {self.max_retries} attempts: {str(e)}")
 
-        # This should never be reached due to the raise statements above
         raise APIError(f"Request failed after {self.max_retries} attempts")
-
+    
     def _validate_response(self, response: Any) -> None:
         """Validate API response"""
         if response is None:

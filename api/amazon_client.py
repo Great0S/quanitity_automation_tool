@@ -117,7 +117,7 @@ class AmazonClient(BaseAPIClient):
         # Calculate signature
         signature = base64.b64encode(
             hmac.new(
-                self.secret_key.encode("utf-8"),
+                (self.secret_key or "").encode("utf-8"),
                 string_to_sign.encode("utf-8"),
                 hashlib.sha256
             ).digest()
@@ -311,7 +311,9 @@ class AmazonClient(BaseAPIClient):
                 
             # Get product attributes
             attributes = product_result.find(".//ns:AttributeSets", product_namespace)
-            title = attributes.find(".//ns:Title", product_namespace)
+            title = None
+            if attributes is not None:
+                title = attributes.find(".//ns:Title", product_namespace)
             title_text = title.text if title is not None else ""
             
             # Parse inventory XML
@@ -332,13 +334,13 @@ class AmazonClient(BaseAPIClient):
             if inventory_item is not None:
                 quantity_elem = inventory_item.find(".//ns:Quantity", inventory_namespace)
                 if quantity_elem is not None:
-                    quantity = int(quantity_elem.text)
+                    quantity = int(quantity_elem.text) if quantity_elem.text is not None else 0
                     
             # Get status
             status = "inactive"
             if inventory_item is not None:
                 status_elem = inventory_item.find(".//ns:InStockSupplyQuantity", inventory_namespace)
-                if status_elem is not None and int(status_elem.text) > 0:
+                if status_elem is not None and status_elem.text is not None and int(status_elem.text) > 0:
                     status = "active"
                     
             # Return formatted product
